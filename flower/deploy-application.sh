@@ -332,50 +332,100 @@ EOF
     
     gcloud compute scp /tmp/docker-compose-client-${i}.yml $CLIENT_VM:/app/docker-compose.yml --zone=$CLIENT_ZONE --quiet
     
-    # Download dataset from GCS
-    echo_info "Downloading COCO subset on $CLIENT_VM (N_TRAIN=$N_TRAIN, N_VAL=$N_VAL)..."
+    # Download dataset from GCS (skip if already exists) - OPTIMIZED VERSION
+    echo_info "Checking/downloading COCO subset on $CLIENT_VM (N_TRAIN=$N_TRAIN, N_VAL=$N_VAL)..."
     gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command='
       cd /app
       export GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
 
       mkdir -p datasets/coco/{images,labels}/{train2017,val2017}
 
+      # Check current dataset status
+      TRAIN_IMG_COUNT=$(ls datasets/coco/images/train2017/*.jpg 2>/dev/null | wc -l)
+      VAL_IMG_COUNT=$(ls datasets/coco/images/val2017/*.jpg 2>/dev/null | wc -l)
+      TRAIN_LABEL_COUNT=$(ls datasets/coco/labels/train2017/*.txt 2>/dev/null | wc -l)
+      VAL_LABEL_COUNT=$(ls datasets/coco/labels/val2017/*.txt 2>/dev/null | wc -l)
+
+      echo "Current dataset: Train images=$TRAIN_IMG_COUNT, Val images=$VAL_IMG_COUNT"
+      echo "Current labels: Train labels=$TRAIN_LABEL_COUNT, Val labels=$VAL_LABEL_COUNT"
+      echo "Target: Train='"$N_TRAIN"', Val='"$N_VAL"'"
+
       # ------------------ TRAINING IMAGES ------------------
-      echo "Downloading '"$N_TRAIN"' training images..."
-      gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/train2017/*.jpg | head -'"$N_TRAIN"') datasets/coco/images/train2017/
-      echo "Training images downloaded."
-      sleep 2
+      if [ "$TRAIN_IMG_COUNT" -ge '"$N_TRAIN"' ]; then
+        echo "Training images already sufficient, skipping download"
+      else
+        echo "Downloading '"$N_TRAIN"' training images..."
+        gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/train2017/*.jpg | head -'"$N_TRAIN"') datasets/coco/images/train2017/ 2>/dev/null || true
+        echo "Training images downloaded."
+      fi
 
-      # Generate list of basenames for training images
-      cd datasets/coco/images/train2017
-      ls *.jpg | sed "s/\.jpg$//" > /tmp/train_images.txt
+      # ------------------ TRAINING LABELS (OPTIMIZED) ------------------
+      CURRENT_TRAIN_IMGS=$(ls datasets/coco/images/train2017/*.jpg 2>/dev/null | wc -l)
+      CURRENT_TRAIN_LABELS=$(ls datasets/coco/labels/train2017/*.txt 2>/dev/null | wc -l)
 
-      # Download matching training labels in parallel
-      cd ../../labels/train2017
-      echo "Downloading only labels for existing training images..."
-      cat /tmp/train_images.txt | xargs -I {} -P 8 gsutil cp gs://'"$BUCKET_NAME"'/coco/labels/train2017/{}.txt . 2>/dev/null
-      echo "Training labels downloaded."
-      sleep 2
+      if [ "$CURRENT_TRAIN_LABELS" -ge "$CURRENT_TRAIN_IMGS" ]; then
+        echo "Training labels already sufficient, skipping download"
+      else
+        echo "Downloading training labels in parallel..."
+        # Create list of labels needed based on downloaded images
+        cd datasets/coco/images/train2017
+        > /tmp/train_labels_list.txt
+        for img in *.jpg; do
+          basename="${img%.jpg}"
+          if [ ! -f "../../labels/train2017/${basename}.txt" ]; then
+            echo "gs://'"$BUCKET_NAME"'/coco/labels/train2017/${basename}.txt" >> /tmp/train_labels_list.txt
+          fi
+        done
+        
+        # Download all labels in parallel using gsutil -m
+        if [ -s /tmp/train_labels_list.txt ]; then
+          cat /tmp/train_labels_list.txt | gsutil -m cp -I ../../labels/train2017/ 2>/dev/null || true
+        fi
+        rm -f /tmp/train_labels_list.txt
+        cd /app
+        echo "Training labels downloaded."
+      fi
 
       # ------------------ VALIDATION IMAGES ------------------
-      echo "Downloading '"$N_VAL"' validation images..."
-      gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/val2017/*.jpg | head -'"$N_VAL"') datasets/coco/images/val2017/
-      echo "Validation images downloaded."
-      sleep 2
+      if [ "$VAL_IMG_COUNT" -ge '"$N_VAL"' ]; then
+        echo "Validation images already sufficient, skipping download"
+      else
+        echo "Downloading '"$N_VAL"' validation images..."
+        gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/val2017/*.jpg | head -'"$N_VAL"') datasets/coco/images/val2017/ 2>/dev/null || true
+        echo "Validation images downloaded."
+      fi
 
-      # Generate list of basenames for validation images
-      cd ../../images/val2017
-      ls *.jpg | sed "s/\.jpg$//" > /tmp/val_images.txt
+      # ------------------ VALIDATION LABELS (OPTIMIZED) ------------------
+      CURRENT_VAL_IMGS=$(ls datasets/coco/images/val2017/*.jpg 2>/dev/null | wc -l)
+      CURRENT_VAL_LABELS=$(ls datasets/coco/labels/val2017/*.txt 2>/dev/null | wc -l)
 
-      # Download matching validation labels in parallel
-      cd ../../labels/val2017
-      echo "Downloading only labels for existing validation images..."
-      cat /tmp/val_images.txt | xargs -I {} -P 8 gsutil cp gs://'"$BUCKET_NAME"'/coco/labels/val2017/{}.txt . 2>/dev/null
-      echo "Validation labels downloaded."
-      sleep 2
+      if [ "$CURRENT_VAL_LABELS" -ge "$CURRENT_VAL_IMGS" ]; then
+        echo "Validation labels already sufficient, skipping download"
+      else
+        echo "Downloading validation labels in parallel..."
+        # Create list of labels needed based on downloaded images
+        cd datasets/coco/images/val2017
+        > /tmp/val_labels_list.txt
+        for img in *.jpg; do
+          basename="${img%.jpg}"
+          if [ ! -f "../../labels/val2017/${basename}.txt" ]; then
+            echo "gs://'"$BUCKET_NAME"'/coco/labels/val2017/${basename}.txt" >> /tmp/val_labels_list.txt
+          fi
+        done
+        
+        # Download all labels in parallel using gsutil -m
+        if [ -s /tmp/val_labels_list.txt ]; then
+          cat /tmp/val_labels_list.txt | gsutil -m cp -I ../../labels/val2017/ 2>/dev/null || true
+        fi
+        rm -f /tmp/val_labels_list.txt
+        cd /app
+        echo "Validation labels downloaded."
+      fi
       
-      echo "Dataset download complete"
-      '
+      echo "Dataset check/download complete"
+      echo "Final counts: Train images=$(ls datasets/coco/images/train2017/*.jpg 2>/dev/null | wc -l), Val images=$(ls datasets/coco/images/val2017/*.jpg 2>/dev/null | wc -l)"
+      echo "Final counts: Train labels=$(ls datasets/coco/labels/train2017/*.txt 2>/dev/null | wc -l), Val labels=$(ls datasets/coco/labels/val2017/*.txt 2>/dev/null | wc -l)"
+      ' &
 done
 
 # Wait for dataset downloads
