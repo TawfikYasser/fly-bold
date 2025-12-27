@@ -14,6 +14,9 @@ import subprocess
 import sys
 import importlib
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # keep your existing small CNN for non-detection tasks
 class Net(nn.Module):
