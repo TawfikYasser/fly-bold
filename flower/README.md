@@ -15,6 +15,9 @@ This project automates the deployment of a production-ready Federated Learning i
 - ✅ **Hot code updates** without full rebuild
 - ✅ **Optional GPU and TLS support**
 
+## High-level Overview of the System Architecture
+<img src="system-architecture.png" alt="System Architecture" style="display:block; margin-left:auto; margin-right:auto;" />
+
 ## 📋 Prerequisites
 
 - **GCP Account** with billing enabled
