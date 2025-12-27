@@ -455,6 +455,6 @@ done
 echo_success "Deployment complete!"
 echo ""
 echo "Run ID: $RUN_ID"
-echo "To start training: gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && flwr run .'"
+echo "To start training: gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
 echo ""
 echo "Monitor with: ./05-manage-clients.sh status"

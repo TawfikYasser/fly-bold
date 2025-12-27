@@ -290,12 +290,12 @@ def main(grid: Grid, context: Context) -> None:
         global_model = Net()
         arrays = ArrayRecord(global_model.state_dict())
 
+    # FIXED: Removed initial_parameters argument (not supported in Flower 1.22.0+)
     strategy = FedAvg(
         fraction_train=fraction_train,
         fraction_evaluate=fraction_evaluate,
         train_metrics_aggr_fn=custom_train_metrics_aggregation,
         evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
-        initial_parameters=None,
     )
 
     train_cfg = {"lr": lr, "num_rounds": num_rounds}
