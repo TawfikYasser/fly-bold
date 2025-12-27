@@ -230,7 +230,7 @@ services:
         flower-superlink --fleet-api-address=0.0.0.0:9092 --ssl-ca-certfile=/app/certs/ca.crt --ssl-certfile=/app/certs/server.crt --ssl-keyfile=/app/certs/server.key;
       fi"
     ports: ["9092:9092", "9093:9093"]
-    volumes: [".:/app", "./certs:/app/certs:ro"]
+    volumes: [".:/app", "./src:/app/src", "./certs:/app/certs:ro", "./logs:/app/logs"]
     restart: unless-stopped
 networks:
   default:
@@ -301,7 +301,7 @@ services:
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
+    volumes: ["./src:/app/src", "./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
     environment:
       - CLIENT_ID=${CLIENT_ID_1}
       - PARTITION_ID=${CLIENT_ID_1}

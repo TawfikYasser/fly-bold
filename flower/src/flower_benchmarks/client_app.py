@@ -21,6 +21,57 @@ from pathlib import Path
 
 # REMOVED: All Prometheus imports and initialization (lines 16-82)
 
+def ensure_yolo_models_available():
+    """Copy yolov5 models directory to working directory AND Flower's package dir."""
+    import shutil
+    import glob
+    
+    # 1. Copy to working directory (for subprocess mode)
+    target_models_dir = os.path.join(os.getcwd(), "yolov5", "models")
+    
+    if not os.path.exists(target_models_dir):
+        possible_sources = [
+            "/app/yolov5/models",
+            os.path.join(os.path.dirname(__file__), "..", "..", "yolov5", "models"),
+        ]
+        
+        for src in possible_sources:
+            if os.path.exists(src):
+                print(f"[setup] Copying yolov5 models from {src} to {target_models_dir}")
+                os.makedirs(os.path.dirname(target_models_dir), exist_ok=True)
+                shutil.copytree(src, target_models_dir)
+                break
+    
+    # 2. Copy to Flower's installed app directory (for in-process mode)
+    # Find Flower app installation directory
+    flower_app_dirs = glob.glob("/root/.flwr/apps/tawfik.flower_benchmarks.*/")
+    
+    for app_dir in flower_app_dirs:
+        flower_models_dir = os.path.join(app_dir, "yolov5", "models")
+        
+        # Only copy if it doesn't exist or is missing YAML files
+        if not os.path.exists(flower_models_dir) or not list(Path(flower_models_dir).glob("*.yaml")):
+            print(f"[setup] Copying yolov5 models to Flower app dir: {flower_models_dir}")
+            
+            # Find source
+            source_dir = "/app/yolov5/models"
+            if os.path.exists(source_dir):
+                os.makedirs(flower_models_dir, exist_ok=True)
+                
+                # Copy all YAML files
+                for yaml_file in Path(source_dir).glob("*.yaml"):
+                    dest_file = os.path.join(flower_models_dir, yaml_file.name)
+                    if not os.path.exists(dest_file):
+                        shutil.copy2(yaml_file, dest_file)
+                        print(f"[setup] Copied {yaml_file.name}")
+                
+                # Copy hub directory if it exists
+                source_hub = os.path.join(source_dir, "hub")
+                dest_hub = os.path.join(flower_models_dir, "hub")
+                if os.path.exists(source_hub) and not os.path.exists(dest_hub):
+                    shutil.copytree(source_hub, dest_hub)
+                    print(f"[setup] Copied hub directory")
+
 def get_config(key: str, context: Context, default=None, type_converter=str):
     """
     Get configuration with clear precedence:
@@ -104,6 +155,8 @@ def train(msg: Message, context: Context):
         Path("/app/.healthy").touch()
     except Exception:
         pass
+
+    ensure_yolo_models_available()  # ADD THIS LINE
 
     received_sizes = calculate_message_size(msg)
     task_type = get_config("task", context, default="classification")
@@ -282,7 +335,7 @@ def evaluate(msg: Message, context: Context):
         client_id = partition_id
         client_dataset_root = os.path.join(tmp_clients_base, f"client_{client_id}")
         val_yaml = os.path.abspath(os.path.join(client_dataset_root, "coco_client.yaml"))
-        current_round = get_config("server-round", context, default=0)
+        current_round = msg.content["config"].get("server-round", 0)
 
         tmp_out_ckpt = os.path.join(
             get_config("yolo_runs_dir", context, default="runs/train"),
