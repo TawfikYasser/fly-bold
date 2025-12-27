@@ -4,6 +4,8 @@ Complete automation suite for deploying Flower Federated Learning with YOLOv5 ob
 
 ## 🎯 Overview
 
+NOTE: This README file is not updated, more scripts were added. README will be updated soon.
+
 This project automates the deployment of a production-ready Federated Learning infrastructure on GCP featuring:
 
 - ✅ **GCS bucket** for centralized COCO dataset storage
