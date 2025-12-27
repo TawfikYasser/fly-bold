@@ -1,0 +1,115 @@
+# =====================================================================
+# For a full TOML configuration guide, check the Flower docs:
+# https://flower.ai/docs/framework/how-to-configure-pyproject-toml.html
+# =====================================================================
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flower_benchmarks"
+version = "1.0.15"
+description = "Federated Learning for YOLOv5 on GCP"
+license = "Apache-2.0"
+
+[project.optional-dependencies]
+# For pip to find CPU-only PyTorch versions
+pytorch = [
+    "torch==2.0.0+cpu ; platform_system != 'Darwin'",
+    "torchvision==0.15.1+cpu ; platform_system != 'Darwin'"
+]
+
+# Dependencies for your Flower App
+# flwr[rest] is needed for SuperLink with REST backend
+# flwr[simulation] is kept for local simulation testing
+dependencies = [
+    "flwr[rest,simulation]>=1.22.0",
+    "flwr-datasets[vision]>=0.5.0",
+    "protobuf>=5.28.2",
+    "numpy>=1.24.4,<2.0.0",
+    "torch==2.0.0+cpu",
+    "torchvision==0.15.1+cpu",
+    "pycocotools>=2.0.6",
+    "opencv-python>=4.7.0",
+    "matplotlib>=3.5.0",
+    "pandas>=1.5.0",
+    "albumentations>=1.3.0",
+    "tqdm>=4.64.0",
+    "seaborn>=0.12.0",
+    "tensorboard>=2.13.0",
+    "prometheus-client==0.19.0",
+    "Pillow==10.1.0",
+    "requests>=2.28.0"
+]
+
+# CRITICAL FIX: Include yolov5 models directory with YAML files
+[tool.hatch.build]
+include = [
+    "src/flower_benchmarks",
+    "yolov5",
+    "yolov5/**/*.yaml",
+    "yolov5/**/*.py",
+    "download_coco_n_images.py",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flower_benchmarks", "yolov5"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/flower_benchmarks",
+    "yolov5",
+    "yolov5/**/*.yaml",
+    "pyproject.toml",
+    "README.md"
+]
+
+[tool.flwr.app]
+publisher = "tawfik"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+# Point to your ServerApp and ClientApp objects
+[tool.flwr.app.components]
+serverapp = "flower_benchmarks.server_app:app"
+clientapp = "flower_benchmarks.client_app:app"
+
+# Custom config values accessible via `context.run_config`
+[tool.flwr.app.config]
+gcs_bucket = "flybold-coco-inf022"
+num-server-rounds = 5
+fraction-train = 1
+fraction_evaluate = 1
+local-epochs = 2
+lr = 0.001
+task = "detection"  # "classification" or "detection"
+coco_root = "/app/datasets/coco"
+yolo_tmp_dir = "./yolov5/tmp_coco_clients"  # Temp dir for client data
+yolo_runs_dir = "./yolov5/runs/train"  # Runs dir for YOLO training
+yolo_size = "s"  # n, s, m, l, or x
+img_size = 512
+batch_size = 24
+dirichlet_alpha = 0.7
+run_id = 100
+
+# Default federation to use when running the app
+[tool.flwr.federations]
+default = "deployment"
+
+# Deployment federation for real Flower deployment (SuperLink/SuperNode)
+# Server: flower-superlink, Clients: flower-supernode
+# Address and insecure mode can be set via .env (FLWR_SUPERLINK_ADDRESS, INSECURE or FLWR_INSECURE)
+[tool.flwr.federations.deployment]
+options.backend = "rest"
+options.backends.client-resources.num-cpus = 4
+address = "0.0.0.0:9093"
+insecure = true
+# root-certificates = "/app/certs/ca.crt"  # For TLS setup - use absolute path
+
+
+# Local simulation federation (CPU only) - kept for testing
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 3
+options.backend.client-resources.num-cpus = 4
+options.backend.client-resources.num-gpus = 0
