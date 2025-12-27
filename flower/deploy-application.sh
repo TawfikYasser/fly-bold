@@ -221,7 +221,7 @@ services:
   fl-server:
     image: ${DOCKER_IMAGE}
     container_name: fl-server
-    shm_size: '2gb'
+    shm_size: '16gb'
     env_file: [.env]
     command: >
       sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
@@ -293,7 +293,7 @@ services:
   fl-client-${CLIENT_ID_1}:
     image: ${DOCKER_IMAGE}
     container_name: fl-client-${CLIENT_ID_1}
-    shm_size: '2gb'
+    shm_size: '16gb'
     env_file: [.env]
     command: >
       sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then

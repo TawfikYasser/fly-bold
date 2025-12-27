@@ -229,6 +229,7 @@ def train(msg: Message, context: Context):
                 f"client{client_id}_r{server_round}", "weights", 
                 f"client{client_id}_r{server_round}_val.pt"
             )
+
             save_state_dict_as_yolo_checkpoint(final_state, model_size, tmp_out_ckpt)
             load_yolo_checkpoint_as_state_dict(tmp_out_ckpt)
         except Exception as e:
@@ -335,12 +336,12 @@ def evaluate(msg: Message, context: Context):
         client_id = partition_id
         client_dataset_root = os.path.join(tmp_clients_base, f"client_{client_id}")
         val_yaml = os.path.abspath(os.path.join(client_dataset_root, "coco_client.yaml"))
-        current_round = msg.content["config"].get("server-round", 0)
+        server_round = msg.content["config"].get("server-round", 0)
 
         tmp_out_ckpt = os.path.join(
-            get_config("yolo_runs_dir", context, default="runs/train"),
-            f"client{client_id}_r{current_round}",
-            "weights", f"client{client_id}_r{current_round}_val.pt"
+            context.run_config.get("yolo_runs_dir", "runs/train"),
+            f"client{client_id}_r{server_round}", "weights", 
+            f"client{client_id}_r{server_round}_val.pt"
         )
 
         eval_start_time = time.perf_counter()
