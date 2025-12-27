@@ -14,9 +14,6 @@ import subprocess
 import sys
 import importlib
 from pathlib import Path
-import logging
-
-logger = logging.getLogger(__name__)
 
 # keep your existing small CNN for non-detection tasks
 class Net(nn.Module):
@@ -356,16 +353,17 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
         # Remove the received_weights file
         if os.path.exists(tmp_weights):
             os.remove(tmp_weights)
-            logger.debug(f"Cleaned up temporary checkpoint: {tmp_weights}")
+            print(f"Cleaned up temporary checkpoint: {tmp_weights}")
         
         # Optionally keep only best.pt and remove intermediate epochs
         weights_dir = Path(run_dir) / name / "weights"
         if weights_dir.exists():
             for pt_file in weights_dir.glob("epoch*.pt"):
                 os.remove(pt_file)
-                logger.debug(f"Cleaned up intermediate checkpoint: {pt_file}")
+                print(f"Cleaned up intermediate checkpoint: {pt_file}")
+                
     except Exception as e:
-        logger.warning(f"Could not clean up temporary files: {e}")
+        print(f"Could not clean up temporary files: {e}")
 
     return final_state, round_log
 
@@ -403,7 +401,9 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             data=data_yaml,
             imgsz=img,
             task='val',
-            verbose=True
+            verbose=True,
+            workers=0,
+            half=False
         )
         
         print(f"[yolo_eval] In-process val.run returned results type: {type(results)}")
@@ -463,7 +463,9 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             "--weights", weights_pt,
             "--data", data_yaml,
             "--img", str(img),
-            "--verbose"
+            "--verbose",
+            "--workers", "0",
+            "--half", "False"
         ]
         print(f"[yolo_eval] Running subprocess: {' '.join(cmd)}")
 
