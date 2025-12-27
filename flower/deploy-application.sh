@@ -334,35 +334,41 @@ EOF
     
     # Download dataset from GCS
     echo_info "Downloading COCO subset on $CLIENT_VM (N_TRAIN=$N_TRAIN, N_VAL=$N_VAL)..."
-    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
-        cd /app
-        export GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
-        
-        # Create dataset structure
-        mkdir -p datasets/coco/{images,labels}/{train2017,val2017}
-        
-        # Download training images
-        echo 'Downloading $N_TRAIN training images...'
-        gsutil -m cp \$(gsutil ls gs://${BUCKET_NAME}/coco/images/train2017/*.jpg | head -$N_TRAIN) datasets/coco/images/train2017/
-        
-        # Download training labels
-        for img in datasets/coco/images/train2017/*.jpg; do
-            label=\$(basename \$img .jpg).txt
-            gsutil cp gs://${BUCKET_NAME}/coco/labels/train2017/\$label datasets/coco/labels/train2017/ 2>/dev/null || true
-        done
-        
-        # Download validation images
-        echo 'Downloading $N_VAL validation images...'
-        gsutil -m cp \$(gsutil ls gs://${BUCKET_NAME}/coco/images/val2017/*.jpg | head -$N_VAL) datasets/coco/images/val2017/
-        
-        # Download validation labels
-        for img in datasets/coco/images/val2017/*.jpg; do
-            label=\$(basename \$img .jpg).txt
-            gsutil cp gs://${BUCKET_NAME}/coco/labels/val2017/\$label datasets/coco/labels/val2017/ 2>/dev/null || true
-        done
-        
-        echo 'Dataset download complete'
-    " &
+    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command='
+      cd /app
+      export GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
+
+      mkdir -p datasets/coco/{images,labels}/{train2017,val2017}
+
+      echo "Downloading '"$N_TRAIN"' training images..."
+      gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/train2017/*.jpg | head -'"$N_TRAIN"') datasets/coco/images/train2017/
+      echo "Training images downloaded."
+      sleep 5
+      echo "Downloading all training labels..."
+      gsutil -m cp -n gs://flybold-coco-inf022/coco/labels/train2017/*.txt datasets/coco/labels/train2017/
+      echo "Filtering labels to match existing images (parallel)..."
+      # Training labels
+      cd datasets/coco/labels/train2017
+      find . -name "*.txt" | xargs -P 8 -I {} bash -c 'img="../images/train2017/$(basename {} .txt).jpg"; [ ! -f "$img" ] && rm "{}"'
+      echo "Filtering complete."
+      echo "Training labels downloaded."
+      sleep 5
+
+      echo "Downloading '"$N_VAL"' validation images..."
+      gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/val2017/*.jpg | head -'"$N_VAL"') datasets/coco/images/val2017/
+      echo "Validation images downloaded."
+      sleep 5
+      echo "Downloading all validation labels..."
+      gsutil -m cp -n gs://flybold-coco-inf022/coco/labels/val2017/*.txt datasets/coco/labels/val2017/
+      echo "Filtering labels to match existing images (parallel)..."
+      # Validation labels
+      cd ../val2017
+      find . -name "*.txt" | xargs -P 8 -I {} bash -c 'img="../images/val2017/$(basename {} .txt).jpg"; [ ! -f "$img" ] && rm "{}"'
+      echo "Filtering complete."
+      echo "Validation labels downloaded."
+      sleep 5
+      echo "Dataset download complete"
+      '
 done
 
 # Wait for dataset downloads
