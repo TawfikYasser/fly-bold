@@ -26,7 +26,7 @@ for CLIENT_VM_VAR in "${CLIENT_VMS[@]}"; do
     CLIENT_ZONE=${!CLIENT_ZONE_VAR}
     
     echo "[INFO] Cleaning datasets on $CLIENT_VM ($CLIENT_ZONE)..."
-    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="sudo rm -rf /app/datasets/*"
+    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="sudo rm -rf /app/datasets/* /app/datasets/.* 2>/dev/null || true"
     echo "[SUCCESS] Datasets removed on $CLIENT_VM"
 done
 

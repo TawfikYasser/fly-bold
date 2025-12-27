@@ -340,33 +340,40 @@ EOF
 
       mkdir -p datasets/coco/{images,labels}/{train2017,val2017}
 
+      # ------------------ TRAINING IMAGES ------------------
       echo "Downloading '"$N_TRAIN"' training images..."
       gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/train2017/*.jpg | head -'"$N_TRAIN"') datasets/coco/images/train2017/
       echo "Training images downloaded."
-      sleep 5
-      echo "Downloading all training labels..."
-      gsutil -m cp -n gs://flybold-coco-inf022/coco/labels/train2017/*.txt datasets/coco/labels/train2017/
-      echo "Filtering labels to match existing images (parallel)..."
-      # Training labels
-      cd datasets/coco/labels/train2017
-      find . -name "*.txt" | xargs -P 8 -I {} bash -c 'img="../images/train2017/$(basename {} .txt).jpg"; [ ! -f "$img" ] && rm "{}"'
-      echo "Filtering complete."
-      echo "Training labels downloaded."
-      sleep 5
+      sleep 2
 
+      # Generate list of basenames for training images
+      cd datasets/coco/images/train2017
+      ls *.jpg | sed "s/\.jpg$//" > /tmp/train_images.txt
+
+      # Download matching training labels in parallel
+      cd ../../labels/train2017
+      echo "Downloading only labels for existing training images..."
+      cat /tmp/train_images.txt | xargs -I {} -P 8 gsutil cp gs://'"$BUCKET_NAME"'/coco/labels/train2017/{}.txt . 2>/dev/null
+      echo "Training labels downloaded."
+      sleep 2
+
+      # ------------------ VALIDATION IMAGES ------------------
       echo "Downloading '"$N_VAL"' validation images..."
       gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/val2017/*.jpg | head -'"$N_VAL"') datasets/coco/images/val2017/
       echo "Validation images downloaded."
-      sleep 5
-      echo "Downloading all validation labels..."
-      gsutil -m cp -n gs://flybold-coco-inf022/coco/labels/val2017/*.txt datasets/coco/labels/val2017/
-      echo "Filtering labels to match existing images (parallel)..."
-      # Validation labels
-      cd ../val2017
-      find . -name "*.txt" | xargs -P 8 -I {} bash -c 'img="../images/val2017/$(basename {} .txt).jpg"; [ ! -f "$img" ] && rm "{}"'
-      echo "Filtering complete."
+      sleep 2
+
+      # Generate list of basenames for validation images
+      cd ../../images/val2017
+      ls *.jpg | sed "s/\.jpg$//" > /tmp/val_images.txt
+
+      # Download matching validation labels in parallel
+      cd ../../labels/val2017
+      echo "Downloading only labels for existing validation images..."
+      cat /tmp/val_images.txt | xargs -I {} -P 8 gsutil cp gs://'"$BUCKET_NAME"'/coco/labels/val2017/{}.txt . 2>/dev/null
       echo "Validation labels downloaded."
-      sleep 5
+      sleep 2
+      
       echo "Dataset download complete"
       '
 done
