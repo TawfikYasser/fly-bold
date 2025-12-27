@@ -66,13 +66,36 @@ usermod -aG docker $(who am i | awk "{print \$1}")
     sleep 60
 fi
 
-# Copy project files to VM
-echo_info "Copying project files to build VM..."
-gcloud compute scp --recurse ./src $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
-gcloud compute scp --recurse ./yolov5 $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
-gcloud compute scp ./Dockerfile $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
-gcloud compute scp ./requirements.txt $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
-gcloud compute scp ./pyproject.toml $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
+# Copy project files to VM (skip if already present)
+echo_info "Checking and copying project files to build VM..."
+
+# Check which files/directories are missing
+MISSING_FILES=$(gcloud compute ssh $TEMP_VM_NAME --zone=$TEMP_VM_ZONE --command="
+    missing=''
+    [ ! -d /tmp/src ] && missing=\"\$missing src\"
+    [ ! -d /tmp/yolov5 ] && missing=\"\$missing yolov5\"
+    [ ! -f /tmp/Dockerfile ] && missing=\"\$missing Dockerfile\"
+    [ ! -f /tmp/requirements.txt ] && missing=\"\$missing requirements.txt\"
+    [ ! -f /tmp/pyproject.toml ] && missing=\"\$missing pyproject.toml\"
+    echo \$missing
+" 2>/dev/null)
+
+if [ -z "$MISSING_FILES" ]; then
+    echo "All files already present on VM, skipping copy"
+else
+    echo "Missing files: $MISSING_FILES - copying..."
+    
+    # Copy only missing files
+    for file in $MISSING_FILES; do
+        if [ "$file" = "src" ] || [ "$file" = "yolov5" ]; then
+            echo "Copying directory: $file"
+            gcloud compute scp --recurse ./$file $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
+        else
+            echo "Copying file: $file"
+            gcloud compute scp ./$file $TEMP_VM_NAME:/tmp/ --zone=$TEMP_VM_ZONE --quiet
+        fi
+    done
+fi
 
 # Build and push image on VM
 echo_info "Building Docker image on VM: $FULL_IMAGE_NAME"

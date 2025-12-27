@@ -11,8 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# ADD after line 12 (after apt-get install):
-
 # Install Google Cloud SDK for GCS access
 RUN apt-get update && \
     apt-get install -y curl gnupg && \
@@ -24,8 +22,6 @@ RUN apt-get update && \
     apt-get install -y google-cloud-sdk && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-ENV PATH=$PATH:/usr/local/gcloud/google-cloud-sdk/bin
 
 # Copy only requirements first for better caching
 COPY requirements.txt /tmp/
@@ -67,7 +63,9 @@ RUN mkdir -p /app/logs /app/checkpoints /app/certs /app/datasets /app/data
 COPY pyproject.toml /app/
 COPY src/flower_benchmarks/ /app/src/flower_benchmarks/
 COPY yolov5/ /app/yolov5/
-COPY download_coco_n_images.py /app/
+
+# REMOVED: COPY download_coco_n_images.py /app/
+# (Dataset download handled by GCS bucket + deployment script)
 
 # Install the Flower app in editable mode
 RUN pip install --no-cache-dir -e .
@@ -79,10 +77,10 @@ RUN find /app -type f -name "*.pyc" -delete && \
     find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-# Expose ports for Flower components and Prometheus metrics
+# Expose ports for Flower components
 EXPOSE 9091 9092 9093
 
-# Health check (will be overridden by docker-compose)
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python3 -c "import os; exit(0 if os.path.exists('/app/.healthy') else 1)" || exit 1
 
