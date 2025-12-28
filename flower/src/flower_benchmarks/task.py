@@ -380,6 +380,8 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
     if cwd not in sys.path:
         sys.path.insert(0, cwd)
 
+    img = int(img)
+
     print(f"[yolo_eval] Evaluating weights: {weights_pt}")
     print(f"[yolo_eval] Weights file exists: {os.path.exists(weights_pt)}")
     
@@ -464,8 +466,7 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             "--data", data_yaml,
             "--img", str(img),
             "--verbose",
-            "--workers", "0",
-            "--half", "False"
+            "--workers", "0"
         ]
         print(f"[yolo_eval] Running subprocess: {' '.join(cmd)}")
 
