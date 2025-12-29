@@ -3,10 +3,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import re
+
 
 # Configuration
 INPUT_FILE = "EXP_YOLOv5_s_detection_14_logs.json"
-OUTPUT_DIR = "analysis_plots"
+# extract the experiment number (e.g. 14)
+match = re.search(r"_detection_(\d+)_", INPUT_FILE)
+exp_id = match.group(1) if match else "unknown"
+
+OUTPUT_DIR = f"analysis_plots_{exp_id}"
 
 # Experiment configuration
 CONFIG = {
