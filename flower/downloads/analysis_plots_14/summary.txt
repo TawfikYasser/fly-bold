@@ -1,0 +1,21 @@
+Summary
+
+Total runtime (~14.75 hours for 5 rounds) is reasonable and expected for your setup.
+
+~3 hours per round aligns with:
+
+YOLOv5-s on CPU only
+
+512×512 images
+
+2 local epochs
+
+10 parallel clients
+
+Non-IID data (Dirichlet α = 0.7)
+
+Client training (~19 min) happens in parallel; round time reflects the slowest client + aggregation + evaluation + overhead.
+
+No red flags: not suspiciously fast, not excessively slow.
+
+Training improves while validation slightly dips—typical for CPU-bound, non-IID federated runs.
