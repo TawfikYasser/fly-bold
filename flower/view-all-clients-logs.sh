@@ -14,7 +14,7 @@ for VM in "${!CLIENTS[@]}"; do
   
   gcloud compute ssh "$VM" \
     --zone="$ZONE" \
-    --command="sudo docker compose -f /app/docker-compose.yml logs -f --tail=20" \
+    --command="sudo docker compose -f /app/docker-compose.yml logs -f " \
     | sed "s/^/[$VM] /" &
 
 done
