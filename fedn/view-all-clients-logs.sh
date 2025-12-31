@@ -15,7 +15,7 @@ CLIENTS["${CLIENT_5_VM}"]=${CLIENT_5_ZONE}
 for VM in "${!CLIENTS[@]}"; do
   ZONE=${CLIENTS[$VM]}
   echo "Starting logs for $VM ($ZONE)"
-  gcloud compute ssh "$VM" --zone="$ZONE" --command="sudo docker compose -f /app/docker-compose.yml logs -f --tail=20" | sed "s/^/[$VM] /" &
+  gcloud compute ssh "$VM" --zone="$ZONE" --command="sudo docker compose -f /app/docker-compose.yaml logs -f --tail=20" | sed "s/^/[$VM] /" &
 done
 
 wait

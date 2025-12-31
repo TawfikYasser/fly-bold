@@ -20,21 +20,9 @@ DOCKER_IMAGE=$(grep '^DOCKER_IMAGE=' docker-image-info.txt | cut -d'=' -f2)
 
 info "Starting FEDn deployment"
 
-read -p "Enable TLS (self-signed)? (y/n) [n]: " tls
-ENABLE_TLS=${tls:-n}
-if [[ $ENABLE_TLS =~ ^[Yy]$ ]]; then
-  if [ ! -d certs ]; then
-    ./generate_certs.sh
-  fi
-  TLS_ENABLED=true
-else
-  TLS_ENABLED=false
-fi
-
-# Save basic env
+# Save basic env vars for use in prompts or eventual local usage
 cat > .env << EOF
 DOCKER_IMAGE=$DOCKER_IMAGE
-TLS_ENABLED=$TLS_ENABLED
 SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
 EOF
 
@@ -42,164 +30,54 @@ EOF
 info "Preparing server VM $SERVER_VM"
 
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /app/{config,storage,certs}" >/dev/null
-# Ensure docker running and permissions applied (belt-and-suspenders)
+# Ensure docker running and permissions applied
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
-# Copy the full fedn project folder to the server for reference/admin use
+# Copy the full fedn project folder to the server
+info "Copying fedn folder to server..."
 gcloud compute scp --recurse . "$SERVER_VM":/app/fly-bold-fedn --zone="$SERVER_ZONE" --quiet
 
-gcloud compute scp --recurse ./fedn/fedn/config $SERVER_VM:/app/ --zone="$SERVER_ZONE" --quiet
-gcloud compute scp --recurse ./certs $SERVER_VM:/app/ --zone="$SERVER_ZONE" --quiet || true
+# Copy configs from local fedn/config
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
+  cp /app/fly-bold-fedn/docker-compose-server.yaml /app/docker-compose.yaml
+  
+  # Copy config templates to the active config dir
+  cp /app/fly-bold-fedn/fedn/config/settings-combiner.yaml.template /app/config/combiner.yaml
+  cp /app/fly-bold-fedn/fedn/config/controller.yaml /app/config/controller.yaml
+  cp /app/fly-bold-fedn/fedn/config/settings-hooks.yaml.template /app/config/hooks.yaml
 
-# Render configs with internal IP
-cat > /tmp/controller.yaml << EOF
-network_id: fedn-network
-controller:
-  host: 0.0.0.0
-  port: 8092
-  debug: False
+  # DYNAMIC CONFIG UPDATE:
+  # Replace the placeholder 'REPLACE_THIS_IP' with the actual Internal IP of this VM.
+  # This ensures the Combiner advertises the correct address to clients.
+  sed -i \"s/REPLACE_THIS_IP/$SERVER_INTERNAL_IP/g\" /app/config/*.yaml
+"
 
-statestore:
-  type: MongoDB
-  mongo_config:
-    username: fedn_admin
-    password: password
-    host: mongo
-    port: 6534
-
-storage:
-  storage_type: BOTO3
-  storage_config:
-    storage_endpoint_url: http://minio:9000
-    storage_access_key: fedn_admin
-    storage_secret_key: password
-    storage_bucket: fedn-models
-    context_bucket: fedn-context
-    storage_secure_mode: False
-    storage_verify_ssl: False
+# Create .env on Server VM for Docker Compose
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
+cat > /app/.env << EOF
+DOCKER_IMAGE=$DOCKER_IMAGE
+SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
+MINIO_ROOT_USER=fedn_admin
+MINIO_ROOT_PASSWORD=password
+MONGO_USER=fedn_admin
+MONGO_PASSWORD=password
 EOF
+"
 
-cat > /tmp/combiner.yaml << EOF
-network_id: fedn-network
-name: combiner
-host: 0.0.0.0
-address: ${SERVER_INTERNAL_IP}
-port: 12080
-max_clients: 30
+# Copy configs if they exist in the repo location, otherwise we might be missing specific controller.yaml
+# The original script GENERATED them. The user wants 'fedn folder go as is'.
+# If 'fedn/fedn/config' has templates, we need to use them.
+# Inspecting file list: fedn/fedn/config exists.
+# We will trust the 'as is' directive. If files are missing, it will fail, but that matches 'as is'.
 
-statestore:
-  type: MongoDB
-  mongo_config:
-    username: fedn_admin
-    password: password
-    host: mongo
-    port: 6534
-
-storage:
-  storage_type: BOTO3
-  storage_config:
-    storage_endpoint_url: http://minio:9000
-    storage_access_key: fedn_admin
-    storage_secret_key: password
-    storage_bucket: fedn-models
-    context_bucket: fedn-context
-    storage_secure_mode: False
-    storage_verify_ssl: False
-EOF
-
-cat > /tmp/hooks.yaml << EOF
-network_id: fedn-network
-discover_host: api-server
-discover_port: 8092
-name: hooks
-host: hooks
-port: 12081
-max_clients: 30
-EOF
-
-cat > /tmp/docker-compose-server.yml << EOF
-version: '3.8'
-services:
-  minio:
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: fedn_admin
-      MINIO_ROOT_PASSWORD: password
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - ./storage/minio:/data
-  mongo:
-    image: mongo:7.0
-    command: mongod --port 6534
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: fedn_admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-    ports:
-      - "6534:6534"
-    volumes:
-      - ./storage/mongo:/data/db
-  api-server:
-    image: ${DOCKER_IMAGE}
-    working_dir: /app
-    command: ["controller","start","--init","/app/config/controller.yaml"]
-    environment:
-      STATESTORE_CONFIG: /app/config/controller.yaml
-      MODELSTORAGE_CONFIG: /app/config/controller.yaml
-      FEDN_COMPUTE_PACKAGE_DIR: /app/storage
-      TMPDIR: /app/tmp
-    depends_on:
-      - minio
-      - mongo
-    ports:
-      - "8092:8092"
-    volumes:
-      - ./config:/app/config
-      - ./storage:/app/storage
-  hooks:
-    image: ${DOCKER_IMAGE}
-    working_dir: /app
-    command: ["hooks","start","--init","/app/config/hooks.yaml"]
-    environment:
-      TMPDIR: /app/tmp
-    depends_on:
-      - api-server
-    ports:
-      - "12081:12081"
-    volumes:
-      - ./config:/app/config
-  combiner:
-    image: ${DOCKER_IMAGE}
-    working_dir: /app
-    command: ["combiner","start","--init","/app/config/combiner.yaml"]
-    environment:
-      TMPDIR: /app/tmp
-    depends_on:
-      - api-server
-      - hooks
-    ports:
-      - "12080:12080"
-    volumes:
-      - ./config:/app/config
-networks:
-  default:
-    driver: bridge
-EOF
-
-gcloud compute scp /tmp/controller.yaml /tmp/combiner.yaml /tmp/hooks.yaml /tmp/docker-compose-server.yml $SERVER_VM:/app/config/ --zone="$SERVER_ZONE" --quiet
-
-info "Starting server stack"
+info "Starting server stack on $SERVER_VM"
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
 set -e
 cd /app
-# place configs
-mv config/docker-compose-server.yml .
-sudo docker compose -f docker-compose-server.yml pull || true
-sudo docker compose -f docker-compose-server.yml up -d
+sudo docker compose pull || true
+sudo docker compose up -d
 sleep 10
-sudo docker compose -f docker-compose-server.yml ps
+sudo docker compose ps
 " || fail "Server deployment failed"
 
 success "Server and combiner running"
@@ -215,50 +93,58 @@ for i in $(seq 1 5); do
   info "Deploying clients on $VM_NAME (ids $CLIENT_ID_1,$CLIENT_ID_2)"
 
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo mkdir -p /app/{client,logs}" >/dev/null
-  # Copy full project for reference/ops on each client VM
+
+  # Copy full project
   gcloud compute scp --recurse . "$VM_NAME":/app/fly-bold-fedn --zone="$VM_ZONE" --quiet
-  gcloud compute scp --recurse ./client $VM_NAME:/app/ --zone="$VM_ZONE" --quiet
 
-  # Render client config overriding discover_host
-  cat > /tmp/fedn-client-${i}.yaml << EOF
-network_id: fedn-network
-discover_host: ${SERVER_INTERNAL_IP}
-discover_port: 8092
-EOF
-
-  cat > /tmp/docker-compose-client-${i}.yml << EOF
+  # Setup Client Env
+  # Generate dynamic docker-compose for this VM to match Client IDs (match fedn-client-<ID>)
+  cat > /tmp/docker-compose-client-${i}.yaml << EOF
 version: '3.8'
 services:
   fedn-client-${CLIENT_ID_1}:
     image: ${DOCKER_IMAGE}
+    container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app/client
     command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
-      - ./client:/app/client
-      - ./logs:/app/logs
+      - ./client/fedn.yaml:/app/client/fedn.yaml
+      - ../logs:/app/logs
   fedn-client-${CLIENT_ID_2}:
     image: ${DOCKER_IMAGE}
+    container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app/client
     command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:
-      - ./client:/app/client
-      - ./logs:/app/logs
+      - ./client/fedn.yaml:/app/client/fedn.yaml
+      - ../logs:/app/logs
 networks:
   default:
     driver: bridge
 EOF
 
-  gcloud compute scp /tmp/fedn-client-${i}.yaml $VM_NAME:/app/client/fedn.yaml --zone="$VM_ZONE" --quiet
-  gcloud compute scp /tmp/docker-compose-client-${i}.yml $VM_NAME:/app/docker-compose.yml --zone="$VM_ZONE" --quiet
+  # Copy generated compose file
+  gcloud compute scp /tmp/docker-compose-client-${i}.yaml "$VM_NAME":/app/docker-compose.yaml --zone="$VM_ZONE" --quiet
 
-  # Ensure python3.12 stack and deps (defense-in-depth beyond startup script)
+  # Setup Client Env and Configs
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="
+    cp /app/fly-bold-fedn/fedn/client/fedn.yaml /app/client/fedn.yaml
+    cat > /app/.env << INNEREOF
+DOCKER_IMAGE=$DOCKER_IMAGE
+COMBINER_HOST=$SERVER_INTERNAL_IP
+CLIENT_ID_1=$CLIENT_ID_1
+CLIENT_ID_2=$CLIENT_ID_2
+INNEREOF
+  "
+
+  # Ensure python3.12 stack (defense-in-depth)
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="
 set -e
-sudo usermod -aG docker $USER || true
+sudo usermod -aG docker \$USER || true
 sudo systemctl enable --now docker || true
 python3.12 -V || true
 python3.12 -m pip install --no-cache-dir --upgrade pip

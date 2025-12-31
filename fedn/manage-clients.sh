@@ -37,7 +37,7 @@ get_vm_for_client(){
 show_status(){
   echo "=== FEDn Cluster Status ==="
   echo "[SERVER: $SERVER_VM]"
-  gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="cd /app && sudo docker compose -f docker-compose-server.yml ps" 2>/dev/null || true
+  gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="cd /app && sudo docker compose ps" 2>/dev/null || true
   echo ""
   for i in $(seq 1 5); do
     VM_VAR="CLIENT_${i}_VM"; ZONE_VAR="CLIENT_${i}_ZONE"
