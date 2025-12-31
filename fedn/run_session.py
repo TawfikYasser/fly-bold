@@ -17,7 +17,7 @@ MONGO_USER = os.environ.get('MONGO_USER', 'fedn_admin')
 MONGO_PASSWORD = os.environ.get('MONGO_PASSWORD', 'password')
 NETWORK_ID = os.environ.get('NETWORK_ID', 'fedn-network')
 
-def verify_rounds_in_db(expected_rounds):
+def verify_rounds_in_db(expected_rounds, session_id=None):
     print(f"\nVerifying {expected_rounds} rounds in Database...")
     try:
         client = pymongo.MongoClient(
@@ -29,9 +29,13 @@ def verify_rounds_in_db(expected_rounds):
         db = client[NETWORK_ID]
         
         rounds_coll = db['control.rounds']
-        
-        # Find rounds sorted by ID
-        rounds = list(rounds_coll.find().sort("round_id", -1).limit(expected_rounds))
+
+        query = {}
+        if session_id:
+            query["round_config.session_id"] = session_id
+
+        # Find rounds for this session sorted by ID
+        rounds = list(rounds_coll.find(query).sort("round_id", -1).limit(expected_rounds))
         
         if len(rounds) < expected_rounds:
             print(f"WARNING: Found only {len(rounds)} rounds in DB, expected {expected_rounds}.")
@@ -42,7 +46,8 @@ def verify_rounds_in_db(expected_rounds):
         for r in rounds:
             status = r.get('status', 'Unknown')
             rid = r.get('round_id')
-            print(f" - Round {rid}: Status '{status}'")
+            sid = r.get('round_config', {}).get('session_id')
+            print(f" - Round {rid} (session {sid}): Status '{status}'")
             if status in ['Finished', 'Success']:
                 success_count += 1
                 
@@ -87,8 +92,11 @@ def run_simulation():
     rounds_to_run = 3
     print(f"Starting session ({rounds_to_run} rounds)...")
     try:
-        result = client.start_session(rounds=rounds_to_run, round_timeout=120)
+        result = client.start_session(rounds=rounds_to_run, round_timeout=600)
         print(f"Session started: {result}")
+        session_id = result.get("session_id") or result.get("id")
+        if not session_id:
+            print("Warning: session_id missing in start_session response; database verification will be broad.")
         
         # Poll for completion
         print("Waiting for session to complete...")
@@ -97,12 +105,18 @@ def run_simulation():
             status = client.get_controller_status()
             state = status.get('state')
             print(f"Current state: {state}")
-            if state == 'idle':
+
+            if session_id and client.session_is_finished(session_id):
                 print("Session completed!")
+                break
+
+            # Fallback: if controller is idle but session status could not be fetched
+            if state == 'idle' and not session_id:
+                print("Controller idle; assuming session completed.")
                 break
         
         # verify
-        verify_rounds_in_db(rounds_to_run)
+        verify_rounds_in_db(rounds_to_run, session_id=session_id)
                 
     except Exception as e:
         print(f"Error starting/monitoring session: {e}")

@@ -694,7 +694,7 @@ def main():
         df_rounds, df_clients = mock_data_generator()
     else:
         db = get_mongo_connection()
-        if not db:
+        if db is None:
             return
         rounds_raw, val_raw = fetch_data(db)
         df_rounds, df_clients = process_data(rounds_raw, val_raw)
