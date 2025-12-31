@@ -2,7 +2,7 @@ import os
 import json
 import argparse
 import logging
-import logging
+import re
 try:
     import pymongo
 except ImportError:
@@ -100,10 +100,17 @@ def process_data(rounds_data, validations_data):
 
             # Extract metrics
             # Keys from validate.py: mp, mr, mAP@0.5, mAP
+            
+            # Robust client ID extraction from sender name (handles various formats)
+            sender_name = v.get('sender', {}).get('name', 'unknown')
+            # Try to extract numeric ID from patterns like 'client-0', 'client_1', 'fedn-client-2'
+            client_id_match = re.search(r'(\d+)$', sender_name)
+            client_id = client_id_match.group(1) if client_id_match else sender_name
+            
             metrics = {
                 # Try to find round info directly, or infer
                 'round_id': v.get('round_id'), # Might not exist 
-                'client_id': v.get('sender', {}).get('name', 'unknown').replace('client', '').replace('_', ''),
+                'client_id': client_id,
                 'eval_mr': float(data.get('mr', 0)),
                 'eval_mp': float(data.get('mp', 0)),
                 'eval_mAP50': float(data.get('mAP@0.5', 0)),

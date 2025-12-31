@@ -62,7 +62,6 @@ def run_yolo_val(weights_pt: str, data_yaml: str, img: int):
             raise RuntimeError("YOLO validation failed")
         return {}
 
-
 def validate(in_model_path: str, out_json_path: str):
     """Validate a YOLOv5 model checkpoint with client data and emit metrics JSON."""
 

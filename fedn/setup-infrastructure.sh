@@ -85,7 +85,9 @@ cat > /tmp/vm-startup.sh << 'EOF'
 set -e
 curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
-usermod -aG docker $(who am i | awk '{print $1}')
+# Get the primary non-root user (fallback to root if none found)
+PRIMARY_USER=$(getent passwd 1000 | cut -d: -f1 || echo "root")
+usermod -aG docker "$PRIMARY_USER" 2>/dev/null || true
 systemctl enable --now docker
 # docker compose plugin
 mkdir -p /usr/local/lib/docker/cli-plugins
@@ -104,7 +106,7 @@ python3.12 -m pip install --no-cache-dir "numpy<2" opencv-python-headless==4.9.0
 python3.12 -m pip install --no-cache-dir fedn yolov5
 rm -f /tmp/get-pip.py
 mkdir -p /app
-chown -R $(who am i | awk '{print $1}'):$(who am i | awk '{print $1}') /app
+chown -R "$PRIMARY_USER":"$PRIMARY_USER" /app 2>/dev/null || true
 EOF
 
 info "Creating server VM: $SERVER_VM_NAME"

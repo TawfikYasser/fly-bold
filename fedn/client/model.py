@@ -1,5 +1,3 @@
-import os
-
 import config
 from fedn.utils.helpers.helpers import get_helper
 

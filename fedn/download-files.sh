@@ -6,11 +6,11 @@ set -euo pipefail
 source vm-info.txt
 
 echo "=== FEDn File Downloader ==="
-# Find regular files
-FILES=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type f \( -name '*.json' -o -name '*.log' -o -name '*.npz' -o -name '*.tar.gz' -o -name '*.yaml' \) 2>/dev/null | sort")
+# Find regular files (preserve stderr for actual errors, only suppress 'permission denied' type messages)
+FILES=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type f \( -name '*.json' -o -name '*.log' -o -name '*.npz' -o -name '*.tar.gz' -o -name '*.yaml' \) 2>/dev/null | sort") || { echo "Warning: SSH command for files failed"; FILES=""; }
 
 # Check for analysis_plots directory
-PLOTS_DIR=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type d -name 'analysis_plots'" 2>/dev/null)
+PLOTS_DIR=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type d -name 'analysis_plots' 2>/dev/null") || { echo "Warning: SSH command for plots dir failed"; PLOTS_DIR=""; }
 
 if [ -n "$PLOTS_DIR" ]; then
   FILES="$FILES
