@@ -1,0 +1,36 @@
+name: "code checks"
+
+on: push
+
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: init venv
+        run: .devcontainer/bin/init_venv.sh
+
+      - name: Ruff Linting
+        uses: chartboost/ruff-action@v1
+
+      - name: check for floating imports
+        run: >
+          ! grep -E -R 
+          --exclude-dir='.venv' 
+          --exclude-dir='.mnist-pytorch' 
+          --exclude-dir='.mnist-keras' 
+          --exclude-dir='.huggingface'
+          --exclude-dir='docs'
+          --exclude-dir='flower-client'
+          --exclude='tests.py'
+          --exclude='controller_cmd.py'
+          --exclude='fedn_pb2_grpc.py'
+          --exclude='combiner_cmd.py'
+          --exclude='run_cmd.py'
+          --exclude='README.rst'
+          '^[ \t]+(import|from) ' -I . |
+          grep -v '# not-floating-import'
+
+      # TODO: add linting/formatting for all file types
