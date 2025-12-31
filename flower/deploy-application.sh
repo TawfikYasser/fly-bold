@@ -344,7 +344,7 @@ services:
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./src:/app/src", "./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets:ro", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
+    volumes: ["./src:/app/src", "./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
     environment:
       - CLIENT_ID=${CLIENT_ID_1}
       - PARTITION_ID=${CLIENT_ID_1}
@@ -354,7 +354,7 @@ services:
   fl-client-${CLIENT_ID_2}:
     image: ${DOCKER_IMAGE}
     container_name: fl-client-${CLIENT_ID_2}
-    shm_size: '2gb'
+    shm_size: '28gb'
     env_file: [.env]
     command: >
       sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
@@ -362,7 +362,7 @@ services:
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets:ro", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
+    volumes: ["./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
     environment:
       - CLIENT_ID=${CLIENT_ID_2}
       - PARTITION_ID=${CLIENT_ID_2}

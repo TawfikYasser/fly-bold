@@ -5,7 +5,7 @@ NETWORK=flybold-network
 SERVER_VM=flybold-server
 SERVER_ZONE=us-central1-a
 SERVER_INTERNAL_IP=10.0.0.4
-SERVER_EXTERNAL_IP=136.113.112.187
+SERVER_EXTERNAL_IP=34.45.95.69
 
 CLIENT_1_VM=flybold-client-1
 CLIENT_1_ZONE=us-central1-a
