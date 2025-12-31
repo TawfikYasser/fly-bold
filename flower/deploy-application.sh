@@ -30,6 +30,11 @@ if [ ! -f "docker-image-info.txt" ]; then
 fi
 DOCKER_IMAGE=$(grep '^DOCKER_IMAGE=' docker-image-info.txt | cut -d'=' -f2)
 
+# ✅ NEW: Check if partition manifest exists
+if [ ! -f "partition_manifest.json" ]; then
+    echo_error "partition_manifest.json not found.\n\nPlease run 03b-partition-dataset.sh BEFORE deploying.\nThis script partitions the dataset for all clients."
+fi
+
 echo_info "Starting Flybold deployment"
 
 # Check for existing .env or prompt for parameters
@@ -81,11 +86,12 @@ if [ "$SKIP_PROMPTS" = false ]; then
         INSECURE=true
     fi
     
-    # Dataset size
-    read -p "Training images per client [2000]: " N_TRAIN
-    N_TRAIN=${N_TRAIN:-2000}
-    read -p "Validation images per client [500]: " N_VAL
-    N_VAL=${N_VAL:-500}
+    # NOTE: N_TRAIN and N_VAL should match partition manifest
+    echo_info "Dataset parameters should match partition manifest!"
+    read -p "Training images per client [10000]: " N_TRAIN
+    N_TRAIN=${N_TRAIN:-10000}
+    read -p "Validation images per client [5000]: " N_VAL
+    N_VAL=${N_VAL:-5000}
     
     # FL parameters
     read -p "Number of rounds [30]: " NUM_SERVER_ROUNDS
@@ -262,7 +268,7 @@ for i in $(seq 1 5); do
     
     # Setup directories
     gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
-        sudo mkdir -p /app/{logs,datasets,certs}
+        sudo mkdir -p /app/{logs,certs}
         sudo chown -R \$USER:\$USER /app
     "
     
@@ -286,6 +292,43 @@ for i in $(seq 1 5); do
     CLIENT_ID_1=$(( (i-1)*2 ))
     CLIENT_ID_2=$(( (i-1)*2 + 1 ))
     
+    # ✅ REMOVED: Dataset download section (lines 207-280 in original)
+    # ✅ NEW: Verify pre-partitioned data exists
+    echo_info "Verifying pre-partitioned data on $CLIENT_VM (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
+    VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
+        set -e
+        for CLIENT_ID in $CLIENT_ID_1 $CLIENT_ID_2; do
+            PARTITION_DIR=\"/app/datasets/coco_partitions/client_\${CLIENT_ID}\"
+            
+            if [ ! -d \"\$PARTITION_DIR\" ]; then
+                echo \"ERROR: Partition directory not found: \$PARTITION_DIR\"
+                echo \"Please run 03b-partition-dataset.sh before deployment!\"
+                exit 1
+            fi
+            
+            if [ ! -f \"\$PARTITION_DIR/coco_client.yaml\" ]; then
+                echo \"ERROR: YAML config missing for client \$CLIENT_ID\"
+                exit 1
+            fi
+            
+            TRAIN_IMG=\$(ls \$PARTITION_DIR/images/train2017/*.jpg 2>/dev/null | wc -l)
+            VAL_IMG=\$(ls \$PARTITION_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
+            
+            if [ \$TRAIN_IMG -eq 0 ]; then
+                echo \"ERROR: No training images found for client \$CLIENT_ID\"
+                exit 1
+            fi
+            
+            echo \"✅ Client \$CLIENT_ID: Train=\$TRAIN_IMG images, Val=\$VAL_IMG images\"
+        done
+    " 2>&1)
+    
+    if echo "$VERIFICATION_OUTPUT" | grep -q "ERROR"; then
+        echo_error "Pre-partitioned data verification failed on $CLIENT_VM:\n$VERIFICATION_OUTPUT"
+    else
+        echo "$VERIFICATION_OUTPUT"
+    fi
+    
     # Create client docker-compose
     cat > /tmp/docker-compose-client-${i}.yml << EOF
 version: '3.8'
@@ -301,7 +344,7 @@ services:
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./src:/app/src", "./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
+    volumes: ["./src:/app/src", "./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets:ro", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
     environment:
       - CLIENT_ID=${CLIENT_ID_1}
       - PARTITION_ID=${CLIENT_ID_1}
@@ -319,7 +362,7 @@ services:
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
+    volumes: ["./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets:ro", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
     environment:
       - CLIENT_ID=${CLIENT_ID_2}
       - PARTITION_ID=${CLIENT_ID_2}
@@ -331,108 +374,9 @@ networks:
 EOF
     
     gcloud compute scp /tmp/docker-compose-client-${i}.yml $CLIENT_VM:/app/docker-compose.yml --zone=$CLIENT_ZONE --quiet
-    
-    # Download dataset from GCS (skip if already exists) - OPTIMIZED VERSION
-    echo_info "Checking/downloading COCO subset on $CLIENT_VM (N_TRAIN=$N_TRAIN, N_VAL=$N_VAL)..."
-    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command='
-      cd /app
-      export GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
-
-      mkdir -p datasets/coco/{images,labels}/{train2017,val2017}
-
-      # Check current dataset status
-      TRAIN_IMG_COUNT=$(ls datasets/coco/images/train2017/*.jpg 2>/dev/null | wc -l)
-      VAL_IMG_COUNT=$(ls datasets/coco/images/val2017/*.jpg 2>/dev/null | wc -l)
-      TRAIN_LABEL_COUNT=$(ls datasets/coco/labels/train2017/*.txt 2>/dev/null | wc -l)
-      VAL_LABEL_COUNT=$(ls datasets/coco/labels/val2017/*.txt 2>/dev/null | wc -l)
-
-      echo "Current dataset: Train images=$TRAIN_IMG_COUNT, Val images=$VAL_IMG_COUNT"
-      echo "Current labels: Train labels=$TRAIN_LABEL_COUNT, Val labels=$VAL_LABEL_COUNT"
-      echo "Target: Train='"$N_TRAIN"', Val='"$N_VAL"'"
-
-      # ------------------ TRAINING IMAGES ------------------
-      if [ "$TRAIN_IMG_COUNT" -ge '"$N_TRAIN"' ]; then
-        echo "Training images already sufficient, skipping download"
-      else
-        echo "Downloading '"$N_TRAIN"' training images..."
-        gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/train2017/*.jpg | head -'"$N_TRAIN"') datasets/coco/images/train2017/ 2>/dev/null || true
-        echo "Training images downloaded."
-      fi
-
-      # ------------------ TRAINING LABELS (OPTIMIZED) ------------------
-      CURRENT_TRAIN_IMGS=$(ls datasets/coco/images/train2017/*.jpg 2>/dev/null | wc -l)
-      CURRENT_TRAIN_LABELS=$(ls datasets/coco/labels/train2017/*.txt 2>/dev/null | wc -l)
-
-      if [ "$CURRENT_TRAIN_LABELS" -ge "$CURRENT_TRAIN_IMGS" ]; then
-        echo "Training labels already sufficient, skipping download"
-      else
-        echo "Downloading training labels in parallel..."
-        # Create list of labels needed based on downloaded images
-        cd datasets/coco/images/train2017
-        > /tmp/train_labels_list.txt
-        for img in *.jpg; do
-          basename="${img%.jpg}"
-          if [ ! -f "../../labels/train2017/${basename}.txt" ]; then
-            echo "gs://'"$BUCKET_NAME"'/coco/labels/train2017/${basename}.txt" >> /tmp/train_labels_list.txt
-          fi
-        done
-        
-        # Download all labels in parallel using gsutil -m
-        if [ -s /tmp/train_labels_list.txt ]; then
-          cat /tmp/train_labels_list.txt | gsutil -m cp -I ../../labels/train2017/ 2>/dev/null || true
-        fi
-        rm -f /tmp/train_labels_list.txt
-        cd /app
-        echo "Training labels downloaded."
-      fi
-
-      # ------------------ VALIDATION IMAGES ------------------
-      if [ "$VAL_IMG_COUNT" -ge '"$N_VAL"' ]; then
-        echo "Validation images already sufficient, skipping download"
-      else
-        echo "Downloading '"$N_VAL"' validation images..."
-        gsutil -m cp $(gsutil ls gs://'"$BUCKET_NAME"'/coco/images/val2017/*.jpg | head -'"$N_VAL"') datasets/coco/images/val2017/ 2>/dev/null || true
-        echo "Validation images downloaded."
-      fi
-
-      # ------------------ VALIDATION LABELS (OPTIMIZED) ------------------
-      CURRENT_VAL_IMGS=$(ls datasets/coco/images/val2017/*.jpg 2>/dev/null | wc -l)
-      CURRENT_VAL_LABELS=$(ls datasets/coco/labels/val2017/*.txt 2>/dev/null | wc -l)
-
-      if [ "$CURRENT_VAL_LABELS" -ge "$CURRENT_VAL_IMGS" ]; then
-        echo "Validation labels already sufficient, skipping download"
-      else
-        echo "Downloading validation labels in parallel..."
-        # Create list of labels needed based on downloaded images
-        cd datasets/coco/images/val2017
-        > /tmp/val_labels_list.txt
-        for img in *.jpg; do
-          basename="${img%.jpg}"
-          if [ ! -f "../../labels/val2017/${basename}.txt" ]; then
-            echo "gs://'"$BUCKET_NAME"'/coco/labels/val2017/${basename}.txt" >> /tmp/val_labels_list.txt
-          fi
-        done
-        
-        # Download all labels in parallel using gsutil -m
-        if [ -s /tmp/val_labels_list.txt ]; then
-          cat /tmp/val_labels_list.txt | gsutil -m cp -I ../../labels/val2017/ 2>/dev/null || true
-        fi
-        rm -f /tmp/val_labels_list.txt
-        cd /app
-        echo "Validation labels downloaded."
-      fi
-      
-      echo "Dataset check/download complete"
-      echo "Final counts: Train images=$(ls datasets/coco/images/train2017/*.jpg 2>/dev/null | wc -l), Val images=$(ls datasets/coco/images/val2017/*.jpg 2>/dev/null | wc -l)"
-      echo "Final counts: Train labels=$(ls datasets/coco/labels/train2017/*.txt 2>/dev/null | wc -l), Val labels=$(ls datasets/coco/labels/val2017/*.txt 2>/dev/null | wc -l)"
-      ' &
 done
 
-# Wait for dataset downloads
-echo_info "Waiting for dataset downloads to complete..."
-wait
-
-echo_success "All clients deployed and datasets downloaded"
+echo_success "All clients deployed and data verified"
 
 # Start clients
 for i in $(seq 1 5); do
@@ -455,6 +399,8 @@ done
 echo_success "Deployment complete!"
 echo ""
 echo "Run ID: $RUN_ID"
+echo "✅ All clients are using pre-partitioned data from /app/datasets/coco_partitions/"
+echo ""
 echo "To start training: gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
 echo ""
 echo "Monitor with: ./05-manage-clients.sh status"

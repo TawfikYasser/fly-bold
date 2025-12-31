@@ -16,10 +16,8 @@ import os
 import sys
 
 from flower_benchmarks.plugins.yolov5.model import load_yolo_checkpoint_as_state_dict, save_state_dict_as_yolo_checkpoint
-from flower_benchmarks.task import yolo_train_from_state_and_return_state_dict, prepare_client_yolo_dataset, yolo_evaluate_weights_and_parse_map
+from flower_benchmarks.task import yolo_train_from_state_and_return_state_dict, yolo_evaluate_weights_and_parse_map
 from pathlib import Path
-
-# REMOVED: All Prometheus imports and initialization (lines 16-82)
 
 def ensure_yolo_models_available():
     """Copy yolov5 models directory to working directory AND Flower's package dir."""
@@ -148,6 +146,49 @@ def extract_yolov5_weights_as_arrays(state_dict: dict):
 
     return weights_dict
 
+def prepare_client_yolo_dataset_prepartitioned(client_id: int):
+    """
+    Use pre-partitioned dataset from /app/datasets/coco_partitions/client_{id}.
+    This directory should have been created by 03b-partition-dataset.sh BEFORE training.
+    """
+    partition_root = f"/app/datasets/coco_partitions/client_{client_id}"
+    data_yaml = os.path.join(partition_root, "coco_client.yaml")
+    
+    # Verify partition exists
+    if not os.path.exists(partition_root):
+        raise FileNotFoundError(
+            f"❌ Pre-partitioned data not found for client {client_id}!\n"
+            f"Expected location: {partition_root}\n\n"
+            f"Please run 03b-partition-dataset.sh BEFORE starting training.\n"
+            f"This script must be executed after infrastructure setup but before deployment."
+        )
+    
+    if not os.path.exists(data_yaml):
+        raise FileNotFoundError(
+            f"❌ YAML config missing for client {client_id}!\n"
+            f"Expected: {data_yaml}\n\n"
+            f"The partition may be incomplete. Please re-run 03b-partition-dataset.sh"
+        )
+    
+    # Verify data integrity
+    train_images = list(Path(partition_root).glob('images/train2017/*.jpg'))
+    val_images = list(Path(partition_root).glob('images/val2017/*.jpg'))
+    
+    if len(train_images) == 0:
+        raise RuntimeError(
+            f"❌ No training images found for client {client_id}!\n"
+            f"Location: {partition_root}/images/train2017/\n\n"
+            f"Please re-run 03b-partition-dataset.sh"
+        )
+    
+    print(f"✅ [dataset] Using pre-partitioned data for client {client_id}")
+    print(f"   Location: {partition_root}")
+    print(f"   Train images: {len(train_images)}")
+    print(f"   Val images: {len(val_images)}")
+    
+    return data_yaml, partition_root
+
+
 @app.train()
 def train(msg: Message, context: Context):
     """Train the model on local data. Supports classification and detection."""
@@ -156,13 +197,13 @@ def train(msg: Message, context: Context):
     except Exception:
         pass
 
-    ensure_yolo_models_available()  # ADD THIS LINE
+    ensure_yolo_models_available()
 
     received_sizes = calculate_message_size(msg)
     task_type = get_config("task", context, default="classification")
 
     if task_type == "detection":
-        # YOLO detection flow
+        # YOLO detection flow with PRE-PARTITIONED data
         num_rounds = msg.content["config"].get("num_rounds", 0)
         server_round = msg.content["config"].get("server-round", 0)
         client_id = get_config("partition-id", context, default=0, type_converter=int)
@@ -171,20 +212,10 @@ def train(msg: Message, context: Context):
         
         received_state = msg.content["arrays"].to_torch_state_dict()
         
-        # CHANGED: Use /app/datasets/coco instead of ./datasets/coco
-        coco_root = os.path.abspath(get_config("coco_root", context, default="/app/datasets/coco"))
-        tmp_clients_base = os.path.abspath(get_config("yolo_tmp_dir", context, default="./yolov5/tmp_coco_clients"))
-        num_clients = get_config("num_clients", context, default=10, type_converter=int)
-        
-        print(f"[client_train] coco_root: {coco_root}, tmp_clients_base: {tmp_clients_base}, num_clients: {num_clients}")
-
-        print(f"[client_train] Preparing dataset for client {client_id}...")
-        data_yaml, client_dataset_root = prepare_client_yolo_dataset(
-            coco_root, tmp_clients_base, client_id, num_clients,
-            alpha=float(os.environ.get("DIRICHLET_ALPHA", context.run_config.get("dirichlet_alpha", 0.7))),
-            seed=context.run_config.get("dirichlet_seed", 42)
-        )
-        print(f"[client_train] Dataset prepared. data_yaml: {data_yaml}")
+        # ✅ USE PRE-PARTITIONED DATA (no dynamic partitioning)
+        print(f"[client_train] Loading pre-partitioned dataset for client {client_id}...")
+        data_yaml, client_dataset_root = prepare_client_yolo_dataset_prepartitioned(client_id)
+        print(f"[client_train] Dataset loaded. data_yaml: {data_yaml}")
 
         model_size = msg.content.get("config", {}).get("yolo_size") or os.environ.get("YOLO_SIZE", context.run_config.get("yolo_size", "n"))
         epochs = int(os.environ.get("LOCAL_EPOCHS", context.run_config.get("local-epochs", 1)))
@@ -283,8 +314,6 @@ def train(msg: Message, context: Context):
         reply_msg = Message(content=content, reply_to=msg)
         sent_sizes = calculate_message_size(reply_msg)
         metrics["data_sent_to_server"] = sent_sizes
-
-        # REMOVED: Prometheus metric setting (lines 479-481)
         
         Path("/app/.healthy").touch()
         return reply_msg
@@ -331,11 +360,15 @@ def evaluate(msg: Message, context: Context):
 
     if task_type == "detection":
         partition_id = context.node_config.get("partition-id", int(get_config("partition-id", context, default=0)))
-        num_partitions = get_config("num_clients", context, default=10, type_converter=int)
-        tmp_clients_base = os.path.abspath(get_config("yolo_tmp_dir", context, default="./yolov5/tmp_coco_clients"))
         client_id = partition_id
-        client_dataset_root = os.path.join(tmp_clients_base, f"client_{client_id}")
-        val_yaml = os.path.abspath(os.path.join(client_dataset_root, "coco_client.yaml"))
+        
+        # Use pre-partitioned data
+        partition_root = f"/app/datasets/coco_partitions/client_{client_id}"
+        val_yaml = os.path.join(partition_root, "coco_client.yaml")
+        
+        if not os.path.exists(val_yaml):
+            raise FileNotFoundError(f"Pre-partitioned data not found for client {client_id}")
+        
         server_round = msg.content["config"].get("server-round", 0)
 
         tmp_out_ckpt = os.path.join(
@@ -368,7 +401,7 @@ def evaluate(msg: Message, context: Context):
             "client_eval_acc_mAP": client_eval_acc_mAP,
             "client_eval_loss": client_eval_loss,
             "client_eval_time": client_eval_time,
-            "num-examples": len(list(Path(client_dataset_root).glob('images/val2017/*.jpg'))),
+            "num-examples": len(list(Path(partition_root).glob('images/val2017/*.jpg'))),
         }
         metric_record = MetricRecord(metrics)
         content = RecordDict({"metrics": metric_record})
