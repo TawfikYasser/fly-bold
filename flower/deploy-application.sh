@@ -31,7 +31,7 @@ fi
 DOCKER_IMAGE=$(grep '^DOCKER_IMAGE=' docker-image-info.txt | cut -d'=' -f2)
 
 # ✅ NEW: Check if partition manifest exists
-if [ ! -f "partition_manifest.json" ]; then
+if [ ! -f "partition_outputs/partition_manifest.json" ]; then
     echo_error "partition_manifest.json not found.\n\nPlease run 03b-partition-dataset.sh BEFORE deploying.\nThis script partitions the dataset for all clients."
 fi
 
@@ -227,7 +227,7 @@ services:
   fl-server:
     image: ${DOCKER_IMAGE}
     container_name: fl-server
-    shm_size: '16gb'
+    shm_size: '24gb'
     env_file: [.env]
     command: >
       sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
@@ -336,7 +336,7 @@ services:
   fl-client-${CLIENT_ID_1}:
     image: ${DOCKER_IMAGE}
     container_name: fl-client-${CLIENT_ID_1}
-    shm_size: '16gb'
+    shm_size: '28gb'
     env_file: [.env]
     command: >
       sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
