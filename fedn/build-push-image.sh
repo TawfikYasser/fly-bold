@@ -72,17 +72,17 @@ set -e
 cd /tmp/fedn
 
 # Login to Docker Hub
-echo '$DOCKER_PASSWORD' | sudo docker login -u '$DOCKER_USERNAME' --password-stdin
+echo \"${DOCKER_PASSWORD}\" | sudo docker login -u \"${DOCKER_USERNAME}\" --password-stdin
 
 # Build using repo Dockerfile
-sudo docker build -t $FULL_IMAGE_NAME -f Dockerfile .
+sudo docker build -t ${FULL_IMAGE_NAME} -f Dockerfile .
 
 # Push
-sudo docker push $FULL_IMAGE_NAME
+sudo docker push ${FULL_IMAGE_NAME}
 
 cat > /tmp/docker-image-info.txt << EOF
-DOCKER_IMAGE=$FULL_IMAGE_NAME
-BUILD_DATE=$(date)
+DOCKER_IMAGE=${FULL_IMAGE_NAME}
+BUILD_DATE=\$(date)
 EOF
 " || fail "Build or push failed on VM"
 
