@@ -7,7 +7,7 @@ import re
 
 
 # Configuration
-INPUT_FILE = "EXP_YOLOv5_s_detection_14_logs.json"
+INPUT_FILE = "EXP_YOLOv5_s_detection_17_logs.json"
 # extract the experiment number (e.g. 14)
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
 exp_id = match.group(1) if match else "unknown"
@@ -16,8 +16,8 @@ OUTPUT_DIR = f"analysis_plots_{exp_id}"
 
 # Experiment configuration
 CONFIG = {
-    "Train Images": 10000,
-    "Val Images": 5000,
+    "Train Images": 1000,
+    "Val Images": 500,
     "Server Rounds": 5,
     "Local Epochs": 2,
     "Batch Size": 24,
@@ -38,7 +38,7 @@ def extract_round_metrics(data):
     """Extract aggregated metrics per round"""
     rounds = []
     for round_data in data:
-        rounds.append({
+        round_dict = {
             'round_id': round_data['round_id'],
             'duration': round_data['round_duration'],
             'train_examples': round_data['training_num_examples'],
@@ -55,7 +55,15 @@ def extract_round_metrics(data):
             'eval_mAP50': round_data['round_eval_acc']['mAP@0.5'],
             'eval_mAP': round_data['round_eval_acc']['mAP'],
             'eval_agg': round_data['round_eval_acc']['aggregated']
-        })
+        }
+        
+        # Add optional metrics if they exist
+        if 'round_data_transferred_mb' in round_data:
+            round_dict['data_transferred_mb'] = round_data['round_data_transferred_mb']
+        if 'round_eval_time' in round_data:
+            round_dict['eval_time'] = round_data['round_eval_time']
+        
+        rounds.append(round_dict)
     return pd.DataFrame(rounds)
 
 def extract_client_metrics(data):
@@ -243,7 +251,12 @@ def plot_client_metrics_per_round(df_clients, output_dir):
 
 def plot_training_time_analysis(df_clients, df_rounds, output_dir):
     """Analyze training times"""
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    has_eval_time = 'eval_time' in df_rounds.columns
+    
+    if has_eval_time:
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     
     # Plot 1: Average client training time per round
     avg_train_time = df_clients.groupby('round_id')['train_time'].mean()
@@ -257,20 +270,74 @@ def plot_training_time_analysis(df_clients, df_rounds, output_dir):
     axes[0].grid(True, alpha=0.3, axis='y')
     axes[0].set_xticks(avg_train_time.index)
     
-    # Plot 2: Total round duration
+    # Plot 2: Total round duration (max client time)
     axes[1].bar(df_rounds['round_id'], df_rounds['duration'], color='#A23B72', alpha=0.7)
     axes[1].set_xlabel('Round', fontsize=12)
     axes[1].set_ylabel('Time (seconds)', fontsize=12)
-    axes[1].set_title('Total Round Duration', fontsize=13, fontweight='bold')
+    axes[1].set_title('Round Duration (Slowest Client)', fontsize=13, fontweight='bold')
     axes[1].grid(True, alpha=0.3, axis='y')
     axes[1].set_xticks(df_rounds['round_id'])
     
     # Add time annotations
     for i, v in enumerate(df_rounds['duration']):
-        axes[1].text(i, v, f'{v/3600:.2f}h', ha='center', va='bottom', fontsize=10)
+        axes[1].text(i, v, f'{v/60:.1f}m', ha='center', va='bottom', fontsize=10)
+    
+    # Plot 3: Evaluation time (if available)
+    if has_eval_time:
+        axes[2].bar(df_rounds['round_id'], df_rounds['eval_time'], color='#F18F01', alpha=0.7)
+        axes[2].set_xlabel('Round', fontsize=12)
+        axes[2].set_ylabel('Time (seconds)', fontsize=12)
+        axes[2].set_title('Evaluation Time per Round', fontsize=13, fontweight='bold')
+        axes[2].grid(True, alpha=0.3, axis='y')
+        axes[2].set_xticks(df_rounds['round_id'])
+        
+        # Add time annotations
+        for i, v in enumerate(df_rounds['eval_time']):
+            axes[2].text(i, v, f'{v:.1f}s', ha='center', va='bottom', fontsize=10)
     
     plt.tight_layout()
     plt.savefig(f"{output_dir}/05_training_time_analysis.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_communication_overhead(df_rounds, output_dir):
+    """Plot communication data transferred per round"""
+    if 'data_transferred_mb' not in df_rounds.columns:
+        print("  - Skipping communication overhead plot (data not available)")
+        return
+    
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Plot 1: Data transferred per round
+    axes[0].bar(df_rounds['round_id'], df_rounds['data_transferred_mb'], 
+               color='#6A994E', alpha=0.7)
+    axes[0].set_xlabel('Round', fontsize=12)
+    axes[0].set_ylabel('Data Transferred (MB)', fontsize=12)
+    axes[0].set_title('Communication Overhead per Round', fontsize=13, fontweight='bold')
+    axes[0].grid(True, alpha=0.3, axis='y')
+    axes[0].set_xticks(df_rounds['round_id'])
+    
+    # Add value annotations
+    for i, v in enumerate(df_rounds['data_transferred_mb']):
+        axes[0].text(i, v, f'{v:.1f}', ha='center', va='bottom', fontsize=10)
+    
+    # Plot 2: Cumulative data transferred
+    cumulative_data = df_rounds['data_transferred_mb'].cumsum()
+    axes[1].plot(df_rounds['round_id'], cumulative_data, marker='o', 
+                linewidth=2.5, markersize=8, color='#6A994E')
+    axes[1].fill_between(df_rounds['round_id'], 0, cumulative_data, alpha=0.3, color='#6A994E')
+    axes[1].set_xlabel('Round', fontsize=12)
+    axes[1].set_ylabel('Cumulative Data (MB)', fontsize=12)
+    axes[1].set_title('Cumulative Communication Overhead', fontsize=13, fontweight='bold')
+    axes[1].grid(True, alpha=0.3)
+    axes[1].set_xticks(df_rounds['round_id'])
+    
+    # Add value annotations
+    for i, v in enumerate(cumulative_data):
+        axes[1].annotate(f'{v:.1f} MB', (df_rounds['round_id'].iloc[i], v),
+                        textcoords="offset points", xytext=(0,10), ha='center', fontsize=9)
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/05b_communication_overhead.png", dpi=300, bbox_inches='tight')
     plt.close()
 
 def plot_client_training_time_comparison(df_clients, output_dir):
@@ -499,10 +566,36 @@ def generate_summary_statistics(df_rounds, df_clients, output_dir):
     summary.append("-" * 80)
     total_time = df_rounds['duration'].sum()
     avg_round_time = df_rounds['duration'].mean()
-    summary.append(f"  Total Experiment Time:................. {total_time/3600:.2f} hours")
-    summary.append(f"  Average Round Duration:................ {avg_round_time/3600:.2f} hours")
+    min_round_time = df_rounds['duration'].min()
+    max_round_time = df_rounds['duration'].max()
+
+    summary.append(f"  Total Training Time (Sum of Rounds):... {total_time/60:.2f} minutes ({total_time/3600:.2f} hours)")
+    summary.append(f"  Average Round Duration:................ {avg_round_time/60:.2f} minutes")
+    summary.append(f"  Min Round Duration:.................... {min_round_time/60:.2f} minutes (Round {df_rounds['duration'].idxmin()})")
+    summary.append(f"  Max Round Duration:.................... {max_round_time/60:.2f} minutes (Round {df_rounds['duration'].idxmax()})")
     summary.append(f"  Average Client Training Time:.......... {df_clients['train_time'].mean():.2f} seconds")
+    summary.append(f"  Min Client Training Time:.............. {df_clients['train_time'].min():.2f} seconds")
+    summary.append(f"  Max Client Training Time:.............. {df_clients['train_time'].max():.2f} seconds")
+
+    # Add evaluation time if available
+    if 'eval_time' in df_rounds.columns:
+        total_eval_time = df_rounds['eval_time'].sum()
+        avg_eval_time = df_rounds['eval_time'].mean()
+        summary.append(f"  Total Evaluation Time:................. {total_eval_time/60:.2f} minutes")
+        summary.append(f"  Average Evaluation Time per Round:..... {avg_eval_time:.2f} seconds")
+
     summary.append("")
+
+    # Communication statistics (NEW SECTION)
+    if 'data_transferred_mb' in df_rounds.columns:
+        summary.append("COMMUNICATION STATISTICS:")
+        summary.append("-" * 80)
+        total_data = df_rounds['data_transferred_mb'].sum()
+        avg_data = df_rounds['data_transferred_mb'].mean()
+        summary.append(f"  Total Data Transferred:................ {total_data:.2f} MB ({total_data/1024:.2f} GB)")
+        summary.append(f"  Average Data per Round:................ {avg_data:.2f} MB")
+        summary.append(f"  Data Transfer Rate:.................... {total_data/(total_time/60):.2f} MB/min")
+        summary.append("")
     
     # Client statistics
     summary.append("CLIENT STATISTICS:")
@@ -565,6 +658,9 @@ def main():
     
     print("  - Training time analysis...")
     plot_training_time_analysis(df_clients, df_rounds, output_dir)
+
+    print("  - Communication overhead analysis...")
+    plot_communication_overhead(df_rounds, output_dir)
     
     print("  - Client training time comparison...")
     plot_client_training_time_comparison(df_clients, output_dir)

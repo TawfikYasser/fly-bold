@@ -66,7 +66,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     clients_logs = []
     total_data_server_to_clients = 0.0
     total_data_clients_to_server = 0.0
-    total_train_time = 0.0
+    max_train_time = 0.0
     total_train_loss = 0.0
     total_examples = 0.0
     total_mr = 0.0
@@ -102,7 +102,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
         total_mp += client_train_acc_mp * num_examples
         total_mAP50 += client_train_acc_mAP50 * num_examples
         total_mAP += client_train_acc_mAP * num_examples
-        total_train_time += client_train_time
+        max_train_time = max(max_train_time, client_train_time)
         total_examples += num_examples
         
         client_log = {
@@ -135,7 +135,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
 
     ALL_ROUND_LOGS.append({
         "round_id": CURRENT_ROUND,
-        "round_duration": total_train_time,
+        "round_duration": max_train_time,
         "training_num_examples": int(total_examples),
         "round_train_loss": round_train_loss,
         "lr": lr,
@@ -146,7 +146,9 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             "mAP@0.5": round_train_acc_mAP50,
             "mAP": round_train_acc_mAP,
             "aggregated": round_train_acc_aggregated
-        }
+        },
+        "round_data_transferred_mb": total_round_data_mb,
+        "round_data_transferred_bytes": int(total_round_data)
     })
 
     # REMOVED: Prometheus metric setting (lines 158-161)
@@ -165,13 +167,16 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
     total_eval_mAP = 0.0
     total_examples = 0.0
     total_eval_time = 0.0
+    max_eval_time = 0.0
     round_eval_acc_aggregated = 0.0
 
     if ALL_ROUND_LOGS:
         current_round = ALL_ROUND_LOGS[-1]
+        current_round["round_eval_time"] = max_eval_time  # ADD THIS LINE
+        current_round["round_eval_loss"] = round_eval_loss
         clients_logs = current_round.get("clients_logs", [])
         client_logs_map = {int(cl["client_id"]): cl for cl in clients_logs}
-
+        
         for record_dict in record_dicts:
             if "metrics" not in record_dict:
                 continue
@@ -194,7 +199,9 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             total_eval_mAP += client_eval_acc_mAP * num_examples
             total_eval_time += client_eval_time
             total_examples += num_examples
-            
+            client_eval_time = _safe_float(metrics.get("client_eval_time", 0.0))
+            max_eval_time = max(max_eval_time, client_eval_time)
+
             if client_id in client_logs_map:
                 client_logs_map[client_id]["client_eval_acc"] = {
                     "mr": client_eval_acc_mr,

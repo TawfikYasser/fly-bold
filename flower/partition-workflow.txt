@@ -1,0 +1,62 @@
+PARTITION WORKFLOW EXPLANATION
+===============================
+
+When you run ./run-partition-on-temp-vm.sh:
+
+1. VM Setup
+-----------
+- Creates or reuses temporary VM 'partition-tmp-vm' with 'cloud-platform' OAuth scopes
+- Installs Python, gcloud SDK, and dependencies (numpy, matplotlib, seaborn) via startup script
+- Waits 40 seconds for initialization
+
+2. File Transfer
+----------------
+- Copies generate_partitions.py, partition-dataset.sh, .env, and vm-info.txt to VM's /tmp directory
+- Makes partition-dataset.sh executable
+
+3. Partition Generation (on temp VM via partition-dataset.sh)
+-------------------------------------------------------------
+- Loads configuration from .env and vm-info.txt
+- Optionally generates new partition manifest using generate_partitions.py (or reuses existing based on user input)
+- Uploads manifest and distribution plots to GCS bucket
+
+   3a. Inside generate_partitions.py:
+   -----------------------------------
+   * Generates unique Dirichlet alpha values for each client (between alpha_min and alpha_max)
+   * Fetches list of all training images from GCS bucket (train2017)
+   * Downloads all training labels to /tmp/coco_labels_train2017/ (reuses if already downloaded)
+   * Parses labels to create image-to-classes mapping
+   * Uses Dirichlet distribution to partition training images among clients:
+     - For each class, distributes images using client-specific alphas
+     - Creates non-IID (heterogeneous) partitions where each client gets different class distributions
+     - Shuffles and assigns images to ensure randomness
+   * Applies N_TRAIN limit per client (randomly samples if needed)
+   * Computes class distribution statistics for training data
+   * Fetches list of all validation images from GCS bucket (val2017)
+   * Downloads all validation labels (reuses if already downloaded)
+   * Repeats Dirichlet partitioning for validation images with different seed
+   * Applies N_VAL limit per client
+   * Computes class distribution statistics for validation data
+   * Generates visualization plots (heatmap of class distribution and sample counts)
+   * Creates partition manifest JSON containing:
+     - Metadata: seed, num_clients, alpha values, totals
+     - Per-client data: assigned train/val image lists, counts, class distributions
+   * Saves manifest and plots to disk
+
+4. Data Distribution (to client VMs)
+------------------------------------
+- Iterates through 5 client VMs, processing 2 clients per VM in parallel
+- For each client:
+  * Copies partition manifest to client VM
+  * Runs Python script to extract assigned image lists
+  * Downloads training images using parallel 'gsutil -m'
+  * Downloads training labels in parallel (only missing ones)
+  * Downloads validation images using parallel 'gsutil -m'
+  * Downloads validation labels in parallel (only missing ones)
+  * Creates YAML config file with dataset paths
+  * Verifies download counts and cleans up temp files
+
+5. Finalization
+---------------
+- Copies partition manifest JSON back to local partition_outputs/ directory
+- Reports completion
