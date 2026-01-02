@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploy Flybold Application
+# Deploy Flybold Application with Dynamic IP Handling
 set -e
 
 PROJECT_ID="inf022"
@@ -18,21 +18,128 @@ echo_error() {
     echo -e "\n\033[1;31m[ERROR]\033[0m $1\n"
 }
 
-# Load VM info
+echo_warning() {
+    echo -e "\n\033[1;33m[WARNING]\033[0m $1\n"
+}
+
+# Function to fetch current IP addresses from GCP
+fetch_vm_ips() {
+    local vm_name=$1
+    local zone=$2
+    
+    # Send informational output to stderr so it doesn't interfere with return value
+    echo -e "  Fetching IPs for $vm_name..." >&2
+    
+    # Get internal IP
+    local internal_ip=$(gcloud compute instances describe $vm_name \
+        --zone=$zone \
+        --format='get(networkInterfaces[0].networkIP)' 2>/dev/null)
+    
+    # Get external IP (may not exist for some VMs)
+    local external_ip=$(gcloud compute instances describe $vm_name \
+        --zone=$zone \
+        --format='get(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null)
+    
+    if [ -z "$internal_ip" ]; then
+        echo_error "Failed to fetch internal IP for $vm_name. Is the VM running?" >&2
+        exit 1
+    fi
+    
+    echo "    Internal: $internal_ip, External: ${external_ip:-None}" >&2
+    
+    # Return IPs via echo (caller will capture) - this goes to stdout
+    echo "$internal_ip|$external_ip"
+}
+
+# Function to update vm-info.txt with current IPs
+update_vm_info() {
+    echo_info "Updating vm-info.txt with current IP addresses..."
+    
+    # Backup existing vm-info.txt
+    if [ -f "vm-info.txt" ]; then
+        cp vm-info.txt vm-info.txt.backup
+        echo "  Backed up existing vm-info.txt"
+    fi
+    
+    # Create new vm-info.txt with current IPs
+    cat > vm-info.txt << EOF
+PROJECT_ID=$PROJECT_ID
+REGION=us-central1
+NETWORK=flybold-network
+
+EOF
+
+    # Fetch server IPs
+    local server_ips=$(fetch_vm_ips "flybold-server" "us-central1-a")
+    local server_internal=$(echo $server_ips | cut -d'|' -f1)
+    local server_external=$(echo $server_ips | cut -d'|' -f2)
+    
+    cat >> vm-info.txt << EOF
+SERVER_VM=flybold-server
+SERVER_ZONE=us-central1-a
+SERVER_INTERNAL_IP=$server_internal
+SERVER_EXTERNAL_IP=$server_external
+
+EOF
+
+    # Fetch client IPs
+    local client_zones=("us-central1-a" "us-central1-b" "us-central1-c" "us-central1-f" "us-central1-a")
+    
+    for i in $(seq 1 5); do
+        local zone=${client_zones[$((i-1))]}
+        local client_ips=$(fetch_vm_ips "flybold-client-$i" "$zone")
+        local client_internal=$(echo $client_ips | cut -d'|' -f1)
+        local client_external=$(echo $client_ips | cut -d'|' -f2)
+        
+        cat >> vm-info.txt << EOF
+CLIENT_${i}_VM=flybold-client-${i}
+CLIENT_${i}_ZONE=$zone
+CLIENT_${i}_INTERNAL_IP=$client_internal
+CLIENT_${i}_EXTERNAL_IP=$client_external
+
+EOF
+    done
+    
+    echo_success "vm-info.txt updated with current IPs"
+}
+
+# Load or create VM info
 if [ ! -f "vm-info.txt" ]; then
     echo_error "vm-info.txt not found. Run 02-setup-infrastructure.sh first."
+    exit 1
 fi
+
+# Check if VMs are running and update IPs
+echo_info "Checking VM status and fetching current IPs..."
+
+# Update vm-info.txt with current IPs
+update_vm_info
+
+# Now source the updated vm-info.txt
 source vm-info.txt
+
+echo_success "All VM IPs refreshed successfully!"
+echo ""
+echo "Current Configuration:"
+echo "  Server: $SERVER_VM ($SERVER_INTERNAL_IP)"
+for i in $(seq 1 5); do
+    CLIENT_VM_VAR="CLIENT_${i}_VM"
+    CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
+    echo "  ${!CLIENT_VM_VAR}: ${!CLIENT_IP_VAR}"
+done
+echo ""
 
 # Load Docker image
 if [ ! -f "docker-image-info.txt" ]; then
     echo_error "docker-image-info.txt not found. Run 03-build-push-image.sh first."
+    exit 1
 fi
 DOCKER_IMAGE=$(grep '^DOCKER_IMAGE=' docker-image-info.txt | cut -d'=' -f2)
 
-# ✅ NEW: Check if partition manifest exists
+# Check if partition manifest exists
 if [ ! -f "partition_outputs/partition_manifest.json" ]; then
     echo_error "partition_manifest.json not found.\n\nPlease run 03b-partition-dataset.sh BEFORE deploying.\nThis script partitions the dataset for all clients."
+    exit 1
 fi
 
 echo_info "Starting Flybold deployment"
@@ -154,6 +261,7 @@ NUM_GPUS=$NUM_GPUS
 FLWR_SUPERLINK_ADDRESS=0.0.0.0:9092
 BUCKET_NAME=$BUCKET_NAME
 DOCKER_IMAGE=$DOCKER_IMAGE
+SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
 EOF
 
 # Save config to GCS
@@ -173,6 +281,7 @@ CONFIG_JSON=$(cat <<EOJSON
   "n_val": $N_VAL,
   "enable_gpu": $ENABLE_GPU,
   "enable_tls": $ENABLE_TLS,
+  "server_internal_ip": "$SERVER_INTERNAL_IP",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOJSON
@@ -204,7 +313,7 @@ fi
 echo_success "Configuration saved"
 
 # Deploy server
-echo_info "Deploying server on $SERVER_VM"
+echo_info "Deploying server on $SERVER_VM (IP: $SERVER_INTERNAL_IP)"
 
 gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
     sudo mkdir -p /app/{logs,checkpoints,certs}
@@ -255,16 +364,18 @@ gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
     sudo docker compose ps
 "
 
-echo_success "Server deployed"
+echo_success "Server deployed at $SERVER_INTERNAL_IP"
 
 # Deploy clients
 for i in $(seq 1 5); do
     CLIENT_VM_VAR="CLIENT_${i}_VM"
     CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+    CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
     CLIENT_VM=${!CLIENT_VM_VAR}
     CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+    CLIENT_IP=${!CLIENT_IP_VAR}
     
-    echo_info "Deploying clients on $CLIENT_VM"
+    echo_info "Deploying clients on $CLIENT_VM (IP: $CLIENT_IP)"
     
     # Setup directories
     gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
@@ -292,8 +403,7 @@ for i in $(seq 1 5); do
     CLIENT_ID_1=$(( (i-1)*2 ))
     CLIENT_ID_2=$(( (i-1)*2 + 1 ))
     
-    # ✅ REMOVED: Dataset download section (lines 207-280 in original)
-    # ✅ NEW: Verify pre-partitioned data exists
+    # Verify pre-partitioned data exists
     echo_info "Verifying pre-partitioned data on $CLIENT_VM (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
     VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         set -e
@@ -325,11 +435,12 @@ for i in $(seq 1 5); do
     
     if echo "$VERIFICATION_OUTPUT" | grep -q "ERROR"; then
         echo_error "Pre-partitioned data verification failed on $CLIENT_VM:\n$VERIFICATION_OUTPUT"
+        exit 1
     else
         echo "$VERIFICATION_OUTPUT"
     fi
     
-    # Create client docker-compose
+    # Create client docker-compose with CURRENT server IP
     cat > /tmp/docker-compose-client-${i}.yml << EOF
 version: '3.8'
 services:
@@ -398,9 +509,16 @@ done
 
 echo_success "Deployment complete!"
 echo ""
-echo "Run ID: $RUN_ID"
-echo "✅ All clients are using pre-partitioned data from /app/datasets/coco_partitions/"
+echo "════════════════════════════════════════════════════════"
+echo "  Run ID: $RUN_ID"
+echo "  Server IP: $SERVER_INTERNAL_IP"
+echo "  All clients connected to: ${SERVER_INTERNAL_IP}:9092"
+echo "  ✅ Using pre-partitioned data from /app/datasets/coco_partitions/"
+echo "════════════════════════════════════════════════════════"
 echo ""
-echo "To start training: gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
+echo "To start training:"
+echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
 echo ""
 echo "Monitor with: ./05-manage-clients.sh status"
+echo ""
+echo "Note: vm-info.txt has been updated with current IPs (backup saved as vm-info.txt.backup)"

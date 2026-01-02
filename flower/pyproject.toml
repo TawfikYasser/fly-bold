@@ -81,8 +81,8 @@ gcs_bucket = "flybold-coco-inf022"
 num-server-rounds = 5
 fraction-train = 1
 fraction_evaluate = 1
-local-epochs = 5
-lr = 0.05
+local-epochs = 3
+lr = 0.005
 task = "detection"  # "classification" or "detection"
 coco_root = "/app/datasets/coco"
 yolo_tmp_dir = "./yolov5/tmp_coco_clients"  # Temp dir for client data
@@ -91,7 +91,7 @@ yolo_size = "s"  # n, s, m, l, or x
 img_size = 512
 batch_size = 24
 dirichlet_alpha = 0.7
-run_id = 19
+run_id = 21
 
 # Default federation to use when running the app
 [tool.flwr.federations]
