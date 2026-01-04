@@ -51,16 +51,29 @@ info "STEP 1: Setting up Infrastructure"
 
 # 2. Build & Push Image
 info "STEP 2: Building and Pushing Docker Image"
-# build-push-image.sh asks for password via read -sp. 
-# We feed it via input redirection.
-# It reads username from .docker_username if present.
-# It reads password.
-if [ -f .docker_username ]; then
-  # It will skip username prompt, only ask password
-  echo "$DOCKER_PASSWORD" | ./build-push-image.sh
-else
-  # Should not happen given pre-check, but just in case
-  { echo "$DOCKER_USERNAME"; echo "$DOCKER_PASSWORD"; } | ./build-push-image.sh
+
+SKIP_BUILD=false
+if [ -f docker-image-info.txt ]; then
+  read -p "Found existing docker-image-info.txt. Reuse existing image? (y/n) [y]: " REUSE_IMAGE
+  REUSE_IMAGE=${REUSE_IMAGE:-y}
+  if [[ "$REUSE_IMAGE" == "y" ]]; then
+    info "Skipping build, reusing existing image."
+    SKIP_BUILD=true
+  fi
+fi
+
+if [ "$SKIP_BUILD" = false ]; then
+  # build-push-image.sh asks for password via read -sp. 
+  # We feed it via input redirection.
+  # It reads username from .docker_username if present.
+  # It reads password.
+  if [ -f .docker_username ]; then
+    # It will skip username prompt, only ask password
+    echo "$DOCKER_PASSWORD" | ./build-push-image.sh
+  else
+    # Should not happen given pre-check, but just in case
+    { echo "$DOCKER_USERNAME"; echo "$DOCKER_PASSWORD"; } | ./build-push-image.sh
+  fi
 fi
 
 # 3. Deploy Application

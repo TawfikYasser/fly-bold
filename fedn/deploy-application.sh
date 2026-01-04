@@ -33,9 +33,17 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /
 # Ensure docker running and permissions applied
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
-# Copy the full fedn project folder to the server
+# Ensure user owns /app so we can SCP to it
+# We aggressively clean the destination first to avoid permission conflicts with old containers/pycache
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app" >/dev/null
+
+# Copy the full project folder (excluding .venv by explicit list)
 info "Copying fedn folder to server..."
-gcloud compute scp --recurse . "$SERVER_VM":/app/fly-bold-fedn --zone="$SERVER_ZONE" --quiet
+# We explicitly list items to avoid copying .venv or other garbage
+FILES_TO_COPY="fedn client *.sh *.py *.md *.txt *.yaml *.tgz *.npz"
+# We can't use wildcards directly in gcloud scp local path easily if they match multiple files, 
+# but gcloud scp supports multiple sources.
+gcloud compute scp --recurse $FILES_TO_COPY "$SERVER_VM":/app/fly-bold-fedn --zone="$SERVER_ZONE" --quiet
 
 # Copy configs from local fedn/config
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
@@ -93,9 +101,12 @@ for i in $(seq 1 5); do
   info "Deploying clients on $VM_NAME (ids $CLIENT_ID_1,$CLIENT_ID_2)"
 
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo mkdir -p /app/{client,logs}" >/dev/null
+  # Ensure user owns /app so we can SCP to it
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo rm -rf /app/fly-bold-fedn && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app" >/dev/null
 
-  # Copy full project
-  gcloud compute scp --recurse . "$VM_NAME":/app/fly-bold-fedn --zone="$VM_ZONE" --quiet
+  # Copy full project (excluding .venv)
+  # FILES_TO_COPY is defined above
+  gcloud compute scp --recurse $FILES_TO_COPY "$VM_NAME":/app/fly-bold-fedn --zone="$VM_ZONE" --quiet
 
   # Setup Client Env
   # Generate dynamic docker-compose for this VM to match Client IDs (match fedn-client-<ID>)

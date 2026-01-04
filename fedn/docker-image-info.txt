@@ -1,0 +1,2 @@
+DOCKER_IMAGE=anirudhsengar/fedn-runtime:latest
+BUILD_DATE=Sun Jan  4 11:39:39 UTC 2026

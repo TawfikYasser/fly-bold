@@ -53,11 +53,11 @@ usermod -aG docker $(who am i | awk "{print $1}")
 fi
 
 info "Checking which build context files are missing on the VM"
-MISSING=$(gcloud compute ssh "$TEMP_VM_NAME" --zone="$TEMP_VM_ZONE" --command="
-  missing=''
-  [ ! -d /tmp/fedn ] && missing=\"$missing fedn\"
-  echo \$missing
-" 2>/dev/null)
+MISSING=$(gcloud compute ssh "$TEMP_VM_NAME" --zone="$TEMP_VM_ZONE" --command='
+  missing=""
+  [ ! -d /tmp/fedn ] && missing="$missing fedn"
+  echo $missing
+' 2>/dev/null)
 
 if [ -z "$MISSING" ]; then
   echo "Build context already present on VM, skipping copy"
