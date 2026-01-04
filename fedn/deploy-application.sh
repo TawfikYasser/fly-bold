@@ -79,27 +79,28 @@ EOF
 # We will trust the 'as is' directive. If files are missing, it will fail, but that matches 'as is'.
 
 info "Starting server stack on $SERVER_VM"
+# Starting server stack on $SERVER_VM
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
 set -e
 cd /app
 sudo docker compose pull || true
-sudo docker compose up -d
-    
-    echo "Waiting for FEDn Controller to be ready..."
-    max_retries=30
-    count=0
-    while ! curl -s http://localhost:8092/get_controller_status >/dev/null; do
-      echo "Waiting for controller... \$count/\$max_retries"
-      sleep 5
-      count=\$((count+1))
-      if [ \$count -ge \$max_retries ]; then
-        echo "Timeout waiting for controller."
-        sudo docker compose logs api-server
-        exit 1
-      fi
-    done
-    echo "Controller is ready!"
-    sudo docker compose ps
+sudo docker compose up -d --remove-orphans
+
+echo \"Waiting for FEDn Controller to be ready...\"
+max_retries=30
+count=0
+while ! curl -s http://localhost:8092/get_controller_status >/dev/null; do
+  echo \"Waiting for controller... \$count/\$max_retries\"
+  sleep 5
+  count=\$((count+1))
+  if [ \$count -ge \$max_retries ]; then
+    echo \"Timeout waiting for controller.\"
+    sudo docker compose logs api-server
+    exit 1
+  fi
+done
+echo \"Controller is ready!\"
+sudo docker compose ps
 " || fail "Server deployment failed"
 
 success "Server and combiner running"
@@ -136,7 +137,7 @@ services:
     image: ${DOCKER_IMAGE}
     container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app/client
-    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
+    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","-in","fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
@@ -146,7 +147,7 @@ services:
     image: ${DOCKER_IMAGE}
     container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app/client
-    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
+    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","-in","fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:

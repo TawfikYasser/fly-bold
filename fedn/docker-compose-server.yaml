@@ -27,7 +27,7 @@ services:
     restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
-    command: ["controller","start","--init","/app/config/controller.yaml"]
+    command: ["controller","start"]
     environment:
       STATESTORE_CONFIG: /app/config/controller.yaml
       MODELSTORAGE_CONFIG: /app/config/controller.yaml
@@ -45,7 +45,7 @@ services:
     restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
-    command: ["hooks","start","--init","/app/config/hooks.yaml"]
+    command: ["hooks","start"]
     environment:
       TMPDIR: /app/tmp
     depends_on:
@@ -58,7 +58,7 @@ services:
     restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
-    command: ["combiner","start","--init","/app/config/combiner.yaml"]
+    command: ["combiner","start"]
     environment:
       TMPDIR: /app/tmp
     depends_on:
