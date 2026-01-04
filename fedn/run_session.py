@@ -89,10 +89,10 @@ def run_simulation():
         # Might fail if model already exists or connection issue
         pass
 
-    rounds_to_run = 3
+    rounds_to_run = 5
     print(f"Starting session ({rounds_to_run} rounds)...")
     try:
-        result = client.start_session(rounds=rounds_to_run, round_timeout=600)
+        result = client.start_session(rounds=rounds_to_run, round_timeout=7200)
         print(f"Session started: {result}")
         session_id = result.get("session_id") or result.get("id")
         if not session_id:

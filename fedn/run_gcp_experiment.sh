@@ -8,6 +8,15 @@ success(){ echo -e "\n[SUCCESS] $1\n"; }
 fail(){ echo -e "\n[ERROR] $1\n"; exit 1; }
 
 # Pre-checks
+# Pre-checks
+
+# Try to load password from file
+if [ -f .docker_password ]; then
+  info "Using Docker Hub password from .docker_password"
+  DOCKER_PASSWORD=$(cat .docker_password)
+  export DOCKER_PASSWORD
+fi
+
 if [ ! -f .docker_username ]; then
   info "Docker credentials not found locally."
   read -p "Enter your Docker Hub username: " DOCKER_USERNAME
@@ -16,18 +25,24 @@ if [ ! -f .docker_username ]; then
   info "Please log in to Docker Hub (for local access if needed later)"
   # We might not strictly need local login if the builder VM handles it, 
   # but we need the password for the builder VM.
-  read -sp "Enter your Docker Hub password: " DOCKER_PASSWORD
-  echo ""
-  export DOCKER_PASSWORD
+  if [ -z "${DOCKER_PASSWORD:-}" ]; then
+    read -sp "Enter your Docker Hub password: " DOCKER_PASSWORD
+    echo ""
+    export DOCKER_PASSWORD
+  else
+    info "Using existing Docker Hub password."
+  fi
 else
   info "Using saved Docker Hub username from .docker_username"
   DOCKER_USERNAME=$(cat .docker_username)
   # We still need the password for the builder script if it's not cached somehow (it's not).
   # The builder script asks for it. We can't export it easily to the inner script's read.
   # Strategy: We will modify the flow to pass it or just ask for it here and feed it in.
-  read -sp "Enter your Docker Hub password (required for builder VM): " DOCKER_PASSWORD
-  echo ""
-  export DOCKER_PASSWORD
+  if [ -z "${DOCKER_PASSWORD:-}" ]; then
+    read -sp "Enter your Docker Hub password (required for builder VM): " DOCKER_PASSWORD
+    echo ""
+    export DOCKER_PASSWORD
+  fi
 fi
 
 # 1. Setup Infrastructure
