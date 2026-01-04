@@ -1,0 +1,29 @@
+network_id: fedn-network
+discover_host: REPLACE_THIS_IP
+discover_port: 8092
+
+name: combiner
+host: 0.0.0.0
+# The 'address' field is what the combiner advertises to clients/controller
+address: REPLACE_THIS_IP
+port: 12080
+max_clients: 30
+
+statestore:
+  type: MongoDB
+  mongo_config:
+    username: fedn_admin
+    password: password
+    host: mongo
+    port: 6534
+
+storage:
+  storage_type: BOTO3
+  storage_config:
+    storage_endpoint_url: http://minio:9000
+    storage_access_key: fedn_admin
+    storage_secret_key: password
+    storage_bucket: fedn-models
+    context_bucket: fedn-context
+    storage_secure_mode: False
+    storage_verify_ssl: False

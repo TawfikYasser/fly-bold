@@ -1,0 +1,68 @@
+#!/bin/bash
+set -e
+
+# Parse example name
+if [ "$#" -ne 2 ]; then
+    >&2 echo "Wrong number of arguments (usage: run.sh <example-name> <helper>)"
+    exit 1
+fi
+example="$1"
+helper="$2"
+
+python -m venv ".$example"
+source ".$example/bin/activate"
+".$example/bin/pip" install . fire
+
+>&2 echo "Start FEDn"
+pushd "examples/$example"
+
+"../../.$example/bin/fedn" package create --path client
+"../../.$example/bin/fedn" run build --path client
+
+if [ "$example" == "mnist-keras" ]; then
+    docker compose \
+        -f ../../docker-compose.yaml \
+        -f docker-compose.override.yaml \
+        up -d --build --scale client=1
+else
+    docker compose \
+        -f ../../docker-compose.yaml \
+        -f docker-compose.override.yaml \
+        up -d --build combiner api-server mongo minio client1   
+fi
+
+# add server functions to python path to import server functions code
+export PYTHONPATH="$PYTHONPATH:../server-functions"
+
+>&2 echo "Wait for reducer to start"
+python ../../.ci/tests/examples/wait_for.py reducer
+
+>&2 echo "Wait for combiners to connect"
+python ../../.ci/tests/examples/wait_for.py combiners
+
+>&2 echo "Upload compute package"
+python ../../.ci/tests/examples/api_test.py set_package --path package.tgz --helper "$helper" --name test
+
+>&2 echo "Wait for clients to connect"
+python ../../.ci/tests/examples/wait_for.py clients
+
+>&2 echo "Upload seed"
+python ../../.ci/tests/examples/api_test.py set_seed --path seed.npz
+
+if [ "$example" == "server-functions" ]; then
+    >&2 echo "Start serverfunctions session"
+    python ../../.ci/tests/examples/api_test.py start_sf_session --name "session" --rounds 3 --helper "$helper"
+else
+    >&2 echo "Start session"
+    python ../../.ci/tests/examples/api_test.py start_session --name "session" --rounds 3 --helper "$helper"
+fi
+
+
+>&2 echo "Checking rounds success"
+python ../../.ci/tests/examples/wait_for.py rounds
+
+>&2 echo "Test API GET requests"
+python ../../.ci/tests/examples/api_test.py test_api_get_methods
+
+popd
+>&2 echo "Test completed successfully"
