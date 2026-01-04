@@ -8,13 +8,13 @@ REGION="us-central1"
 ZONES=("us-central1-a" "us-central1-b" "us-central1-c" "us-central1-f" "us-central1-a")
 NETWORK_NAME="fedn-network"
 
-SERVER_VM_NAME="fedn-server"
+SERVER_VM_NAME="flybold-server"
 SERVER_MACHINE_TYPE="e2-standard-8"
 SERVER_SUBNET="fedn-subnet-server"
 SERVER_SUBNET_RANGE="10.0.0.0/28"
 SERVER_ZONE="${ZONES[0]}"
 
-CLIENT_PREFIX="fedn-client"
+CLIENT_PREFIX="flybold-client"
 CLIENT_MACHINE_TYPE="e2-standard-16"
 CLIENT_COUNT=5
 

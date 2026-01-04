@@ -79,7 +79,7 @@ The `run_session.py` script is designed to run **on the Server VM**. You typical
 To run manually on the server:
 ```bash
 # SSH into server
-gcloud compute ssh fedn-server --zone=us-central1-a
+gcloud compute ssh flybold-server --zone=us-central1-a
 
 # In the server VM:
 cd /app/fly-bold-fedn/fedn
