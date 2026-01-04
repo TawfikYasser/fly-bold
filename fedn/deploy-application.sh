@@ -33,17 +33,17 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /
 # Ensure docker running and permissions applied
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
-# Ensure user owns /app so we can SCP to it
-# We aggressively clean the destination first to avoid permission conflicts with old containers/pycache
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app" >/dev/null
+# Ensure user owns /app so we can SCP to it and install unzip
+# We aggressively clean the destination first
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip" >/dev/null
 
-# Copy the full project folder (excluding .venv by explicit list)
-info "Copying fedn folder to server..."
-# We explicitly list items to avoid copying .venv or other garbage
-FILES_TO_COPY="fedn client *.sh *.py *.md *.txt *.yaml *.tgz *.npz"
-# We can't use wildcards directly in gcloud scp local path easily if they match multiple files, 
-# but gcloud scp supports multiple sources.
-gcloud compute scp --recurse $FILES_TO_COPY "$SERVER_VM":/app/fly-bold-fedn --zone="$SERVER_ZONE" --quiet
+# Copy Zip
+info "Copying fedn.zip to server..."
+gcloud compute scp ../fedn.zip "$SERVER_VM":/app/fedn.zip --zone="$SERVER_ZONE" --quiet
+
+# Unzip and fix structure (zip contains fedn/ folder, so we unzip to /app then rename fedn -> fly-bold-fedn)
+info "Unzipping on server..."
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip" >/dev/null
 
 # Copy configs from local fedn/config
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
@@ -100,13 +100,17 @@ for i in $(seq 1 5); do
 
   info "Deploying clients on $VM_NAME (ids $CLIENT_ID_1,$CLIENT_ID_2)"
 
-  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo mkdir -p /app/{client,logs}" >/dev/null
-  # Ensure user owns /app so we can SCP to it
-  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo rm -rf /app/fly-bold-fedn && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app" >/dev/null
+  # Ensure user owns /app so we can SCP to it and install dependencies (unzip, python3.12 via PPA)
+  # We aggressively clean the destination first
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip && sudo mkdir -p /app/fly-bold-fedn /app/client /app/logs && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y software-properties-common unzip && sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt-get update && sudo apt-get install -y python3.12-full python3-pip python3.12-venv" >/dev/null
 
-  # Copy full project (excluding .venv)
-  # FILES_TO_COPY is defined above
-  gcloud compute scp --recurse $FILES_TO_COPY "$VM_NAME":/app/fly-bold-fedn --zone="$VM_ZONE" --quiet
+  # Copy Zip
+  info "Copying fedn.zip to $VM_NAME..."
+  gcloud compute scp ../fedn.zip "$VM_NAME":/app/fedn.zip --zone="$VM_ZONE" --quiet
+
+  # Unzip and fix structure
+  info "Unzipping on $VM_NAME..."
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip" >/dev/null
 
   # Setup Client Env
   # Generate dynamic docker-compose for this VM to match Client IDs (match fedn-client-<ID>)
