@@ -34,8 +34,8 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
 # Ensure user owns /app so we can SCP to it and install unzip
-# We aggressively clean the destination first
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip" >/dev/null
+# We aggressively clean the destination first, INCLUDING docker-compose files
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip" >/dev/null
 
 # Copy Zip
 info "Copying fedn.zip to server..."
@@ -84,8 +84,22 @@ set -e
 cd /app
 sudo docker compose pull || true
 sudo docker compose up -d
-sleep 10
-sudo docker compose ps
+    
+    echo "Waiting for FEDn Controller to be ready..."
+    max_retries=30
+    count=0
+    while ! curl -s http://localhost:8092/get_controller_status >/dev/null; do
+      echo "Waiting for controller... \$count/\$max_retries"
+      sleep 5
+      count=\$((count+1))
+      if [ \$count -ge \$max_retries ]; then
+        echo "Timeout waiting for controller."
+        sudo docker compose logs api-server
+        exit 1
+      fi
+    done
+    echo "Controller is ready!"
+    sudo docker compose ps
 " || fail "Server deployment failed"
 
 success "Server and combiner running"
@@ -101,8 +115,9 @@ for i in $(seq 1 5); do
   info "Deploying clients on $VM_NAME (ids $CLIENT_ID_1,$CLIENT_ID_2)"
 
   # Ensure user owns /app so we can SCP to it and install dependencies (unzip, python3.12 via PPA)
-  # We aggressively clean the destination first
-  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip && sudo mkdir -p /app/fly-bold-fedn /app/client /app/logs && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y software-properties-common unzip && sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt-get update && sudo apt-get install -y python3.12-full python3-pip python3.12-venv" >/dev/null
+  # Ensure user owns /app so we can SCP to it and install dependencies (unzip, python3.12 via PPA)
+  # We aggressively clean the destination first, INCLUDING docker-compose files and OLD CONTAINERS
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo docker ps -aq | xargs -r sudo docker rm -f && sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml && sudo mkdir -p /app/fly-bold-fedn /app/client /app/logs && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y software-properties-common unzip && sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt-get update && sudo apt-get install -y python3.12-full python3.12-venv" >/dev/null
 
   # Copy Zip
   info "Copying fedn.zip to $VM_NAME..."
@@ -147,7 +162,7 @@ EOF
 
   # Setup Client Env and Configs
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="
-    cp /app/fly-bold-fedn/fedn/client/fedn.yaml /app/client/fedn.yaml
+    cp /app/fly-bold-fedn/client/fedn.yaml /app/client/fedn.yaml
     cat > /app/.env << INNEREOF
 DOCKER_IMAGE=$DOCKER_IMAGE
 COMBINER_HOST=$SERVER_INTERNAL_IP
@@ -162,6 +177,7 @@ set -e
 sudo usermod -aG docker \$USER || true
 sudo systemctl enable --now docker || true
 python3.12 -V || true
+python3.12 -m ensurepip --upgrade
 python3.12 -m pip install --no-cache-dir --upgrade pip
 python3.12 -m pip install --no-cache-dir \"numpy<2\" opencv-python-headless==4.9.0.80 fedn yolov5
 " >/dev/null
@@ -169,7 +185,7 @@ python3.12 -m pip install --no-cache-dir \"numpy<2\" opencv-python-headless==4.9
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="
 cd /app
 sudo docker compose pull || true
-sudo docker compose up -d
+sudo docker compose up -d --remove-orphans
 sleep 5
 sudo docker compose ps
 " &

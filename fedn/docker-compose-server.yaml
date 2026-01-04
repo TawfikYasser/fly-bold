@@ -1,6 +1,7 @@
 version: '3.8'
 services:
   minio:
+    restart: always
     image: minio/minio:RELEASE.2024-05-28T17-19-04Z
     command: server /data --console-address :9001
     environment:
@@ -12,6 +13,7 @@ services:
     volumes:
       - ./storage/minio:/data
   mongo:
+    restart: always
     image: mongo:7.0
     command: mongod --port 6534
     environment:
@@ -22,6 +24,7 @@ services:
     volumes:
       - ./storage/mongo:/data/db
   api-server:
+    restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
     command: ["controller","start","--init","/app/config/controller.yaml"]
@@ -39,6 +42,7 @@ services:
       - ./config:/app/config
       - ./storage:/app/storage
   hooks:
+    restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
     command: ["hooks","start","--init","/app/config/hooks.yaml"]
@@ -51,6 +55,7 @@ services:
     volumes:
       - ./config:/app/config
   combiner:
+    restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
     command: ["combiner","start","--init","/app/config/combiner.yaml"]

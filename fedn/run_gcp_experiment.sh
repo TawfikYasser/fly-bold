@@ -78,8 +78,22 @@ fi
 
 # 3. Deploy Application
 info "STEP 3: Deploying Application"
-# deploy-application.sh asks "Enable TLS (self-signed)? (y/n) [n]:"
-echo "n" | ./deploy-application.sh
+
+SKIP_DEPLOY=false
+if [ -f vm-info.txt ]; then
+  # Only offer skip if we think infrastructure exists
+  read -p "Deploy application? (Enter 'n' to skip and reuse running services) [y]: " DO_DEPLOY
+  DO_DEPLOY=${DO_DEPLOY:-y}
+  if [[ "$DO_DEPLOY" == "n" ]]; then
+    SKIP_DEPLOY=true
+    info "Skipping deployment step."
+  fi
+fi
+
+if [ "$SKIP_DEPLOY" = false ]; then
+  # deploy-application.sh asks "Enable TLS (self-signed)? (y/n) [n]:"
+  echo "n" | ./deploy-application.sh
+fi
 
 # 4. Run Training Session
 info "STEP 4: Running Training Session"
@@ -102,19 +116,23 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
 set -e
 cd /app/fly-bold-fedn
 
-# Install pymongo if not already (it might be needed for the verification script)
-# The startup script installed 'fedn' and 'yolov5', but run_session.py imports 'pymongo'.
-# standard fedn image/venv might have it, but let's ensure.
-sudo /usr/bin/python3.12 -m pip install --no-cache-dir pymongo
+# Install pymongo if not already
+# Standard user installation (no sudo needed as we own /app, or use --user/env)
+# Using python3 -m pip to ensure we use the system python env correctly or the one available
+
+# Ensure pip is installed
+sudo apt-get update && sudo apt-get install -y python3-pip
+
+python3 -m pip install --no-cache-dir fedn pymongo
 
 echo 'Starting run_session.py remote execution...'
-sudo /usr/bin/python3.12 run_session.py
+python3 run_session.py
 
-# Install matplotlib for analyzer (pymongo installed above)
-sudo /usr/bin/python3.12 -m pip install --no-cache-dir matplotlib pandas
+# Install matplotlib for analyzer
+python3 -m pip install --no-cache-dir matplotlib pandas
 
 echo 'Running Experiment Analyzer...'
-sudo /usr/bin/python3.12 experiment_analyzer.py
+python3 experiment_analyzer.py
 "
 
 # 5. Download Results
