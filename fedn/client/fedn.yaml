@@ -4,12 +4,12 @@ network_id: fedn-network
 
 entry_points:
   build:
-    command: python model.py
+    command: /venv/bin/python model.py
   startup:
-    command: python data.py
+    command: /venv/bin/python data.py
   train:
-    command: python train.py
+    command: /venv/bin/python train.py
   validate:
-    command: python validate.py
+    command: /venv/bin/python validate.py
   predict:
-    command: python predict.py
+    command: /venv/bin/python predict.py

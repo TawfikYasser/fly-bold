@@ -139,7 +139,9 @@ services:
     container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && grep -q 'combiner' /etc/hosts || echo '${SERVER_INTERNAL_IP} combiner' >> /etc/hosts && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    extra_hosts:
+      - "combiner:${SERVER_INTERNAL_IP}"
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
@@ -151,7 +153,9 @@ services:
     container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && grep -q 'combiner' /etc/hosts || echo '${SERVER_INTERNAL_IP} combiner' >> /etc/hosts && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    extra_hosts:
+      - "combiner:${SERVER_INTERNAL_IP}"
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:
