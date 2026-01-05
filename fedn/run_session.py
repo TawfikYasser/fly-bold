@@ -89,6 +89,50 @@ def run_simulation():
         # Might fail if model already exists or connection issue
         pass
 
+    try:
+        client.set_active_model("seed.npz")
+        print("Active model set.")
+    except Exception as e:
+        print(f"Error setting active model: {e}")
+        # Might fail if model already exists or connection issue
+        pass
+
+    # Wait for clients to connect
+    print("Waiting for clients to connect...")
+    min_clients = 2
+    max_client_wait = 600 # 10 minutes wait for installation
+    start_wait = time.time()
+    
+    while True:
+        try:
+            # Check for ACTIVE (online) clients
+            clients = client.get_active_clients()
+            network_id = os.environ.get('NETWORK_ID', 'fedn-network') 
+            
+            # Adjust based on API response structure. Assuming list of clients.
+            # get_active_clients usually filters by status='online'
+            client_count = len(clients['result']) if isinstance(clients, dict) and 'result' in clients else len(clients)
+            
+            print(f"Connected clients: {client_count}/{min_clients}")
+            
+            # Debug: Check combiners
+            try:
+                combiners = client.get_combiners()
+                combiner_count = len(combiners['result']) if isinstance(combiners, dict) and 'result' in combiners else len(combiners)
+                print(f"Active Combiners: {combiner_count}")
+            except Exception as e:
+                print(f"Error getting combiners: {e}")
+
+            if client_count >= min_clients:
+                break
+        except Exception as e:
+             print(f"Error listing clients: {e}")
+
+        if time.time() - start_wait > max_client_wait:
+            print("Timeout waiting for clients. Starting session anyway (might fail).")
+            break
+        time.sleep(10)
+
     rounds_to_run = 5
     print(f"Starting session ({rounds_to_run} rounds)...")
     try:

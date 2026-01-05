@@ -112,6 +112,14 @@ source vm-info.txt
 # So `run_session.py` is at `/app/fly-bold-fedn/run_session.py`.
 
 info "Connecting to Server VM ($SERVER_VM) to start training..."
+
+read -p "Start training session? (y/n) [y]: " START_TRAINING
+START_TRAINING=${START_TRAINING:-y}
+if [[ "$START_TRAINING" != "y" ]]; then
+  info "Skipping training session."
+  exit 0
+fi
+
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
 set -e
 cd /app/fly-bold-fedn
@@ -126,13 +134,13 @@ sudo apt-get update && sudo apt-get install -y python3-pip
 python3 -m pip install --no-cache-dir fedn pymongo
 
 echo 'Starting run_session.py remote execution...'
-python3 run_session.py
+python3 -u run_session.py
 
 # Install matplotlib for analyzer
 python3 -m pip install --no-cache-dir matplotlib pandas
 
 echo 'Running Experiment Analyzer...'
-python3 experiment_analyzer.py
+python3 -u experiment_analyzer.py
 "
 
 # 5. Download Results

@@ -33,9 +33,9 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /
 # Ensure docker running and permissions applied
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
-# Ensure user owns /app so we can SCP to it and install unzip
+# Ensure user owns /app so we can SCP to it and install unzip and python deps
 # We aggressively clean the destination first, INCLUDING docker-compose files
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip" >/dev/null
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip python3-pip && pip3 install fedn pymongo" >/dev/null
 
 # Copy Zip
 info "Copying fedn.zip to server..."
@@ -137,7 +137,8 @@ services:
     image: ${DOCKER_IMAGE}
     container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app
-    command: ["/bin/bash", "-c", "pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    entrypoint: ""
+    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
@@ -148,7 +149,8 @@ services:
     image: ${DOCKER_IMAGE}
     container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app
-    command: ["/bin/bash", "-c", "pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    entrypoint: ""
+    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:

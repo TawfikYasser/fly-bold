@@ -1,5 +1,5 @@
 network_id: fedn-network
-discover_host: REPLACE_THIS_IP
+discover_host: api-server
 discover_port: 8092
 
 name: combiner
