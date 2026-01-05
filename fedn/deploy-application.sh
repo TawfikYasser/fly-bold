@@ -34,8 +34,9 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
 # Ensure user owns /app so we can SCP to it and install unzip and python deps
-# We aggressively clean the destination first, INCLUDING docker-compose files
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml && sudo mkdir -p /app/fly-bold-fedn && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip python3-pip && pip3 install fedn pymongo" >/dev/null
+# We aggressively clean the destination first, INCLUDING docker-compose files and STORAGE (to kill zombies)
+# CRITICAL: Stop containers FIRST so they don't hold onto deleted file handles (fixes MinIO SlowDown/Unwritable error)
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo docker ps -aq | xargs -r sudo docker rm -f && sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml /app/storage && sudo mkdir -p /app/fly-bold-fedn /app/storage && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip python3-pip && pip3 install fedn pymongo" >/dev/null
 
 # Copy Zip
 info "Copying fedn.zip to server..."

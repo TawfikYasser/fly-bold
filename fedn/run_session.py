@@ -81,21 +81,40 @@ def run_simulation():
         print("Error: seed.npz not found!")
         return
 
+    model_id = None
     try:
-        client.set_active_model("seed.npz")
-        print("Active model set.")
+        # set_active_model often returns the result which might contain model_id
+        # If not, we should query for it
+        response = client.set_active_model("seed.npz")
+        print(f"Active model set: {response}")
+        
+        # Try to get the active model to confirm and get ID
+        active_model = client.get_active_model()
+        if active_model:
+             model_id = active_model.get('model', active_model.get('id'))
+             try:
+                if model_id:
+                    print(f"Confirmed active model ID: {model_id}")
+             except Exception as e:
+                print(f"Error checking active model: {e}")
+             
     except Exception as e:
         print(f"Error setting active model: {e}")
-        # Might fail if model already exists or connection issue
-        pass
+        return
 
+    # Create and upload dummy package
+    import tarfile
+    if not os.path.exists("package.tar.gz"):
+        with tarfile.open("package.tar.gz", "w:gz") as tar:
+            tar.add("run_session.py") # Add self as dummy content
+    
     try:
-        client.set_active_model("seed.npz")
-        print("Active model set.")
+        print("Uploading compute package...")
+        # Upload package to ensure controller has a context
+        response = client.set_active_package("package.tar.gz", "numpyhelper", "fedn-package")
+        print(f"Package uploaded: {response}")
     except Exception as e:
-        print(f"Error setting active model: {e}")
-        # Might fail if model already exists or connection issue
-        pass
+        print(f"Error uploading package: {e}")
 
     # Wait for clients to connect
     print("Waiting for clients to connect...")
@@ -115,6 +134,11 @@ def run_simulation():
             
             print(f"Connected clients: {client_count}/{min_clients}")
             
+            # Debug: Print client details
+            if isinstance(clients, dict) and 'result' in clients:
+                for c in clients['result']:
+                    print(f" - Client {c.get('name')} ({c.get('client_id')}): {c}")
+
             # Debug: Check combiners
             try:
                 combiners = client.get_combiners()
@@ -134,9 +158,13 @@ def run_simulation():
         time.sleep(10)
 
     rounds_to_run = 5
-    print(f"Starting session ({rounds_to_run} rounds)...")
+    print(f"Starting session ({rounds_to_run} rounds) with model {model_id}...")
     try:
-        result = client.start_session(rounds=rounds_to_run, round_timeout=7200)
+        if model_id:
+            result = client.start_session(rounds=rounds_to_run, round_timeout=7200, model_id=model_id)
+        else:
+            result = client.start_session(rounds=rounds_to_run, round_timeout=7200)
+            
         print(f"Session started: {result}")
         session_id = result.get("session_id") or result.get("id")
         if not session_id:
