@@ -136,10 +136,11 @@ version: '3.8'
 services:
   fedn-client-${CLIENT_ID_1}:
     image: ${DOCKER_IMAGE}
+    user: "0:0"
     container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
     extra_hosts:
       - "combiner:${SERVER_INTERNAL_IP}"
     environment:
@@ -150,10 +151,11 @@ services:
       - /app/datasets:/app/datasets
   fedn-client-${CLIENT_ID_2}:
     image: ${DOCKER_IMAGE}
+    user: "0:0"
     container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
     extra_hosts:
       - "combiner:${SERVER_INTERNAL_IP}"
     environment:
