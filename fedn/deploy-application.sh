@@ -139,7 +139,7 @@ services:
     container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && grep -q 'combiner' /etc/hosts || echo '${SERVER_INTERNAL_IP} combiner' >> /etc/hosts && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
@@ -151,7 +151,7 @@ services:
     container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    command: ["/bin/bash", "-c", "export HOME=/app/tmp && mkdir -p /app/tmp && grep -q 'combiner' /etc/hosts || echo '${SERVER_INTERNAL_IP} combiner' >> /etc/hosts && pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:

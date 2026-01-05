@@ -3,9 +3,9 @@ discover_host: api-server
 discover_port: 8092
 
 name: combiner
-host: 0.0.0.0
+host: combiner
 # The 'address' field is what the combiner advertises to clients/controller
-address: REPLACE_THIS_IP
+address: combiner
 port: 12080
 max_clients: 30
 
