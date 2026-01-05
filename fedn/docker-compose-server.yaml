@@ -47,6 +47,8 @@ services:
     working_dir: /app
     command: ["hooks","start"]
     environment:
+      STATESTORE_CONFIG: /app/config/hooks.yaml
+      MODELSTORAGE_CONFIG: /app/config/hooks.yaml
       TMPDIR: /app/tmp
     depends_on:
       - api-server
@@ -58,8 +60,10 @@ services:
     restart: always
     image: ${DOCKER_IMAGE}
     working_dir: /app
-    command: ["combiner","start"]
+    command: ["combiner","start","-in","/app/config/combiner.yaml"]
     environment:
+      STATESTORE_CONFIG: /app/config/combiner.yaml
+      MODELSTORAGE_CONFIG: /app/config/combiner.yaml
       TMPDIR: /app/tmp
     depends_on:
       - api-server

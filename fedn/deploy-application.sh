@@ -126,7 +126,7 @@ for i in $(seq 1 5); do
 
   # Unzip and fix structure
   info "Unzipping on $VM_NAME..."
-  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip" >/dev/null
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip && sudo chmod -R 777 /app/fly-bold-fedn/client" >/dev/null
 
   # Setup Client Env
   # Generate dynamic docker-compose for this VM to match Client IDs (match fedn-client-<ID>)
@@ -136,23 +136,25 @@ services:
   fedn-client-${CLIENT_ID_1}:
     image: ${DOCKER_IMAGE}
     container_name: fedn-client-${CLIENT_ID_1}
-    working_dir: /app/client
-    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","-in","fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
+    working_dir: /app
+    command: ["/bin/bash", "-c", "pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
-      - ./client/fedn.yaml:/app/client/fedn.yaml
+      - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
+      - /app/datasets:/app/datasets
   fedn-client-${CLIENT_ID_2}:
     image: ${DOCKER_IMAGE}
     container_name: fedn-client-${CLIENT_ID_2}
-    working_dir: /app/client
-    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","-in","fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
+    working_dir: /app
+    command: ["/bin/bash", "-c", "pip install --no-cache-dir PyYAML pandas seaborn tqdm psutil thop protobuf pycocotools && client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:
-      - ./client/fedn.yaml:/app/client/fedn.yaml
+      - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
+      - /app/datasets:/app/datasets
 networks:
   default:
     driver: bridge

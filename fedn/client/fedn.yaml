@@ -1,6 +1,6 @@
 # Remove the python_env tag below to handle the environment manually
 network_id: fedn-network
-python_env: python_env.yaml 
+# python_env: python_env.yaml 
 
 entry_points:
   build:
