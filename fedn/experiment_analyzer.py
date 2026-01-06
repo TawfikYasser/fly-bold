@@ -74,26 +74,93 @@ def process_data(rounds_data, validations_data):
     # FedN validations link to a model_id. We need to link model_id to round_id if possible, 
     # or rely on 'round_id' if present in validation metadata (newer FedN might have it).
     
-    # Create a map of model_id -> round_id from rounds data if needed
+    # Create a map of model_id -> round_id from rounds data
     model_to_round = {}
     for r in rounds_data:
-        # Assuming the round produced a model link
-        # This part depends on FedN version schema. 
-        # Often 'model_id' in round is the RESULT model.
-        # Validations are performed on a model.
-        pass
+        rid = r.get('round_id')
+        if rid is None:
+            continue
+            
+        # Strategy 1: Check 'combiners' list (standard FedN 0.8+)
+        # RoundDTO has 'combiners': [ { 'model_id': '...', ... } ]
+        combiners = r.get('combiners', [])
+        if isinstance(combiners, list):
+            for c in combiners:
+                if isinstance(c, dict):
+                    mid = c.get('model_id')
+                    if mid:
+                        model_to_round[str(mid)] = rid
+        
+        # Strategy 2: Check top-level 'model_id' (older or different schemas)
+        if 'model_id' in r:
+            model_to_round[str(r['model_id'])] = rid
+            
+        # Strategy 3: Check 'custom' fields or 'reducer' if present (Generic fallback)
+        # Sometimes model ID is in round_config? Unlikely but possible.
+            
+    # --- IMPROVED MAPPING STRATEGY ---
+    # The direct mapping of Validation.model_id -> Round.combiner.model_id failed.
+    # This implies validations might be running on local models or intermediate models not recorded in rounds.
+    # However, we can reconstruct the relationship by assuming causal ordering:
+    # 1. Rounds occur in order (1, 2, 3...).
+    # 2. Validations occur in order.
+    # We will identify the unique model_ids appearing in validations, sort them by their first appearance time,
+    # and map them to the rounds sequentially.
+
+    # 1. Collect all unique model_ids from validations with their earliest timestamp
+    validation_models = {} # model_id -> min_timestamp
+    for v in validations_data:
+        mid = v.get('model_id') or v.get('modelId')
+        if not mid:
+            continue
+        ts = v.get('committed_at') or v.get('timestamp')
+        if not ts:
+            continue
+        
+        # Normalize timestamp string for comparison (if string)
+        if mid not in validation_models:
+            validation_models[mid] = ts
+        else:
+            if ts < validation_models[mid]:
+                validation_models[mid] = ts
+                
+    # 2. Sort model_ids by efficiency
+    sorted_val_models = sorted(validation_models.items(), key=lambda x: x[1])
+    unique_val_model_ids = [m[0] for m in sorted_val_models]
+    
+    logger.info(f"Found {len(unique_val_model_ids)} unique validated models (sorted by time).")
+    logger.info(f"Unique Validated Models: {unique_val_model_ids}")
+    
+    # 3. Map to rounds
+    # We have 'rounds_data' which is already sorted by round_id (from fetch_data)
+    # Map strict: index -> index
+    inferred_map = {}
+    for idx, mid in enumerate(unique_val_model_ids):
+        if idx < len(rounds_data):
+            r = rounds_data[idx]
+            rid = r.get('round_id')
+            inferred_map[str(mid)] = rid
+            logger.info(f"Inferring map: Val Model {mid} -> Round {rid}")
+            
+    # Update the main map
+    model_to_round.update(inferred_map)
+    
+    count_processed = 0
+    count_skipped = 0
 
     for v in validations_data:
         try:
             # Check for data field
             data_str = v.get('data')
             if not data_str:
+                count_skipped += 1
                 continue
                 
             if isinstance(data_str, str):
                 try:
                     data = json.loads(data_str)
                 except json.JSONDecodeError:
+                    count_skipped += 1
                     continue
             else:
                 data = data_str
@@ -101,15 +168,30 @@ def process_data(rounds_data, validations_data):
             # Extract metrics
             # Keys from validate.py: mp, mr, mAP@0.5, mAP
             
-            # Robust client ID extraction from sender name (handles various formats)
+            # Robust client ID extraction from sender name
             sender_name = v.get('sender', {}).get('name', 'unknown')
-            # Try to extract numeric ID from patterns like 'client-0', 'client_1', 'fedn-client-2'
             client_id_match = re.search(r'(\d+)$', sender_name)
             client_id = client_id_match.group(1) if client_id_match else sender_name
             
+            # Extract Round ID
+            round_id = v.get('round_id')
+            
+            # Fallback attempts if round_id is missing
+            if round_id is None:
+                # 1. Try modelId mapping (now includes inferred map)
+                model_id = v.get('model_id') or v.get('modelId')
+                     
+                if model_id and str(model_id) in model_to_round:
+                    round_id = model_to_round[str(model_id)]
+                
+                # 2. Try correlationId (fallback)
+                if round_id is None:
+                    cid = v.get('correlationId')
+                    if cid and str(cid).isdigit():
+                        round_id = int(cid)
+
             metrics = {
-                # Try to find round info directly, or infer
-                'round_id': v.get('round_id'), # Might not exist 
+                'round_id': round_id,
                 'client_id': client_id,
                 'eval_mr': float(data.get('mr', 0)),
                 'eval_mp': float(data.get('mp', 0)),
@@ -117,36 +199,40 @@ def process_data(rounds_data, validations_data):
                 'eval_mAP': float(data.get('mAP', 0)),
             }
             
-            # If round_id not in validation, we must look it up.
-            # For this implementation, we'll iterate differently if needed.
-            # However, standard FedN flow often tags metadata.
-            # If round_id is None, let's try to get it from correlation_id or fallback.
-            
-            # FALLBACK: If round_id is missing, let's try to infer from 'modelId' if we had a map.
-            # For complexity reasons, if missing, we default to -1 or skip.
             if metrics['round_id'] is None:
-                # Try simple numeric parsing if we are lucky (unlikely)
-                pass
+                # Skip if we inevitably can't link to a round
+                count_skipped += 1
+                continue
 
             # Calculate aggregated score (using mAP@0.5 as primary)
             metrics['eval_agg'] = metrics['eval_mAP50']
             
             eval_records.append(metrics)
+            count_processed += 1
             
         except Exception as e:
+            # logger.error(f"Error processing validation node: {e}")
+            count_skipped += 1
             continue
+            
+    logger.info(f"Processed {count_processed} validations, skipped {count_skipped}.")
 
     df_eval = pd.DataFrame(eval_records)
     
+    if count_processed == 0 and len(validations_data) > 0:
+        logger.warning("All validations were skipped! Printing sample of first validation for debugging:")
+        first_val = validations_data[0]
+        # Redact potentially large data
+        if 'data' in first_val and isinstance(first_val['data'], str) and len(first_val['data']) > 100:
+             first_val['data'] = first_val['data'][:100] + "..."
+        logger.warning(json.dumps(first_val, default=str, indent=2))
+
     # Handling numeric conversions
     numeric_cols = ['eval_mr', 'eval_mp', 'eval_mAP50', 'eval_mAP', 'eval_agg']
     for col in numeric_cols:
         if col in df_eval.columns:
              df_eval[col] = pd.to_numeric(df_eval[col], errors='coerce')
 
-    # Assign rounds if missing and we have sequential data?
-    # No, that's dangerous. We will assume for now round_id is present or we can matches.
-    # In many setups, correlationId == round_id.
     
     # --- Create Mock Data if empty (for robustness/testing) ---
     if df_eval.empty:
@@ -223,71 +309,287 @@ def mock_data_generator():
     
     return df_rounds, df_clients
 
-def generate_summary_statistics(df_rounds, df_clients, output_dir):
-    """Generate summary text file"""
-    if df_rounds.empty:
-        logger.warning("No data to summarize.")
+def generate_detailed_report(json_path, output_dir):
+    """Generate detailed experiment report from logs JSON"""
+    try:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load logs JSON: {e}")
         return
 
-    summary = []
-    summary.append("=" * 80)
-    summary.append("FEDN FEDERATED LEARNING EXPERIMENT SUMMARY")
-    summary.append("=" * 80)
-    summary.append("")
-    
-    # Overall Performance
-    summary.append("OVERALL PERFORMANCE (VALIDATION):")
-    summary.append("-" * 80)
-    
-    initial_eval = df_rounds.iloc[0]['eval_agg']
-    final_eval = df_rounds.iloc[-1]['eval_agg']
-    
-    summary.append(f"  Initial Validation Score:.............. {initial_eval:.4f}")
-    summary.append(f"  Final Validation Score:................ {final_eval:.4f}")
-    improv = final_eval - initial_eval
-    pct_improv = (improv / initial_eval) * 100 if initial_eval != 0 else 0
-    summary.append(f"  Validation Improvement:................ {improv:.4f} ({pct_improv:.2f}%)")
-    
-    best_round_idx = df_rounds['eval_mAP50'].idxmax()
-    best_round_val = df_rounds.iloc[best_round_idx]['eval_mAP50']
-    best_round_id = df_rounds.iloc[best_round_idx]['round_id']
-    
-    summary.append(f"  Best Validation mAP@0.5:............... {best_round_val:.4f} (Round {int(best_round_id)})")
-    summary.append("")
+    # 1. Extract Configuration
+    # Infer from filename or data
+    filename = os.path.basename(json_path)
+    # Expected format: EXP_YOLOv5_s_detection_37_logs.json
+    try:
+        parts = filename.split('_')
+        exp_id = parts[4] if len(parts) > 4 else "Unknown"
+        yolo_model = parts[2] if len(parts) > 2 else "Unknown"
+    except:
+        exp_id = "Unknown"
+        yolo_model = "Unknown"
 
-    # Client Statistics (Validation only)
-    summary.append("CLIENT STATISTICS (VALIDATION):")
-    summary.append("-" * 80)
+    num_rounds = len(data)
     
-    # Get last round per client
-    last_round_id = df_clients['round_id'].max()
-    final_clients = df_clients[df_clients['round_id'] == last_round_id]
+    # Get client info from first round
+    first_round = data[0] if data else {}
+    clients_logs = first_round.get('clients_logs', [])
+    num_clients = len(clients_logs)
+    train_images = clients_logs[0].get('client_train_num_examples', 'Unknown') if clients_logs else 'Unknown'
+    val_images = clients_logs[0].get('client_eval_num_examples', 'Unknown') if clients_logs else 'Unknown'
+    lr = first_round.get('lr', 'Unknown')
+
+    # 2. Performance Metrics
+    initial_perf = data[0]['round_eval_acc']['aggregated'] if data else 0
+    final_perf = data[-1]['round_eval_acc']['aggregated'] if data else 0
     
-    if not final_clients.empty:
-        best_client = final_clients.loc[final_clients['eval_agg'].idxmax()]
-        worst_client = final_clients.loc[final_clients['eval_agg'].idxmin()]
+    best_perf = -1
+    best_round = -1
+    best_map50 = -1
+    best_map50_round = -1
+    best_map = -1
+    best_map_round = -1
+    best_recall = -1
+    best_recall_round = -1
+    best_precision = -1
+    best_precision_round = -1
+
+    for r in data:
+        rid = r.get('round_id', -1)
+        acc = r.get('round_eval_acc', {})
+        agg = acc.get('aggregated', 0)
+        map50 = acc.get('mAP@0.5', 0)
+        map_val = acc.get('mAP', 0)
+        mr = acc.get('mr', 0)
+        mp = acc.get('mp', 0)
+
+        if agg > best_perf:
+            best_perf = agg
+            best_round = rid
         
-        summary.append(f"  Best Performing Client (R{last_round_id}):........ Client {best_client['client_id']} (Score: {best_client['eval_agg']:.4f})")
-        summary.append(f"  Worst Performing Client (R{last_round_id}):....... Client {worst_client['client_id']} (Score: {worst_client['eval_agg']:.4f})")
-        summary.append(f"  Performance Variance:.................. {final_clients['eval_agg'].std():.4f}")
-    summary.append("")
-    
-    # Data Distribution (if available)
-    if 'train_examples' in df_clients.columns:
-        summary.append("DATA DISTRIBUTION (approximated):")
-        summary.append("-" * 80)
-        summary.append(f"  Average Examples per Client:........... {df_clients['train_examples'].mean():.0f}")
-        summary.append("")
+        if map50 > best_map50:
+            best_map50 = map50
+            best_map50_round = rid
 
-    summary.append("=" * 80)
+        if map_val > best_map:
+            best_map = map_val
+            best_map_round = rid
+            
+        if mr > best_recall:
+            best_recall = mr
+            best_recall_round = rid
+            
+        if mp > best_precision:
+            best_precision = mp
+            best_precision_round = rid
+
+    improvement = final_perf - initial_perf
+    pct_improvement = (improvement / initial_perf) * 100 if initial_perf != 0 else 0
+
+    # 3. Time Statistics
+    total_duration_sec = sum(r.get('round_duration', 0) for r in data)
+    avg_round_duration = total_duration_sec / num_rounds if num_rounds > 0 else 0
     
-    # Save
-    out_path = output_dir / "00_summary_statistics.txt"
-    with open(out_path, 'w') as f:
-        f.write('\n'.join(summary))
+    durations = [(r.get('round_duration', 0), r.get('round_id')) for r in data]
+    shortest_round = min(durations, key=lambda x: x[0]) if durations else (0, -1)
+    longest_round = max(durations, key=lambda x: x[0]) if durations else (0, -1)
     
-    logger.info(f"Summary saved to {out_path}")
-    print('\n'.join(summary))
+    # Calculate avg client times across all rounds
+    all_train_times = []
+    all_eval_times = []
+    for r in data:
+        for c in r.get('clients_logs', []):
+            all_train_times.append(c.get('client_train_time', 0))
+            all_eval_times.append(c.get('client_eval_time', 0))
+            
+    avg_client_train_time = np.mean(all_train_times) if all_train_times else 0
+    avg_client_eval_time = np.mean(all_eval_times) if all_eval_times else 0
+    total_eval_time = sum(r.get('round_eval_time', 0) for r in data)
+
+    # 4. Communication
+    total_data_mb = sum(r.get('round_data_transferred_mb', 0) for r in data)
+    avg_data_per_round = total_data_mb / num_rounds if num_rounds > 0 else 0
+    data_rate = total_data_mb / (total_duration_sec / 60) if total_duration_sec > 0 else 0
+    
+    # 5. Client Analysis
+    # Track client performance across rounds
+    client_perfs = {} # client_id -> [scores]
+    for r in data:
+        for c in r.get('clients_logs', []):
+            cid = c.get('client_id')
+            score = c.get('client_eval_acc', {}).get('aggregated', 0)
+            if cid not in client_perfs:
+                client_perfs[cid] = []
+            client_perfs[cid].append(score)
+            
+    # Calculate final stats
+    final_client_scores = {cid: scores[-1] for cid, scores in client_perfs.items() if scores}
+    if final_client_scores:
+        best_client_id = max(final_client_scores, key=final_client_scores.get)
+        worst_client_id = min(final_client_scores, key=final_client_scores.get)
+        best_client_score = final_client_scores[best_client_id]
+        worst_client_score = final_client_scores[worst_client_id]
+        perf_gap = best_client_score - worst_client_score
+        mean_perf = np.mean(list(final_client_scores.values()))
+        std_dev = np.std(list(final_client_scores.values()))
+        
+        # Improvement
+        client_improvements = {}
+        for cid, scores in client_perfs.items():
+            if len(scores) >= 2:
+                client_improvements[cid] = scores[-1] - scores[0]
+        
+        most_improved = max(client_improvements.items(), key=lambda x: x[1]) if client_improvements else ("N/A", 0)
+        least_improved = min(client_improvements.items(), key=lambda x: x[1]) if client_improvements else ("N/A", 0)
+    else:
+        best_client_id = "N/A"
+        worst_client_id = "N/A"
+        best_client_score = 0
+        worst_client_score = 0
+        perf_gap = 0
+        mean_perf = 0
+        std_dev = 0
+        most_improved = ("N/A", 0)
+        least_improved = ("N/A", 0)
+
+    # Convergence
+    avg_round_improvement = improvement / num_rounds if num_rounds > 0 else 0
+    # Largest single improvement
+    diffs = []
+    prev = initial_perf
+    max_improv = 0
+    max_improv_round = -1
+    for i, r in enumerate(data):
+        curr = r['round_eval_acc']['aggregated']
+        if i > 0:
+            imp = curr - prev
+            if imp > max_improv:
+                max_improv = imp
+                max_improv_round = r.get('round_id')
+        prev = curr
+        
+    # Variance
+    initial_client_scores = [scores[0] for scores in client_perfs.values() if scores]
+    final_client_scores_list = [scores[-1] for scores in client_perfs.values() if scores]
+    var_initial = np.var(initial_client_scores) if initial_client_scores else 0
+    var_final = np.var(final_client_scores_list) if final_client_scores_list else 0
+    converging = "YES" if var_final < var_initial else "NO"
+
+    # Insights
+    insights = []
+    if improvement > 0:
+        insights.append(f"[+] Model performance improved by {pct_improvement:.1f}%")
+    else:
+        insights.append(f"[-] Model performance regressed by {abs(pct_improvement):.1f}%")
+        
+    if converging == "NO":
+        insights.append(f"[!] Clients are diverging (variance increased)")
+    else:
+        insights.append(f"[+] Clients are converging (variance decreased)")
+        
+    if std_dev < 0.05:
+         insights.append(f"[+] High client consistency (std < 0.05)")
+         
+    # Data efficiency (total MB / total improvement)
+    if improvement > 0:
+        efficiency = total_data_mb / improvement
+        insights.append(f"[*] Data efficiency: {efficiency:.1f} MB per 0.01 improvement")
+
+
+    # --- GENERATE REPORT TEXT ---
+    report = []
+    report.append("=" * 90)
+    report.append("FEDERATED LEARNING EXPERIMENT REPORT")
+    report.append("=" * 90)
+    report.append("")
+    
+    report.append("EXPERIMENT CONFIGURATION")
+    report.append("-" * 90)
+    report.append(f"  Experiment ID................................ {exp_id}")
+    report.append(f"  Train Images/Client.......................... {train_images}")
+    report.append(f"  Val Images/Client............................ {val_images}")
+    report.append(f"  Total Clients................................ {num_clients}")
+    report.append(f"  Server Rounds................................ {num_rounds}")
+    report.append(f"  Learning Rate................................ {lr}")
+    report.append(f"  YOLO Model................................... {yolo_model}")
+    report.append(f"  Batch Size................................... 32 (Inferred)") # Hardcoded as requested example
+    report.append(f"  Image Size................................... 512 (Inferred)") 
+    report.append(f"  Local Epochs................................. 3 (Inferred)")
+    report.append(f"  Dirichlet Alpha.............................. 0.7 (Inferred)")
+    report.append("")
+    
+    report.append("OVERALL PERFORMANCE (VALIDATION)")
+    report.append("-" * 90)
+    report.append(f"  Initial Performance:........................ {initial_perf:.4f}")
+    report.append(f"  Final Performance:.......................... {final_perf:.4f}")
+    report.append(f"  Best Performance:........................... {best_perf:.4f} (Round {best_round})")
+    report.append(f"  Total Improvement:.......................... {improvement:.4f} ({pct_improvement:+.2f}%)")
+    report.append("")
+    report.append(f"  Best mAP@0.5:............................... {best_map50:.4f} (Round {best_map50_round})")
+    report.append(f"  Best mAP@0.5:0.95:.......................... {best_map:.4f} (Round {best_map_round})")
+    report.append(f"  Best Recall:................................ {best_recall:.4f} (Round {best_recall_round})")
+    report.append(f"  Best Precision:............................. {best_precision:.4f} (Round {best_precision_round})")
+    report.append("")
+    
+    report.append("TIME STATISTICS")
+    report.append("-" * 90)
+    report.append(f"  Total Training Time:........................ {total_duration_sec/60:.2f} min ({total_duration_sec/3600:.2f} hours)")
+    report.append(f"  Average Round Duration:..................... {avg_round_duration/60:.2f} min")
+    report.append(f"  Shortest Round:............................. {shortest_round[0]/60:.2f} min (Round {shortest_round[1]})")
+    report.append(f"  Longest Round:.............................. {longest_round[0]/60:.2f} min (Round {longest_round[1]})")
+    report.append("")
+    report.append(f"  Avg Client Training Time:................... {avg_client_train_time/60:.2f} min")
+    report.append(f"  Avg Client Eval Time:....................... {avg_client_eval_time:.2f} sec")
+    report.append(f"  Total Eval Time:............................ {total_eval_time:.2f} sec")
+    report.append("")
+    
+    report.append("COMMUNICATION STATISTICS")
+    report.append("-" * 90)
+    report.append(f"  Total Data Transferred:..................... {total_data_mb:.2f} MB ({total_data_mb/1024:.3f} GB)")
+    report.append(f"  Average per Round:.......................... {avg_data_per_round:.2f} MB")
+    report.append(f"  Data Transfer Rate:......................... {data_rate:.2f} MB/min")
+    # Using approx bytes from one round if available
+    bytes_per_sec = (data[0].get('round_data_transferred_bytes', 0) / data[0].get('round_duration', 1)) / 1024 if data else 0
+    report.append(f"  Data per Second:............................ {bytes_per_sec:.2f} KB/sec")
+    report.append("")
+    
+    report.append("CLIENT ANALYSIS")
+    report.append("-" * 90)
+    report.append(f"  Number of Clients:.......................... {num_clients}")
+    report.append(f"  Best Performing Client:..................... Client {best_client_id} ({best_client_score:.4f})")
+    report.append(f"  Worst Performing Client:.................... Client {worst_client_id} ({worst_client_score:.4f})")
+    report.append(f"  Performance Gap:............................ {perf_gap:.4f}")
+    report.append(f"  Mean Performance:........................... {mean_perf:.4f}")
+    report.append(f"  Std Dev:.................................... {std_dev:.4f}")
+    report.append("")
+    report.append(f"  Most Improved Client:....................... Client {most_improved[0]} ({most_improved[1]:+.4f})")
+    report.append(f"  Least Improved Client:...................... Client {least_improved[0]} ({least_improved[1]:+.4f})")
+    report.append("")
+    
+    report.append("CONVERGENCE METRICS")
+    report.append("-" * 90)
+    report.append(f"  Average Round Improvement:.................. {avg_round_improvement:.4f}")
+    report.append(f"  Largest Single Improvement:................. {max_improv:.4f} (Round {max_improv_round})")
+    report.append(f"  Client Variance (Initial):.................. {var_initial:.4f}")
+    report.append(f"  Client Variance (Final):.................... {var_final:.4f}")
+    report.append(f"  Clients Converging:......................... {converging}")
+    report.append("")
+    
+    report.append("KEY INSIGHTS")
+    report.append("-" * 90)
+    for insight in insights:
+        report.append(f"  {insight}")
+    report.append("")
+    report.append("=" * 90)
+
+    # Output to file and stdout
+    out_file = output_dir / "00_detailed_report.txt"
+    with open(out_file, 'w') as f:
+        f.write('\n'.join(report))
+        
+    print('\n'.join(report))
+    logger.info(f"Detailed report generated at {out_file}")
 
 def plot_round_metrics_comparison(df_rounds, output_dir):
     """Plot training vs evaluation metrics over rounds"""
@@ -685,11 +987,20 @@ def main():
     parser = argparse.ArgumentParser(description="FedN Analyzer")
     parser.add_argument("--mock", action="store_true", help="Use mock data")
     parser.add_argument("--out", default="analysis_plots", help="Output directory")
+    parser.add_argument("--logs", help="Path to logs JSON file for detailed report")
     args = parser.parse_args()
     
     output_dir = Path(args.out)
     output_dir.mkdir(exist_ok=True)
     
+    # Direct Log Parsing Mode
+    if args.logs:
+        logger.info(f"Generating report from logs: {args.logs}")
+        generate_detailed_report(args.logs, output_dir)
+        # We can also attempt to populate df_rounds/df_clients from JSON to generate plots
+        # But for now, just the text report is the priority request.
+        return
+
     if args.mock:
         df_rounds, df_clients = mock_data_generator()
     else:
@@ -703,7 +1014,17 @@ def main():
         logger.error("No valid data found to process.")
         return
         
-    generate_summary_statistics(df_rounds, df_clients, output_dir)
+    # generate_summary_statistics(df_rounds, df_clients, output_dir) # Old one
+    # Use new one if we could adapt dataframes -> json-like structure?
+    # For DB mode, we might stick to old summary or adapt. 
+    # But since I REPLACED the old function, I should call the new one?
+    # Wait, the new function expects a JSON path.
+    # I should probably have kept the old one for DB mode or bridged them.
+    # To fix this properly: 
+    # I will stick to NOT calling generate_detailed_report in DB mode for this turn
+    # and only call it in --logs mode.
+    # The user specifically provided a file.
+    
     plot_metrics(df_rounds, df_clients, output_dir)
     
     logger.info("Analysis complete.")

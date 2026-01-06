@@ -31,7 +31,12 @@ while IFS= read -r f; do
 done <<< "$FILES"
 
 echo ""
-read -p "Enter file numbers (comma) or 'all': " sel
+echo ""
+if [ -n "${1:-}" ]; then
+  sel="$1"
+else
+  read -p "Enter file numbers (comma) or 'all': " sel
+fi
 mkdir -p downloads
 
 if [ "$sel" = "all" ]; then
@@ -44,6 +49,19 @@ if [ "$sel" = "all" ]; then
         gcloud compute scp "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
     fi
   done
+elif [ "$sel" = "analysis" ]; then
+  echo "Downloading ONLY analysis results..."
+  FOUND=false
+  for f in "${FARR[@]}"; do
+    if [[ "$f" == *"analysis_plots"* ]]; then
+        echo "Downloading $f"
+        gcloud compute scp --recurse "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
+        FOUND=true
+    fi
+  done
+  if [ "$FOUND" = false ]; then
+      echo "No analysis_plots directory found on server."
+  fi
 else
   IFS=',' read -ra NUMS <<< "$sel"
   for n in "${NUMS[@]}"; do
