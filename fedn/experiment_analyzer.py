@@ -1014,17 +1014,7 @@ def main():
         logger.error("No valid data found to process.")
         return
         
-    # generate_summary_statistics(df_rounds, df_clients, output_dir) # Old one
-    # Use new one if we could adapt dataframes -> json-like structure?
-    # For DB mode, we might stick to old summary or adapt. 
-    # But since I REPLACED the old function, I should call the new one?
-    # Wait, the new function expects a JSON path.
-    # I should probably have kept the old one for DB mode or bridged them.
-    # To fix this properly: 
-    # I will stick to NOT calling generate_detailed_report in DB mode for this turn
-    # and only call it in --logs mode.
-    # The user specifically provided a file.
-    
+    generate_summary_statistics(df_rounds, df_clients, output_dir)
     plot_metrics(df_rounds, df_clients, output_dir)
     
     logger.info("Analysis complete.")

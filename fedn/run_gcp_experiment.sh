@@ -141,12 +141,19 @@ python3 -m pip install --no-cache-dir matplotlib pandas
 
 echo 'Running Experiment Analyzer...'
 python3 -u experiment_analyzer.py
+
+# Try to find a log file and generate detailed report
+LOG_FILE=$(find /app -name "EXP_*_logs.json" | head -n 1)
+if [ -n "$LOG_FILE" ]; then
+  echo "Generating detailed report from $LOG_FILE..."
+  python3 -u experiment_analyzer.py --logs "$LOG_FILE"
+fi
 "
 
 # 5. Download Results
 info "STEP 5: Downloading Results"
 # download-files.sh asks: "Enter file numbers (comma) or 'all': "
-echo "all" | ./download-files.sh
+echo "analysis" | ./download-files.sh
 
 # 6. Cleanup
 info "STEP 6: Cleanup"
