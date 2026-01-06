@@ -330,7 +330,10 @@ def evaluate(msg: Message, context: Context):
     eval_start_time = time.perf_counter()
     val_metrics = yolo_evaluate_weights_and_parse_map(
         checkpoint_path, data_yaml, 
-        img=get_config("img_size", context, default=640)
+        img=get_config("img_size", context, default=640),
+        run_dir=context.run_config.get("yolo_runs_dir", "runs/train"),
+        client_tag=f"client{client_id}",
+        round_idx=server_round
     )
     eval_time = time.perf_counter() - eval_start_time
     

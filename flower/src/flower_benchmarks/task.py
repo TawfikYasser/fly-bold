@@ -15,6 +15,137 @@ import sys
 import importlib
 from pathlib import Path
 
+def parse_yolo_training_results(run_dir: str, name: str):
+    """
+    Parse YOLOv5 training metrics from results.csv file.
+    Returns dict with loss, precision, recall, mAP@0.5, mAP@0.5:0.95
+    """
+    import csv
+    
+    results_csv = Path(run_dir) / name / "results.csv"
+    
+    if not results_csv.exists():
+        print(f"[WARNING] results.csv not found at {results_csv}")
+        return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+    
+    try:
+        # Read the CSV file
+        with open(results_csv, 'r') as f:
+            # Skip the header comment line if it starts with #
+            lines = f.readlines()
+            # Filter out comment lines
+            data_lines = [line for line in lines if not line.strip().startswith('#')]
+            
+            if len(data_lines) < 2:  # Need header + at least one data row
+                print(f"[WARNING] results.csv has insufficient data")
+                return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+            
+            # Parse CSV
+            reader = csv.DictReader(data_lines)
+            rows = list(reader)
+            
+            if not rows:
+                print(f"[WARNING] results.csv is empty")
+                return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+        
+        # Get the last epoch (final training metrics)
+        last_row = rows[-1]
+        
+        # Strip whitespace from keys
+        last_row = {k.strip(): v.strip() for k, v in last_row.items()}
+        
+        # YOLOv5 results.csv typical columns:
+        # epoch, train/box_loss, train/obj_loss, train/cls_loss, 
+        # metrics/precision, metrics/recall, metrics/mAP_0.5, metrics/mAP_0.5:0.95
+        
+        precision = float(last_row.get('metrics/precision', last_row.get('precision', 0.0)))
+        recall = float(last_row.get('metrics/recall', last_row.get('recall', 0.0)))
+        map50 = float(last_row.get('metrics/mAP_0.5', last_row.get('mAP_0.5', 0.0)))
+        map_5095 = float(last_row.get('metrics/mAP_0.5:0.95', last_row.get('mAP_0.5:0.95', 0.0)))
+        
+        # Calculate total loss (sum of box, obj, cls losses)
+        box_loss = float(last_row.get('train/box_loss', last_row.get('box_loss', 0.0)))
+        obj_loss = float(last_row.get('train/obj_loss', last_row.get('obj_loss', 0.0)))
+        cls_loss = float(last_row.get('train/cls_loss', last_row.get('cls_loss', 0.0)))
+        total_loss = box_loss + obj_loss + cls_loss
+        
+        metrics = {
+            "loss": total_loss,
+            "mp": precision,
+            "mr": recall,
+            "mAP@0.5": map50,
+            "mAP": map_5095
+        }
+        
+        print(f"[yolo_train] Parsed training metrics from results.csv:")
+        print(f"             loss={total_loss:.4f}, P={precision:.4f}, R={recall:.4f}, mAP@0.5={map50:.4f}, mAP={map_5095:.4f}")
+        
+        return metrics
+    except Exception as e:
+        print(f"[ERROR] Failed to parse results.csv: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+
+def parse_yolo_evaluation_results(run_dir: str, name: str):
+    """
+    Parse YOLOv5 evaluation metrics from results.csv file.
+    Returns dict with loss, precision, recall, mAP@0.5, mAP@0.5:0.95
+    """
+    import csv
+    
+    results_csv = Path(run_dir) / name / "results.csv"
+    
+    if not results_csv.exists():
+        print(f"[WARNING] results.csv not found at {results_csv}")
+        return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+    
+    try:
+        # Read the CSV file
+        with open(results_csv, 'r') as f:
+            # Skip the header comment line if it starts with #
+            lines = f.readlines()
+            # Filter out comment lines
+            data_lines = [line for line in lines if not line.strip().startswith('#')]
+            
+            if len(data_lines) < 2:  # Need header + at least one data row
+                print(f"[WARNING] results.csv has insufficient data")
+                return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+            
+            # Parse CSV
+            reader = csv.DictReader(data_lines)
+            rows = list(reader)
+            
+            if not rows:
+                print(f"[WARNING] results.csv is empty")
+                return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+        
+        # Get the last epoch (final training metrics)
+        last_row = rows[-1]
+        
+        # Strip whitespace from keys
+        last_row = {k.strip(): v.strip() for k, v in last_row.items()}
+        
+        # Calculate total loss (sum of box, obj, cls losses)
+        box_loss = float(last_row.get('val/box_loss', last_row.get('box_loss', 0.0)))
+        obj_loss = float(last_row.get('val/obj_loss', last_row.get('obj_loss', 0.0)))
+        cls_loss = float(last_row.get('val/cls_loss', last_row.get('cls_loss', 0.0)))
+        total_loss = box_loss + obj_loss + cls_loss
+        
+        metrics = {
+            "loss": total_loss
+        }
+        
+        print(f"[yolo_train] Parsed training metrics from results.csv:")
+        
+        return metrics
+
+    except Exception as e:
+        print(f"[ERROR] Failed to parse results.csv: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+
 # keep your existing small CNN for non-detection tasks
 class Net(nn.Module):
     """Model (simple CNN adapted from 'PyTorch: A 60 Minute Blitz')"""
@@ -349,6 +480,17 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
     round_log["round_end_time"] = time.perf_counter()
     round_log["round_duration"] = round_log["round_end_time"] - round_log["round_start_time"]
 
+    print(f"[yolo_train] Adding training metrics to round_log...")
+    training_metrics = parse_yolo_training_results(run_dir_abs, name)
+    
+    round_log["loss"] = training_metrics["loss"]
+    round_log["mp"] = training_metrics["mp"]
+    round_log["mr"] = training_metrics["mr"]
+    round_log["mAP@0.5"] = training_metrics["mAP@0.5"]
+    round_log["mAP"] = training_metrics["mAP"]
+
+    print(f"[yolo_train] round_log now contains: {list(round_log.keys())}")
+
     try:
         # Remove the received_weights file
         if os.path.exists(tmp_weights):
@@ -367,7 +509,7 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
 
     return final_state, round_log
 
-def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: int = 640):
+def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: int = 640, run_dir: str = "runs/train", client_tag: str = "client", round_idx: int = 0):
     """
     Evaluate YOLOv5 weights using in-process `yolov5.val.run` when possible.
     Falls back to subprocess if imports fail.
@@ -450,7 +592,12 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
                 import traceback
                 traceback.print_exc()
 
+        name = f"{client_tag}_r{round_idx}"
+        loss_metrics = parse_yolo_evaluation_results(run_dir, name)
+        metrics["loss"] = loss_metrics.get("loss", 0.0)
         print(f"[yolo_eval] In-process evaluation completed. Metrics: {metrics}")
+
+
         return metrics
 
     except Exception as e:
