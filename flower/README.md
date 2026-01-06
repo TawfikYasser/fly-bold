@@ -4,8 +4,6 @@ Complete automation suite for deploying Flower Federated Learning with YOLOv5 ob
 
 ## 🎯 Overview
 
-NOTE: This README file is not updated, more scripts were added. README will be updated soon.
-
 This project automates the deployment of a production-ready Federated Learning infrastructure on GCP featuring:
 
 - ✅ **GCS bucket** for centralized COCO dataset storage
@@ -34,23 +32,26 @@ This project automates the deployment of a production-ready Federated Learning i
 
 ## ⚡ Quick Start
 
-### Full Setup (3 Steps)
+### Full Setup (4 Steps)
 
 ```bash
 # 1. Setup bucket and download COCO dataset (~60-90 minutes)
-./01-setup-bucket-dataset.sh
+./setup-bucket-dataset.sh
 
 # 2. Create GCP infrastructure (VMs, networks) (~5 minutes)
-./02-setup-infrastructure.sh
+./setup-infrastructure.sh
 
-# 3. Build and push Docker image (~15 minutes)
-./03-build-push-image.sh
+# 3. Partition Dataset (~10 minutes)
+./run-partition-on-temp-vm.sh
 
-# 4. Deploy application with interactive prompts (~20 minutes)
-./04-deploy-application.sh
+# 4. Build and push Docker image (~15 minutes)
+./build-push-image.sh
+
+# 5. Deploy application with interactive prompts (~20 minutes)
+./deploy-application.sh
 ```
 
-**Total time**: ~100-130 minutes (most time is COCO download)
+**Total time**: ~110-140 minutes (most time is COCO download)
 
 ### What Gets Created
 
@@ -69,14 +70,21 @@ This project automates the deployment of a production-ready Federated Learning i
 
 ```
 flybold/
-├── 01-setup-bucket-dataset.sh    # Create GCS bucket, download COCO
-├── 02-setup-infrastructure.sh    # Create VMs and networks
-├── 03-build-push-image.sh        # Build/push Docker image
-├── 04-deploy-application.sh      # Deploy FL application
-├── 05-manage-clients.sh          # Manage individual clients
-├── 06-update-code.sh             # Hot update code
-├── 07-download-files.sh          # Download results from server
-├── 08-cleanup.sh                 # Delete all resources
+├── setup-bucket-dataset.sh       # Create GCS bucket, download COCO
+├── setup-infrastructure.sh       # Create VMs and networks
+├── run-partition-on-temp-vm.sh   # Partition dataset on temp VM (New!)
+├── partition-dataset.sh          # Partition logic (runs on temp VM)
+├── build-push-image.sh           # Build/push Docker image
+├── deploy-application.sh         # Deploy FL application
+├── manage-clients.sh             # Manage individual clients
+├── update-code.sh                # Hot update code
+├── download-files.sh             # Download results from server
+├── cleanup.sh                    # Delete all resources
+├── monitor-resources.sh          # Real-time resource monitoring
+├── check-client-data.sh          # Verify dataset on clients
+├── clean-client-datasets.sh      # Clean datasets from clients
+├── refresh-vm-ips.sh             # Refresh IP info in vm-info.txt
+├── view-all-clients-logs.sh      # Stream logs from all clients
 ├── src/
 │   └── flower_benchmarks/
 │       ├── client_app.py         # FL Client (modified)
@@ -93,12 +101,12 @@ flybold/
 
 ## 🔧 Detailed Usage
 
-### Script 01: Setup Bucket and Dataset
+### Script: Setup Bucket and Dataset
 
 Downloads full COCO dataset (train2017 + val2017) to GCS bucket.
 
 ```bash
-./01-setup-bucket-dataset.sh
+./setup-bucket-dataset.sh
 ```
 
 **What it does**:
@@ -118,12 +126,12 @@ Downloads full COCO dataset (train2017 + val2017) to GCS bucket.
 
 ---
 
-### Script 02: Setup Infrastructure
+### Script: Setup Infrastructure
 
 Creates all GCP resources for FL deployment.
 
 ```bash
-./02-setup-infrastructure.sh
+./setup-infrastructure.sh
 ```
 
 **What it creates**:
@@ -151,12 +159,31 @@ Creates all GCP resources for FL deployment.
 
 ---
 
-### Script 03: Build and Push Image
+### Script: Partition Dataset
+
+Partitions the COCO dataset using Dirichlet distribution on a temporary VM.
+
+```bash
+./run-partition-on-temp-vm.sh
+```
+
+**What it does**:
+1. Creates a temporary VM (`partition-tmp-vm`).
+2. Generates a partition manifest (`partition_manifest.json`) using `generate_partitions.py`.
+3. Distributes the partitioned data (file lists) to client VMs.
+4. Clients verify/download their data relative to the GCS bucket.
+5. Saves outputs to `partition_outputs/`.
+
+**Time**: ~10 minutes
+
+---
+
+### Script: Build and Push Image
 
 Builds Docker image with FL application and pushes to Docker Hub.
 
 ```bash
-./03-build-push-image.sh
+./build-push-image.sh
 ```
 
 **Interactive prompts**:
@@ -176,12 +203,12 @@ Builds Docker image with FL application and pushes to Docker Hub.
 
 ---
 
-### Script 04: Deploy Application
+### Script: Deploy Application
 
 Deploys FL server and clients with customizable parameters.
 
 ```bash
-./04-deploy-application.sh
+./deploy-application.sh
 ```
 
 **Interactive Configuration**:
@@ -218,28 +245,28 @@ Dirichlet alpha [0.5]: 0.5
 
 ---
 
-### Script 05: Manage Clients
+### Script: Manage Clients
 
 Control individual clients at any time.
 
 ```bash
 # View status of all clients
-./05-manage-clients.sh status
+./manage-clients.sh status
 
 # View logs for client 5
-./05-manage-clients.sh logs --client 5
+./manage-clients.sh logs --client 5
 
 # Stop client 3
-./05-manage-clients.sh stop --client 3
+./manage-clients.sh stop --client 3
 
 # Restart client 7
-./05-manage-clients.sh restart --client 7
+./manage-clients.sh restart --client 7
 
 # Start all clients
-./05-manage-clients.sh start --all
+./manage-clients.sh start --all
 
 # Stop all clients
-./05-manage-clients.sh stop --all
+./manage-clients.sh stop --all
 ```
 
 **Client ID Mapping**:
@@ -257,7 +284,7 @@ Control individual clients at any time.
 
 ---
 
-### Script 06: Update Code
+### Script: Update Code
 
 Deploy code changes without rebuilding infrastructure.
 
@@ -267,7 +294,7 @@ nano src/flower_benchmarks/client_app.py
 nano src/flower_benchmarks/server_app.py
 
 # Push changes to all VMs
-./06-update-code.sh
+./update-code.sh
 ```
 
 **What it does**:
@@ -284,12 +311,12 @@ nano src/flower_benchmarks/server_app.py
 
 ---
 
-### Script 07: Download Files
+### Script: Download Files
 
 Retrieve results from server VM.
 
 ```bash
-./07-download-files.sh
+./download-files.sh
 ```
 
 **Interactive file browser**:
@@ -311,12 +338,12 @@ Enter file number(s) to download (comma-separated, or 'all'): 1,2
 
 ---
 
-### Script 08: Cleanup
+### Script: Cleanup
 
 Delete all GCP resources.
 
 ```bash
-./08-cleanup.sh
+./cleanup.sh
 ```
 
 **Confirmation required**: Type `DELETE` to proceed
@@ -329,6 +356,19 @@ Delete all GCP resources.
 - Local config files
 
 **Time**: ~2 minutes
+
+---
+
+### Helper Scripts
+
+- **`monitor-resources.sh`**: Shows real-time CPU/RAM usage of VMs and containers.
+  ```bash
+  ./monitor-resources.sh
+  ```
+- **`check-client-data.sh`**: Verifies that the COCO dataset is correctly partitioned and downloaded on all client VMs.
+- **`clean-client-datasets.sh`**: Deletes dataset files from client VMs to free up space or force a re-download.
+- **`refresh-vm-ips.sh`**: Updates `vm-info.txt` with current IPs (useful if VMs were stopped/started).
+- **`view-all-clients-logs.sh`**: Streams logs from all clients simultaneously.
 
 ---
 
@@ -354,10 +394,10 @@ gcloud compute ssh flybold-server --zone=us-central1-a \
   --command='sudo docker logs -f fl-server'
 
 # View specific client logs
-./05-manage-clients.sh logs --client 3
+./manage-clients.sh logs --client 3
 
 # Check all statuses
-./05-manage-clients.sh status
+./manage-clients.sh status
 ```
 
 ---
@@ -366,7 +406,7 @@ gcloud compute ssh flybold-server --zone=us-central1-a \
 
 ### Environment Variables (`.env`)
 
-Generated by `04-deploy-application.sh`:
+Generated by `deploy-application.sh`:
 
 ```bash
 ENABLE_GPU=false
@@ -435,7 +475,7 @@ Each client gets a **non-IID subset** using Dirichlet distribution:
 **Cost saving tips**:
 - Stop VMs when not in use: `gcloud compute instances stop <vm-name>`
 - Use preemptible instances (70% discount)
-- Delete resources after experiments: `./08-cleanup.sh`
+- Delete resources after experiments: `./cleanup.sh`
 
 ---
 
@@ -452,7 +492,7 @@ gcloud compute ssh flybold-server --zone=us-central1-a \
 
 ```bash
 # View specific client
-./05-manage-clients.sh logs --client 5
+./manage-clients.sh logs --client 5
 
 # Or directly
 gcloud compute ssh flybold-client-3 --zone=us-central1-f \
@@ -462,7 +502,7 @@ gcloud compute ssh flybold-client-3 --zone=us-central1-f \
 ### View All Statuses
 
 ```bash
-./05-manage-clients.sh status
+./manage-clients.sh status
 ```
 
 Output:
@@ -513,7 +553,7 @@ sudo systemctl start docker
 
 1. Check server is running:
 ```bash
-./05-manage-clients.sh status
+./manage-clients.sh status
 ```
 
 2. Verify internal IPs in `vm-info.txt`
@@ -548,10 +588,10 @@ gcloud projects get-iam-policy inf022 \
 
 ```bash
 # View logs for crashed client
-./05-manage-clients.sh logs --client 3
+./manage-clients.sh logs --client 3
 
 # Restart client
-./05-manage-clients.sh restart --client 3
+./manage-clients.sh restart --client 3
 ```
 
 ### Out of Memory
@@ -563,7 +603,7 @@ BATCH_SIZE=16  # Was 24
 
 Then re-deploy:
 ```bash
-./04-deploy-application.sh  # Uses existing .env
+./deploy-application.sh  # Uses existing .env
 ```
 
 ---
@@ -574,7 +614,7 @@ Then re-deploy:
 
 Enable TLS during deployment:
 ```bash
-./04-deploy-application.sh
+./deploy-application.sh
 # Answer 'y' to "Enable TLS?"
 ```
 
@@ -607,13 +647,13 @@ Default compute service account has:
 
 To increase from 10 to 20 clients:
 
-1. Modify `04-deploy-application.sh`:
+1. Modify `deploy-application.sh`:
 ```bash
 # Change VM loop from 5 to 10
 for i in $(seq 1 10); do
 ```
 
-2. Add 5 more VMs in `02-setup-infrastructure.sh`:
+2. Add 5 more VMs in `setup-infrastructure.sh`:
 ```bash
 CLIENT_COUNT=10  # Was 5
 ```
@@ -627,7 +667,7 @@ NUM_CLIENTS=20
 
 Enable GPUs during deployment:
 ```bash
-./04-deploy-application.sh
+./deploy-application.sh
 # Answer 'y' to "Enable GPU?"
 # Specify CPUs and GPUs per client
 ```
@@ -664,10 +704,10 @@ YOLO_SIZE=x  # Largest
 Each run gets unique `RUN_ID`:
 ```bash
 # Run 1
-./04-deploy-application.sh  # Creates run_id=1
+./deploy-application.sh  # Creates run_id=1
 
 # Run 2 (without cleanup)
-./04-deploy-application.sh  # Creates run_id=2
+./deploy-application.sh  # Creates run_id=2
 ```
 
 Configs saved to:
@@ -702,36 +742,12 @@ This setup is ideal for:
 
 ---
 
-## 📝 Key Differences from Original
-
-### Removed
-- ❌ Prometheus + Grafana monitoring
-- ❌ COCO128 (replaced with full COCO)
-- ❌ Multiple separate networks per VM
-
-### Added
-- ✅ GCS bucket for centralized dataset storage
-- ✅ Auto-incremented run IDs
-- ✅ Config persistence in GCS
-- ✅ Dynamic parameter updates
-- ✅ Per-client management (10 individual clients)
-- ✅ Hot code update mechanism
-- ✅ File download utility
-
-### Modified
-- 🔄 Dataset path: `./datasets/coco` → `/app/datasets/coco`
-- 🔄 Client count: Variable → Fixed 10 (2 per VM)
-- 🔄 Networking: Single VPC with 6 subnets
-- 🔄 Dockerfile: Added Google Cloud SDK
-
----
-
 ## 🤝 Contributing
 
 To modify this setup:
 
-1. **Change VM sizes**: Edit `02-setup-infrastructure.sh`
-2. **Modify FL code**: Edit `src/`, then run `./06-update-code.sh`
+1. **Change VM sizes**: Edit `setup-infrastructure.sh`
+2. **Modify FL code**: Edit `src/`, then run `./update-code.sh`
 3. **Adjust monitoring**: Currently minimal (logs only)
 4. **Add features**: Create new scripts following naming pattern
 
@@ -749,13 +765,13 @@ This project is provided as-is for educational and research purposes.
 
 | Task | Command |
 |------|---------|
-| Full setup | `01→02→03→04` scripts |
+| Full setup | `Script 1→2→3→4` |
 | Start training | `gcloud compute ssh flybold-server`, then `flwr run .` |
-| View status | `./05-manage-clients.sh status` |
-| Stop client | `./05-manage-clients.sh stop --client 3` |
-| Update code | `./06-update-code.sh` |
-| Download results | `./07-download-files.sh` |
-| Cleanup all | `./08-cleanup.sh` |
+| View status | `./manage-clients.sh status` |
+| Stop client | `./manage-clients.sh stop --client 3` |
+| Update code | `./update-code.sh` |
+| Download results | `./download-files.sh` |
+| Cleanup all | `./cleanup.sh` |
 
 ### Common Commands
 

@@ -135,8 +135,6 @@ if [ "$SKIP_GENERATION" = false ]; then
     echo_info "Uploading manifest to GCS..."
     RUN_ID=${RUN_ID:-1}
     gsutil cp "$MANIFEST_FILE" "gs://${BUCKET_NAME}/partitions/manifest_run${RUN_ID}.json"
-    gsutil cp partition_train_distribution.png "gs://${BUCKET_NAME}/partitions/train_dist_run${RUN_ID}.png"
-    gsutil cp partition_val_distribution.png "gs://${BUCKET_NAME}/partitions/val_dist_run${RUN_ID}.png"
     echo_success "Manifest backed up to GCS"
 fi
 
@@ -169,11 +167,12 @@ setup_client_partition() {
         export BUCKET_NAME=$BUCKET_NAME
         export MANIFEST=/tmp/partition_manifest.json
         
-        echo '[VM] Setting up Client \$CLIENT_ID partition...'
+        echo '[VM] Setting up Client $client_id partition...'
         
-        # Create directory structure
+        # Create directory structure with sudo
         BASE_DIR=/app/datasets/coco_partitions/client_\${CLIENT_ID}
-        mkdir -p \$BASE_DIR/{images,labels}/{train2017,val2017}
+        sudo mkdir -p \$BASE_DIR/{images,labels}/{train2017,val2017}
+        sudo chown -R \$USER:\$USER \$BASE_DIR
         
         # Extract image lists from manifest
         python3 << 'PYEOF'
