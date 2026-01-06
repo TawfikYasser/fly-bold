@@ -293,11 +293,39 @@ def evaluate(msg: Message, context: Context):
     
     server_round = msg.content["config"].get("server-round", 0)
     
-    checkpoint_path = os.path.join(
+    # ✅ FIX: Look for actual checkpoint files (best.pt or last.pt)
+    weights_dir = os.path.join(
         context.run_config.get("yolo_runs_dir", "runs/train"),
-        f"client{client_id}_r{server_round}", "weights", 
-        f"client{client_id}_r{server_round}_val.pt"
+        f"client{client_id}_r{server_round}", "weights"
     )
+    
+    # Try best.pt first, then last.pt, then any .pt file
+    checkpoint_path = None
+    candidate_files = [
+        os.path.join(weights_dir, "best.pt"),
+        os.path.join(weights_dir, "last.pt"),
+    ]
+    
+    for candidate in candidate_files:
+        if os.path.exists(candidate):
+            checkpoint_path = candidate
+            print(f"[CLIENT {client_id}] Found checkpoint: {checkpoint_path}")
+            break
+    
+    if checkpoint_path is None:
+        # Fallback: find any .pt file in weights directory
+        if os.path.exists(weights_dir):
+            pt_files = list(Path(weights_dir).glob("*.pt"))
+            if pt_files:
+                checkpoint_path = str(pt_files[0])
+                print(f"[CLIENT {client_id}] Using fallback checkpoint: {checkpoint_path}")
+    
+    if checkpoint_path is None or not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(
+            f"No checkpoint found for client {client_id} round {server_round}\n"
+            f"Searched in: {weights_dir}\n"
+            f"Expected files: best.pt or last.pt"
+        )
     
     eval_start_time = time.perf_counter()
     val_metrics = yolo_evaluate_weights_and_parse_map(
@@ -315,7 +343,7 @@ def evaluate(msg: Message, context: Context):
     else:
         num_val_examples = _DATASET_CACHE[val_cache_key]
     
-    # âœ… FIXED: Consistent eval metrics structure - explicit dict literal
+    # ✅ FIXED: Consistent eval metrics structure - explicit dict literal
     metrics = {
         "num-examples": float(max(1, int(num_val_examples))),
         "client_id": float(int(client_id)),
