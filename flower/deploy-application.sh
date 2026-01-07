@@ -153,6 +153,11 @@ if [ -f .env ]; then
     if [[ $use_existing =~ ^[Yy]$ ]]; then
         source .env
         SKIP_PROMPTS=true
+        # IMPORTANT: Always use current server IP from vm-info.txt, not old .env
+        echo_warning "Overriding SERVER_INTERNAL_IP with current value from vm-info.txt"
+        echo "  Old IP in .env: ${SERVER_INTERNAL_IP}"
+        source vm-info.txt  # Re-source to get current SERVER_INTERNAL_IP
+        echo "  Current IP: ${SERVER_INTERNAL_IP}"
     else
         SKIP_PROMPTS=false
     fi
@@ -330,7 +335,7 @@ if [ "$ENABLE_TLS" = "true" ]; then
 fi
 
 # Create server docker-compose
-cat > /tmp/docker-compose-server.yml << EOF
+cat > /tmp/docker-compose-server.yml << 'EOF'
 version: '3.8'
 services:
   fl-server:
@@ -338,14 +343,24 @@ services:
     container_name: fl-server
     shm_size: '24gb'
     env_file: [.env]
+    environment:
+      - PYTHONPATH=/app/src:/app
     command: >
-      sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
+      sh -c "
+      echo '=== Flower Server Starting ===' &&
+      echo 'PYTHONPATH:' \$PYTHONPATH &&
+      if [ \"\$INSECURE\" = 'true' ]; then
         flower-superlink --insecure --fleet-api-address=0.0.0.0:9092;
       else
         flower-superlink --fleet-api-address=0.0.0.0:9092 --ssl-ca-certfile=/app/certs/ca.crt --ssl-certfile=/app/certs/server.crt --ssl-keyfile=/app/certs/server.key;
       fi"
     ports: ["9092:9092", "9093:9093"]
-    volumes: [".:/app", "./src:/app/src", "./certs:/app/certs:ro", "./logs:/app/logs"]
+    volumes:
+      - "./src:/app/src"
+      - "./yolov5:/app/yolov5"
+      - "./logs:/app/logs"
+      - "./certs:/app/certs:ro"
+      - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
 networks:
   default:
@@ -449,17 +464,28 @@ services:
     container_name: fl-client-${CLIENT_ID_1}
     shm_size: '28gb'
     env_file: [.env]
+    environment:
+      - CLIENT_ID=${CLIENT_ID_1}
+      - PARTITION_ID=${CLIENT_ID_1}
+      - PYTHONPATH=/app/src:/app
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
     command: >
-      sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
+      sh -c "
+      echo '=== Flower Client ${CLIENT_ID_1} Starting ===' &&
+      echo 'PYTHONPATH:' \$PYTHONPATH &&
+      if [ \"\\\$INSECURE\" = 'true' ]; then
         flower-supernode --insecure --superlink=${SERVER_INTERNAL_IP}:9092;
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./src:/app/src", "./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
-    environment:
-      - CLIENT_ID=${CLIENT_ID_1}
-      - PARTITION_ID=${CLIENT_ID_1}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
+    volumes:
+      - "./src:/app/src"
+      - "./yolov5:/app/yolov5"
+      - "./logs:/app/logs"
+      - "./certs:/app/certs:ro"
+      - "./datasets:/app/datasets"
+      - "./gcs-key.json:/app/gcs-key.json:ro"
+      - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
     
   fl-client-${CLIENT_ID_2}:
@@ -467,17 +493,28 @@ services:
     container_name: fl-client-${CLIENT_ID_2}
     shm_size: '28gb'
     env_file: [.env]
+    environment:
+      - CLIENT_ID=${CLIENT_ID_2}
+      - PARTITION_ID=${CLIENT_ID_2}
+      - PYTHONPATH=/app/src:/app
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
     command: >
-      sh -c "if [ \"\\\$INSECURE\" = 'true' ]; then
+      sh -c "
+      echo '=== Flower Client ${CLIENT_ID_2} Starting ===' &&
+      echo 'PYTHONPATH:' \$PYTHONPATH &&
+      if [ \"\\\$INSECURE\" = 'true' ]; then
         flower-supernode --insecure --superlink=${SERVER_INTERNAL_IP}:9092;
       else
         flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
       fi"
-    volumes: ["./logs:/app/logs", "./certs:/app/certs:ro", "./datasets:/app/datasets", "./yolov5:/app/yolov5", "./gcs-key.json:/app/gcs-key.json:ro"]
-    environment:
-      - CLIENT_ID=${CLIENT_ID_2}
-      - PARTITION_ID=${CLIENT_ID_2}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
+    volumes:
+      - "./src:/app/src"
+      - "./yolov5:/app/yolov5"
+      - "./logs:/app/logs"
+      - "./certs:/app/certs:ro"
+      - "./datasets:/app/datasets"
+      - "./gcs-key.json:/app/gcs-key.json:ro"
+      - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
 networks:
   default:

@@ -15,23 +15,41 @@ fi
 source .env
 
 # Config
-CHECK_INTERVAL=60   # 1 minute
+CHECK_INTERVAL=10   # 10 seconds
 EXPERIMENT_NAME="EXP_YOLOv5_${YOLO_SIZE}_detection"
 LOG_FILE="${EXPERIMENT_NAME}_${RUN_ID}_logs.json"
+CONTAINER_NAME="fl-server"
+CONTAINER_PATH="/app/${LOG_FILE}"
 
 echo "[INFO] Monitoring for log file: ${LOG_FILE}"
-echo "[INFO] Checking every 60 seconds..."
+echo "[INFO] Container: ${CONTAINER_NAME}"
+echo "[INFO] Checking every ${CHECK_INTERVAL} seconds..."
 echo "[INFO] Server: ${SERVER_VM}"
 
 while true; do
     echo "[INFO] $(date '+%H:%M:%S') checking..."
 
+    # Check if file exists inside the fl-server container
     exists=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
-        [ -f /app/${LOG_FILE} ] && echo yes || echo no
+        sudo docker exec ${CONTAINER_NAME} test -f ${CONTAINER_PATH} && echo yes || echo no
     " 2>/dev/null)
 
     if [ "$exists" = "yes" ]; then
-        echo "[SUCCESS] Log file detected. Training finished."
+        echo "[SUCCESS] Log file detected in container. Training finished."
+
+        # Download the file from container to local machine
+        echo "[INFO] Downloading log file to local machine..."
+        
+        # First, copy from container to VM
+        gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
+            sudo docker cp ${CONTAINER_NAME}:${CONTAINER_PATH} /tmp/${LOG_FILE}
+        "
+        
+        # Then, copy from VM to local machine downloads directory
+        mkdir -p downloads
+        gcloud compute scp "${SERVER_VM}:/tmp/${LOG_FILE}" "./downloads/${LOG_FILE}" --zone="$SERVER_ZONE"
+        
+        echo "[SUCCESS] Log file downloaded to: ./downloads/${LOG_FILE}"
 
         echo "[INFO] Stopping client VMs..."
         for i in $(seq 1 5); do
