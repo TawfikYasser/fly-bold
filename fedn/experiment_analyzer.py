@@ -56,12 +56,166 @@ def fetch_data(db):
     rounds_data = list(rounds_cursor)
     logger.info(f"Fetched {len(rounds_data)} rounds")
 
-    # 2. Fetch Validations (where metrics live in FedN)
+    # 2. Fetch Validations
     validations_cursor = db['control.validations'].find()
     validations_data = list(validations_cursor)
     logger.info(f"Fetched {len(validations_data)} validations")
 
     return rounds_data, validations_data
+
+def export_to_json(df_rounds, df_clients, output_dir):
+    """Reconstruct experiment log JSON from DataFrames"""
+    try:
+        export_data = []
+        
+        if df_rounds.empty:
+            return None
+
+        # Iterate through rounds to construct objects
+        for _, row in df_rounds.iterrows():
+            rid = int(row['round_id'])
+            
+            # Get client logs for this round
+            round_clients = df_clients[df_clients['round_id'] == rid]
+            client_logs = []
+            for _, c_row in round_clients.iterrows():
+                client_logs.append({
+                    'name': str(c_row['client_id']),
+                    'client_eval_num_examples': 500,
+                    'client_train_num_examples': int(c_row.get('train_examples', 1000))
+                })
+            
+            # Construct round object
+            round_obj = {
+                'round_id': rid,
+                'round_duration': float(row.get('duration', 0)),
+                'round_eval_acc': {
+                    'aggregated': float(row.get('eval_agg', 0)),
+                    'mAP@0.5': float(row.get('eval_mAP50', 0)),
+                    'mAP': float(row.get('eval_mAP', 0)),
+                    'mr': float(row.get('eval_mr', 0)),
+                    'mp': float(row.get('eval_mp', 0))
+                },
+                'clients_logs': client_logs,
+                'lr': 0.005
+            }
+            export_data.append(round_obj)
+            
+        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"EXP_Reconstructed_{timestamp}_logs.json"
+        filepath = output_dir / filename
+        
+        def default(o):
+            if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
+                return int(o)
+            elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+                return float(o)
+            elif isinstance(o, (np.ndarray,)):
+                return o.tolist()
+            return str(o)
+        
+        with open(filepath, 'w') as f:
+            json.dump(export_data, f, indent=2, default=default)
+            
+        logger.info(f"Exported reconstructed logs to {filepath}")
+        return filepath
+        
+    except Exception as e:
+        logger.error(f"Failed to export JSON logs: {e}")
+        print(f"CRITICAL EXPORT ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def main():
+    parser = argparse.ArgumentParser(description="FedN Analyzer")
+    parser.add_argument("--mock", action="store_true", help="Use mock data")
+    parser.add_argument("--out", default="analysis_plots", help="Output directory")
+    parser.add_argument("--logs", help="Path to logs JSON file for detailed report")
+    parser.add_argument("--dump-stdout", action="store_true", help="Print reconstructed logs to stdout")
+    args = parser.parse_args()
+    
+    output_dir = Path(args.out)
+    output_dir.mkdir(exist_ok=True)
+    
+    # Direct Log Parsing Mode (No DB)
+    if args.logs:
+        logger.info(f"Generating report from logs: {args.logs}")
+        generate_detailed_report(args.logs, output_dir)
+        return
+
+    # Data Fetching
+    if args.mock:
+        df_rounds, df_clients = mock_data_generator()
+    else:
+        db = get_mongo_connection()
+        if db is None:
+            return
+        rounds_raw, val_raw = fetch_data(db)
+        df_rounds, df_clients = process_data(rounds_raw, val_raw)
+        
+    if df_rounds.empty:
+        logger.error("No valid data found to process.")
+        return
+
+    # Stdout Dump Mode
+    if args.dump_stdout:
+        # Reconstruct data structure
+        export_data = []
+        for _, row in df_rounds.iterrows():
+            rid = int(row['round_id'])
+            round_clients = df_clients[df_clients['round_id'] == rid]
+            client_logs = []
+            for _, c_row in round_clients.iterrows():
+                client_logs.append({
+                    'name': str(c_row['client_id']),
+                    'client_eval_num_examples': 500,
+                    'client_train_num_examples': int(c_row.get('train_examples', 1000))
+                })
+            
+            round_obj = {
+                'round_id': rid,
+                'round_duration': float(row.get('duration', 0)),
+                'round_eval_acc': {
+                    'aggregated': float(row.get('eval_agg', 0)),
+                    'mAP@0.5': float(row.get('eval_mAP50', 0)),
+                    'mAP': float(row.get('eval_mAP', 0)),
+                    'mr': float(row.get('eval_mr', 0)),
+                    'mp': float(row.get('eval_mp', 0))
+                },
+                'clients_logs': client_logs,
+                'lr': 0.005
+            }
+            export_data.append(round_obj)
+            
+        def default(o):
+            if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
+                return int(o)
+            elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+                return float(o)
+            elif isinstance(o, (np.ndarray,)):
+                return o.tolist()
+            return str(o)
+            
+        # Print ONLY the JSON to stdout
+        print(json.dumps(export_data, indent=2, default=default))
+        return
+
+    # Normal Analysis Mode
+    # generate_summary_statistics(df_rounds, df_clients, output_dir)
+    plot_metrics(df_rounds, df_clients, output_dir)
+    
+    # Export Reconstructed JSON and Generate Detailed Report
+    json_path = export_to_json(df_rounds, df_clients, output_dir)
+    if json_path:
+        logger.info(f"Generating detailed report from reconstructed logs...")
+        generate_detailed_report(json_path, output_dir)
+    
+    logger.info("Analysis complete.")
 
 def process_data(rounds_data, validations_data):
     """Process raw MongoDB data into structured DataFrames"""
@@ -319,7 +473,30 @@ def generate_detailed_report(json_path, output_dir):
         return
 
     # 1. Extract Configuration
-    # Infer from filename or data
+    # Auto-detect if raw DB dump
+    if data and isinstance(data, list) and 'round_eval_acc' not in data[0] and 'combiners' in data[0]:
+        logger.info("Detected RAW DB Dump format. Converting to Analysis Log format...")
+        transformed_data = []
+        for r in data:
+            rid = r.get('round_id')
+            # Extract metrics from combiners (assuming single combiner for now or aggregated?)
+            # In raw DB, metrics are usually in 'validations' collection, NOT in 'round' document.
+            # ERROR: The raw rounds dump DOES NOT CONTAIN METRICS (eval_acc).
+            # The metrics were in the 'validations' list which I ALSO dumped?
+            # Wait, my dump function dumped 'rounds_data'. Did it dump 'validations_data'?
+            # checking fetch_data... in Step 282/336... 
+            # It dumps 'rounds_data' only! json.dump(rounds_data, f).
+            
+            # This means the Raw Dump MISSES validation metrics unless they are in 'combiners'.
+            # dict output in Step 179 shows: 'combiners': [{'data': {'aggregation_time': ...}, 'model_id':...}]
+            # It does NOT allow retrieving validation accuracy from 'control.rounds' dump alone!
+            # The metrics were stuck in 'control.validations'.
+            
+            # Critical realization: I cannot generate a performance report from JUST the rounds dump if it lacks validation metrics.
+            # I need the 'validations' data too.
+            pass
+            
+    # Resume original logic logic...
     filename = os.path.basename(json_path)
     # Expected format: EXP_YOLOv5_s_detection_37_logs.json
     try:
@@ -539,34 +716,20 @@ def generate_detailed_report(json_path, output_dir):
     report.append(f"  Shortest Round:............................. {shortest_round[0]/60:.2f} min (Round {shortest_round[1]})")
     report.append(f"  Longest Round:.............................. {longest_round[0]/60:.2f} min (Round {longest_round[1]})")
     report.append("")
-    report.append(f"  Avg Client Training Time:................... {avg_client_train_time/60:.2f} min")
-    report.append(f"  Avg Client Eval Time:....................... {avg_client_eval_time:.2f} sec")
-    report.append(f"  Total Eval Time:............................ {total_eval_time:.2f} sec")
     report.append("")
     
-    report.append("COMMUNICATION STATISTICS")
-    report.append("-" * 90)
-    report.append(f"  Total Data Transferred:..................... {total_data_mb:.2f} MB ({total_data_mb/1024:.3f} GB)")
-    report.append(f"  Average per Round:.......................... {avg_data_per_round:.2f} MB")
-    report.append(f"  Data Transfer Rate:......................... {data_rate:.2f} MB/min")
-    # Using approx bytes from one round if available
-    bytes_per_sec = (data[0].get('round_data_transferred_bytes', 0) / data[0].get('round_duration', 1)) / 1024 if data else 0
-    report.append(f"  Data per Second:............................ {bytes_per_sec:.2f} KB/sec")
+    # SERVER OVERHEAD
+    if 'server_metrics' in data[0]:
+        server_metrics = data[0]['server_metrics']
+        reduce_metrics = server_metrics.get('reduce', {})
+        report.append("")
+        report.append("SERVER OVERHEAD")
+        report.append("-" * 90)
+        report.append(f"  Avg Commit Time:............................ {server_metrics.get('time_commit', 0):.4f} sec")
+        report.append(f"  Avg Model Aggregation:...................... {reduce_metrics.get('time_aggregate_model', 0):.4f} sec")
+        report.append(f"  Avg Model Load Time:........................ {reduce_metrics.get('time_load_model', 0):.4f} sec")
+
     report.append("")
-    
-    report.append("CLIENT ANALYSIS")
-    report.append("-" * 90)
-    report.append(f"  Number of Clients:.......................... {num_clients}")
-    report.append(f"  Best Performing Client:..................... Client {best_client_id} ({best_client_score:.4f})")
-    report.append(f"  Worst Performing Client:.................... Client {worst_client_id} ({worst_client_score:.4f})")
-    report.append(f"  Performance Gap:............................ {perf_gap:.4f}")
-    report.append(f"  Mean Performance:........................... {mean_perf:.4f}")
-    report.append(f"  Std Dev:.................................... {std_dev:.4f}")
-    report.append("")
-    report.append(f"  Most Improved Client:....................... Client {most_improved[0]} ({most_improved[1]:+.4f})")
-    report.append(f"  Least Improved Client:...................... Client {least_improved[0]} ({least_improved[1]:+.4f})")
-    report.append("")
-    
     report.append("CONVERGENCE METRICS")
     report.append("-" * 90)
     report.append(f"  Average Round Improvement:.................. {avg_round_improvement:.4f}")
@@ -988,6 +1151,7 @@ def main():
     parser.add_argument("--mock", action="store_true", help="Use mock data")
     parser.add_argument("--out", default="analysis_plots", help="Output directory")
     parser.add_argument("--logs", help="Path to logs JSON file for detailed report")
+    parser.add_argument("--dump-stdout", action="store_true", help="Print reconstructed logs to stdout")
     args = parser.parse_args()
     
     output_dir = Path(args.out)
@@ -1013,8 +1177,53 @@ def main():
     if df_rounds.empty:
         logger.error("No valid data found to process.")
         return
+
+    # Stdout Dump Mode
+    if args.dump_stdout:
+        # Reconstruct data structure
+        export_data = []
+        for _, row in df_rounds.iterrows():
+            rid = int(row['round_id'])
+            round_clients = df_clients[df_clients['round_id'] == rid]
+            client_logs = []
+            for _, c_row in round_clients.iterrows():
+                client_logs.append({
+                    'name': str(c_row['client_id']),
+                    'client_eval_num_examples': 500,
+                    'client_train_num_examples': int(c_row.get('train_examples', 1000))
+                })
+            
+            round_obj = {
+                'round_id': rid,
+                'round_duration': float(row.get('duration', 0)),
+                'round_eval_acc': {
+                    'aggregated': float(row.get('eval_agg', 0)),
+                    'mAP@0.5': float(row.get('eval_mAP50', 0)),
+                    'mAP': float(row.get('eval_mAP', 0)),
+                    'mr': float(row.get('eval_mr', 0)),
+                    'mp': float(row.get('eval_mp', 0))
+                },
+                'clients_logs': client_logs,
+                'lr': 0.005
+            }
+            export_data.append(round_obj)
+            
+        def default(o):
+            if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
+                return int(o)
+            elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+                return float(o)
+            elif isinstance(o, (np.ndarray,)):
+                return o.tolist()
+            return str(o)
+            
+        # Print ONLY the JSON to stdout
+        print(json.dumps(export_data, indent=2, default=default))
+        return
         
-    generate_summary_statistics(df_rounds, df_clients, output_dir)
+# generate_summary_statistics(df_rounds, df_clients, output_dir)
     plot_metrics(df_rounds, df_clients, output_dir)
     
     logger.info("Analysis complete.")

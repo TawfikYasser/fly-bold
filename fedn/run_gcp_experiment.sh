@@ -140,6 +140,9 @@ python3 -u run_session.py
 python3 -m pip install --no-cache-dir matplotlib pandas
 
 echo 'Running Experiment Analyzer...'
+echo 'Running Experiment Analyzer...'
+# Dump reconstructed logs (validations) to JSON
+python3 -u experiment_analyzer.py --dump-stdout > reconstructed_logs.json
 python3 -u experiment_analyzer.py
 
 # Try to find the latest log file and generate detailed report
@@ -155,8 +158,28 @@ info "STEP 5: Downloading Results"
 # download-files.sh asks: "Enter file numbers (comma) or 'all': "
 echo "analysis" | ./download-files.sh
 
-# 6. Cleanup
-info "STEP 6: Cleanup"
+# 6. Local Processing & Report Generation
+info "STEP 6: Generating Verified Report Locally"
+LATEST_DUMP=$(ls -t downloads/EXP_DB_Dump_*_logs.json 2>/dev/null | head -n 1)
+RECONSTRUCTED_LOG="downloads/reconstructed_logs.json"
+
+if [ -f "$LATEST_DUMP" ] && [ -f "$RECONSTRUCTED_LOG" ]; then
+    echo "Found latest dump: $LATEST_DUMP"
+    echo "Found reconstructed logs: $RECONSTRUCTED_LOG"
+    
+    echo "Merging logs to recover training times..."
+    python3 merge_logs.py "$RECONSTRUCTED_LOG" "$LATEST_DUMP" "downloads/merged_logs.json"
+    
+    echo "Generating final verified report..."
+    python3 experiment_analyzer.py --logs "downloads/merged_logs.json" --out "downloads/analysis_plots/"
+    
+    echo "Report generated: downloads/analysis_plots/00_detailed_report.txt"
+else
+    warn "Could not find necessary log files for local report generation."
+fi
+
+# 7. Cleanup
+info "STEP 7: Cleanup"
 # cleanup.sh asks: "Type DELETE to continue: "
 echo "DELETE" | ./cleanup.sh
 

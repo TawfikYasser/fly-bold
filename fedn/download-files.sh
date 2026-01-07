@@ -50,14 +50,14 @@ if [ "$sel" = "all" ]; then
     fi
   done
 elif [ "$sel" = "analysis" ]; then
-  echo "Downloading ONLY analysis results..."
-  FOUND=false
-  for f in "${FARR[@]}"; do
-    if [[ "$f" == *"analysis_plots"* ]]; then
-        echo "Downloading $f"
-        gcloud compute scp --recurse "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
-        FOUND=true
-    fi
+    echo "Downloading ONLY analysis results..."
+    FOUND=false
+    for f in "${FARR[@]}"; do
+      if [[ "$f" == *"analysis_plots"* ]] || [[ "$f" == *"EXP_DB_Dump"* ]] || [[ "$f" == *"EXP_Reconstructed"* ]] || [[ "$f" == *"reconstructed_logs"* ]]; then
+          echo "Downloading $f"
+          gcloud compute scp --recurse "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
+          FOUND=true
+      fi
   done
   if [ "$FOUND" = false ]; then
       echo "No analysis_plots directory found on server."
