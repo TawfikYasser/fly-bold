@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.24"
+version = "1.0.63"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -81,17 +81,17 @@ gcs_bucket = "flybold-coco-inf022"
 num-server-rounds = 5
 fraction-train = 1
 fraction_evaluate = 1
-local-epochs = 3
-lr = 0.005
+local-epochs = 5
+lr = 0.003
 task = "detection"  # "classification" or "detection"
 coco_root = "/app/datasets/coco"
 yolo_tmp_dir = "./yolov5/tmp_coco_clients"  # Temp dir for client data
 yolo_runs_dir = "./yolov5/runs/train"  # Runs dir for YOLO training
 yolo_size = "s"  # n, s, m, l, or x
-img_size = 512
-batch_size = 32
+img_size = 640
+batch_size = 256
 dirichlet_alpha = 0.7
-run_id = 42
+run_id = 63
 
 # Default federation to use when running the app
 [tool.flwr.federations]
@@ -102,7 +102,7 @@ default = "deployment"
 # Address and insecure mode can be set via .env (FLWR_SUPERLINK_ADDRESS, INSECURE or FLWR_INSECURE)
 [tool.flwr.federations.deployment]
 options.backend = "rest"
-options.backends.client-resources.num-cpus = 4
+options.backends.client-resources.num-cpus = 8
 address = "0.0.0.0:9093"
 insecure = true
 # root-certificates = "/app/certs/ca.crt"  # For TLS setup - use absolute path

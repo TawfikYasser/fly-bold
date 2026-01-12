@@ -388,6 +388,7 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
                     name=name,
                     exist_ok=True,
                     disable_wandb=True,
+                    cache="ram"
                 )
                 print(f"[yolo_train] In-process yolov5.train.run completed successfully.")
             except Exception as e:
@@ -413,7 +414,8 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
             "--project", run_dir_abs,
             "--name", name,
             "--exist-ok",
-            "--cfg", cfg
+            "--cfg", cfg,
+            "--cache", "ram"
         ]
         print(f"[yolo_train] Running subprocess training with command:")
         print(f"[yolo_train] {' '.join(cmd)}")
