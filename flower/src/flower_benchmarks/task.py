@@ -431,19 +431,14 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
         env["WANDB_DISABLED"] = "true"  # Extra safety
         env["OMP_NUM_THREADS"] = "4"  # Limit OpenMP threads to avoid resource issues
 
-        proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
+        # Stream output directly to stdout/stderr so logs are visible in real-time
+        proc = subprocess.run(cmd, check=False, env=env)
         print(f"[yolo_train] Subprocess returned with code: {proc.returncode}")
         
         if proc.returncode != 0:
             print("YOLOv5 subprocess training failed.")
-            print("=== STDOUT ===")
-            print(proc.stdout[-2000:] if len(proc.stdout) > 2000 else proc.stdout)
-            print("=== STDERR ===")
-            print(proc.stderr[-2000:] if len(proc.stderr) > 2000 else proc.stderr)
         else:
             print(f"[yolo_train] YOLOv5 subprocess training completed successfully.")
-            print("=== Training Output (last 1000 chars) ===")
-            print(proc.stdout[-1000:] if len(proc.stdout) > 1000 else proc.stdout)
 
     # try to find best.pt under runs/train/<name>/weights/best.pt or last.pt
     out_dir = Path(run_dir) / name / "weights"

@@ -432,17 +432,24 @@ BUCKET_NAME=flybold-coco-inf022
 DOCKER_IMAGE={username}/fly-bold-image:latest
 ```
 
-### Dataset Partitioning
+### Dataset Partitioning (Refined "Partition First" Logic)
 
-Each client gets a **non-IID subset** using Dirichlet distribution:
-- **Alpha = 0.5** (default): Moderate heterogeneity
-- **Alpha → 0**: More heterogeneous (each client has few classes)
-- **Alpha → ∞**: More homogeneous (each client has all classes)
+The system uses a sophisticated **Partition-First** approach to ensure fair but heterogeneous data distribution:
 
-**Example with 10 clients, N_TRAIN=2000 each**:
-- Total: 20,000 training images
-- Each client: ~2,000 images with class imbalance
-- Distribution varies per run (controlled by `dirichlet_seed`)
+1. **Phase 1: Partitioning (The Lottery)**
+   - **Client 0 (IID)**: Guaranteed a fixed uniform slice (10%) of every class.
+   - **Clients 1-9 (Non-IID)**: Compete for the remaining 90% via Dirichlet distribution (controlled by `alpha`).
+
+2. **Phase 2: Capping & Splitting**
+   - Each client is assigned a **Random "Train Cap"** (between `min_train` and `max_train`).
+   - The script checks the *actual* number of images received in Phase 1.
+   - **Training Set**: Taken from the pool, but strictly **Capped** at the client's random target.
+   - **Validation Set**: Strictly enforced to vary **exactly 50% of the Training Set size**.
+   - *Note*: Any excess images beyond the cap+validation are discarded to maintain strict consistency.
+
+**Example Result**:
+- **Rich Client** (Received 10k images, Cap 4k): Gets **4000 Train**, **2000 Val**. Discards 4k.
+- **Poor Client** (Received 1k images, Cap 4k): Gets **666 Train**, **333 Val**. Discards 0.
 
 ---
 

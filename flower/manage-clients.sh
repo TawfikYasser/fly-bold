@@ -18,6 +18,7 @@ COMMANDS:
     restart     Restart client(s)
     status      Show status of all clients
     logs        View logs for a client
+    server-fresh Restart server container(s) and clear logs (fresh start)
 
 OPTIONS:
     --client <0-9>      Specific client ID
@@ -30,6 +31,7 @@ EXAMPLES:
     $0 restart --client 7
     $0 stop --all
     $0 start --all
+    $0 server-fresh
 EOF
 }
 
@@ -136,6 +138,66 @@ restart_all() {
     done
 }
 
+restart_server_fresh() {
+    echo "=== Restarting server and clearing logs (fresh start) ==="
+    echo "[SERVER: $SERVER_VM]"
+
+    # Don't let set -e kill the script without showing why
+    set +e
+    gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="bash -lc '
+        set -euo pipefail
+        cd /app
+
+        # Choose compose file
+        COMPOSE_FILE=
+        if [ -f docker-compose.yml ]; then
+            COMPOSE_FILE=docker-compose.yml
+        elif [ -f docker-compose.yaml ]; then
+            COMPOSE_FILE=docker-compose.yaml
+        else
+            echo \"ERROR: No docker-compose.yml or docker-compose.yaml in /app\" >&2
+            exit 1
+        fi
+
+        echo \"[REMOTE] Using \$COMPOSE_FILE\"
+
+        # Clear Docker json-file logs for currently running compose containers (if any)
+        CONTAINERS=\$(sudo docker compose -f \"\$COMPOSE_FILE\" ps -q 2>/dev/null || true)
+        if [ -n \"\$CONTAINERS\" ]; then
+            echo \"[REMOTE] Truncating Docker logs\"
+            for cid in \$CONTAINERS; do
+                sudo truncate -s 0 \"/var/lib/docker/containers/\$cid/\$cid-json.log\" 2>/dev/null || true
+            done
+        else
+            echo \"[REMOTE] No running containers found (nothing to truncate)\"
+        fi
+
+        echo \"[REMOTE] docker compose down\"
+        sudo docker compose -f \"\$COMPOSE_FILE\" down --remove-orphans || true
+
+        echo \"[REMOTE] docker compose up --force-recreate\"
+        sudo docker compose -f \"\$COMPOSE_FILE\" up -d --force-recreate
+
+        # Optional: clear python caches inside fl-server if service exists
+        if sudo docker compose -f \"\$COMPOSE_FILE\" ps -q fl-server >/dev/null 2>&1; then
+            echo \"[REMOTE] Clearing __pycache__ and *.pyc inside fl-server\"
+            sudo docker compose -f \"\$COMPOSE_FILE\" exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+            sudo docker compose -f \"\$COMPOSE_FILE\" exec -T fl-server find /app -type f -name \"*.pyc\" -delete 2>/dev/null || true
+        fi
+
+        echo \"[REMOTE] docker compose ps\"
+        sudo docker compose -f \"\$COMPOSE_FILE\" ps
+    '"
+    status=$?
+    set -e
+
+    if [ $status -ne 0 ]; then
+        echo "ERROR: server-fresh failed with exit code $status"
+        exit $status
+    fi
+}
+
+
 # Parse arguments
 if [ $# -eq 0 ]; then
     show_usage
@@ -205,6 +267,10 @@ case $COMMAND in
             exit 1
         fi
         ;;
+    server-fresh)
+        restart_server_fresh
+        ;;
+
     logs)
         if [ -z "$CLIENT_ID" ]; then
             echo "ERROR: logs requires --client"
