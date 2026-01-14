@@ -220,9 +220,6 @@ if [ "$SKIP_PROMPTS" = false ]; then
     
     read -p "Image size [512]: " IMG_SIZE
     IMG_SIZE=${IMG_SIZE:-512}
-    
-    read -p "Dirichlet alpha [0.5]: " DIRICHLET_ALPHA
-    DIRICHLET_ALPHA=${DIRICHLET_ALPHA:-0.5}
 fi
 
 # Get/increment run_id
@@ -235,31 +232,12 @@ echo_success "Run ID incremented to $NEXT_RUN_ID"
 RUN_ID=$NEXT_RUN_ID
 
 # Save config
-cat > .env << EOF
-ENABLE_GPU=$ENABLE_GPU
-ENABLE_TLS=$ENABLE_TLS
-INSECURE=$INSECURE
-N_TRAIN=$N_TRAIN
-N_VAL=$N_VAL
-RUN_ID=$RUN_ID
-NUM_SERVER_ROUNDS=$NUM_SERVER_ROUNDS
-NUM_CLIENTS=10
-LOCAL_EPOCHS=$LOCAL_EPOCHS
-BATCH_SIZE=$BATCH_SIZE
-FRACTION_TRAIN=$FRACTION_TRAIN
-FRACTION_EVALUATE=$FRACTION_EVALUATE
-LR=$LR
-YOLO_SIZE=$YOLO_SIZE
-IMG_SIZE=$IMG_SIZE
-DIRICHLET_ALPHA=$DIRICHLET_ALPHA
-NUM_CPUS=$NUM_CPUS
-NUM_GPUS=$NUM_GPUS
-FLWR_SUPERLINK_ADDRESS=0.0.0.0:9092
-BUCKET_NAME=$BUCKET_NAME
-DOCKER_IMAGE=$DOCKER_IMAGE
-SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
-EOF
+# Save updated config to .env using sed (preserve other comments/structure)
+sed -i "s/^RUN_ID=.*/RUN_ID=$RUN_ID/" .env
+sed -i "s|^DOCKER_IMAGE=.*|DOCKER_IMAGE=$DOCKER_IMAGE|" .env
+sed -i "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
 
+# Save config to GCS
 # Save config to GCS
 CONFIG_JSON=$(cat <<EOJSON
 {
@@ -272,9 +250,10 @@ CONFIG_JSON=$(cat <<EOJSON
   "lr": $LR,
   "yolo_size": "$YOLO_SIZE",
   "img_size": $IMG_SIZE,
-  "dirichlet_alpha": $DIRICHLET_ALPHA,
-  "n_train": $N_TRAIN,
-  "n_val": $N_VAL,
+  "min_train": $MIN_TRAIN,
+  "max_train": $MAX_TRAIN,
+  "alpha_min": $DIRICHLET_ALPHA_MIN,
+  "alpha_max": $DIRICHLET_ALPHA_MAX,
   "enable_gpu": $ENABLE_GPU,
   "enable_tls": $ENABLE_TLS,
   "server_internal_ip": "$SERVER_INTERNAL_IP",
@@ -293,7 +272,6 @@ sed -i "s/lr = [0-9.]\+/lr = $LR/" pyproject.toml
 sed -i "s/yolo_size = \"[a-z]\"/yolo_size = \"$YOLO_SIZE\"/" pyproject.toml
 sed -i "s/img_size = [0-9]\+/img_size = $IMG_SIZE/" pyproject.toml
 sed -i "s/batch_size = [0-9]\+/batch_size = $BATCH_SIZE/" pyproject.toml
-sed -i "s/dirichlet_alpha = [0-9.]\+/dirichlet_alpha = $DIRICHLET_ALPHA/" pyproject.toml
 sed -i "s/run_id = [0-9]\+/run_id = $RUN_ID/" pyproject.toml
 sed -i "s|coco_root = \".*\"|coco_root = \"/app/datasets/coco\"|" pyproject.toml
 sed -i "s|gcs_bucket = \".*\"|gcs_bucket = \"$BUCKET_NAME\"|" pyproject.toml
@@ -456,12 +434,7 @@ for i in $(seq 1 5); do
             
             if [ ! -d \"\$PARTITION_DIR\" ]; then
                 echo \"ERROR: Partition directory not found: \$PARTITION_DIR\"
-                echo \"Please run 03b-partition-dataset.sh before deployment!\"
-                exit 1
-            fi
-            
-            if [ ! -f \"\$PARTITION_DIR/coco_client.yaml\" ]; then
-                echo \"ERROR: YAML config missing for client \$CLIENT_ID\"
+                echo \"Please run partition-dataset.sh before deployment!\"
                 exit 1
             fi
             

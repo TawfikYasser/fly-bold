@@ -7,7 +7,6 @@ set -e
 # Set the project ID for gcloud
 gcloud config set project "$PROJECT_ID" >/dev/null 2>&1 || true
 
-
 PROJECT_ID="inf022"
 BUCKET_NAME="flybold-coco-${PROJECT_ID}"
 MANIFEST_FILE="partition_manifest.json"
@@ -49,19 +48,22 @@ source vm-info.txt
 
 # Configuration
 NUM_CLIENTS=${NUM_CLIENTS:-10}
-N_TRAIN=${N_TRAIN:-10000}
-N_VAL=${N_VAL:-5000}
+MIN_TRAIN=${MIN_TRAIN:-1000}
+MAX_TRAIN=${MAX_TRAIN:-5000}
 SEED=${DIRICHLET_SEED:-42}
 ALPHA_MIN=${DIRICHLET_ALPHA_MIN:-0.1}
 ALPHA_MAX=${DIRICHLET_ALPHA_MAX:-1.5}
+SAME_SEED_VAL=${SAME_SEED_VAL:-false}
 
 echo_info "Partition Configuration:"
 echo "  Bucket: $BUCKET_NAME"
 echo "  Clients: $NUM_CLIENTS"
-echo "  N_TRAIN per client: $N_TRAIN"
-echo "  N_VAL per client: $N_VAL"
+echo "  Train size range: [$MIN_TRAIN, $MAX_TRAIN]"
+echo "  Val size: 50% of train"
 echo "  Random seed: $SEED"
 echo "  Alpha range: [$ALPHA_MIN, $ALPHA_MAX]"
+echo "  Client 0: Uniform (alpha=1e6)"
+echo "  Same seed for val: $SAME_SEED_VAL"
 echo ""
 
 # Check if partition already exists (interactive)
@@ -74,8 +76,8 @@ with open('$MANIFEST_FILE', 'r') as f:
     data = json.load(f)
     print(f\"  Seed: {data['metadata']['seed']}\")
     print(f\"  Clients: {data['metadata']['num_clients']}\")
-    print(f\"  N_TRAIN: {data['metadata']['n_train_per_client']}\")
-    print(f\"  N_VAL: {data['metadata']['n_val_per_client']}\")
+    print(f\"  Train range: [{data['metadata']['min_train_per_client']}, {data['metadata']['max_train_per_client']}]\")
+    print(f\"  Same seed val: {data['metadata']['same_seed_for_val']}\")
 "
 
     # Ask user whether to regenerate
@@ -114,16 +116,25 @@ if [ "$SKIP_GENERATION" = false ]; then
     echo "Packages installed."
 
     echo "Generating partition manifest, running generate_partitions.py ..."
+    
+    # Build command
+    CMD="python3 -u generate_partitions.py \
+        --bucket \"$BUCKET_NAME\" \
+        --num-clients $NUM_CLIENTS \
+        --min-train $MIN_TRAIN \
+        --max-train $MAX_TRAIN \
+        --seed $SEED \
+        --alpha-min $ALPHA_MIN \
+        --alpha-max $ALPHA_MAX \
+        --output \"$MANIFEST_FILE\""
+    
+    # Add --same-seed-val flag if true
+    if [ "$SAME_SEED_VAL" = "true" ]; then
+        CMD="$CMD --same-seed-val"
+    fi
+    
     # Run partition generation
-    python3 -u generate_partitions.py \
-        --bucket "$BUCKET_NAME" \
-        --num-clients "$NUM_CLIENTS" \
-        --n-train "$N_TRAIN" \
-        --n-val "$N_VAL" \
-        --seed "$SEED" \
-        --alpha-min "$ALPHA_MIN" \
-        --alpha-max "$ALPHA_MAX" \
-        --output "$MANIFEST_FILE"
+    eval $CMD
     
     if [ $? -ne 0 ]; then
         echo_error "Failed to generate partition manifest"
@@ -135,6 +146,14 @@ if [ "$SKIP_GENERATION" = false ]; then
     echo_info "Uploading manifest to GCS..."
     RUN_ID=${RUN_ID:-1}
     gsutil cp "$MANIFEST_FILE" "gs://${BUCKET_NAME}/partitions/manifest_run${RUN_ID}.json"
+    
+    # Upload plots if they exist
+    if [ -d "client_plots" ]; then
+        echo_info "Uploading client plots to GCS..."
+        gsutil -m cp -r client_plots "gs://${BUCKET_NAME}/partitions/run${RUN_ID}_plots/"
+        echo_success "Plots backed up to GCS"
+    fi
+    
     echo_success "Manifest backed up to GCS"
 fi
 
@@ -174,7 +193,7 @@ setup_client_partition() {
         sudo mkdir -p \$BASE_DIR/{images,labels}/{train2017,val2017}
         sudo chown -R \$USER:\$USER \$BASE_DIR
         
-        # Extract image lists from manifest
+        # Extract image lists and expected counts from manifest
         python3 << 'PYEOF'
 import json
 import os
@@ -189,78 +208,129 @@ with open(manifest_path, 'r') as f:
 
 partition = manifest['partitions'][f'client_{client_id}']
 
-# Save image lists to temporary files
-with open(f'/tmp/train_images_{client_id}.txt', 'w') as f:
-    for img in partition['train_images']:
-        f.write(f\"gs://{os.environ['BUCKET_NAME']}/coco/images/train2017/{img}\\n\")
+# Save image lists to temporary files WITH CORRECT SOURCE PATHS
+train_from_train = partition.get('train_images_from_train2017', [])
+train_from_val = partition.get('train_images_from_val2017', [])
+val_from_train = partition.get('val_images_from_train2017', [])
+val_from_val = partition.get('val_images_from_val2017', [])
 
-with open(f'/tmp/val_images_{client_id}.txt', 'w') as f:
-    for img in partition['val_images']:
+with open(f'/tmp/train_images_{client_id}.txt', 'w') as f:
+    for img in train_from_train:
+        f.write(f\"gs://{os.environ['BUCKET_NAME']}/coco/images/train2017/{img}\\n\")
+    for img in train_from_val:
         f.write(f\"gs://{os.environ['BUCKET_NAME']}/coco/images/val2017/{img}\\n\")
 
-print(f\"[VM] Client {client_id}: {len(partition['train_images'])} train, {len(partition['val_images'])} val images\")
+with open(f'/tmp/val_images_{client_id}.txt', 'w') as f:
+    for img in val_from_train:
+        f.write(f\"gs://{os.environ['BUCKET_NAME']}/coco/images/train2017/{img}\\n\")
+    for img in val_from_val:
+        f.write(f\"gs://{os.environ['BUCKET_NAME']}/coco/images/val2017/{img}\\n\")
+
+# Save expected counts
+train_count = partition['train_count']
+val_count = partition['val_count']
+
+with open(f'/tmp/expected_counts_{client_id}.txt', 'w') as f:
+    f.write(f\"{train_count}\\n\")
+    f.write(f\"{val_count}\\n\")
+
+print(f\"[VM] Client {client_id}: {train_count} train, {val_count} val images\")
 PYEOF
         
-        # Download train images
-        echo '[VM] Downloading training images...'
-        cat /tmp/train_images_\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/images/train2017/ 2>/dev/null || true
+        # Read expected counts
+        EXPECTED_TRAIN=\$(head -1 /tmp/expected_counts_\${CLIENT_ID}.txt)
+        EXPECTED_VAL=\$(tail -1 /tmp/expected_counts_\${CLIENT_ID}.txt)
         
-        # Download train labels (optimized)
+        # Check if data already exists with correct counts
         CURRENT_TRAIN_IMGS=\$(ls \$BASE_DIR/images/train2017/*.jpg 2>/dev/null | wc -l)
         CURRENT_TRAIN_LABELS=\$(ls \$BASE_DIR/labels/train2017/*.txt 2>/dev/null | wc -l)
+        CURRENT_VAL_IMGS=\$(ls \$BASE_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
+        CURRENT_VAL_LABELS=\$(ls \$BASE_DIR/labels/val2017/*.txt 2>/dev/null | wc -l)
         
-        if [ "\$CURRENT_TRAIN_LABELS" -ge "\$CURRENT_TRAIN_IMGS" ]; then
-            echo '[VM] Training labels already sufficient, skipping download'
+        echo \"[VM] Expected: train=\$EXPECTED_TRAIN, val=\$EXPECTED_VAL\"
+        echo \"[VM] Current: train_imgs=\$CURRENT_TRAIN_IMGS, train_labels=\$CURRENT_TRAIN_LABELS\"
+        echo \"[VM] Current: val_imgs=\$CURRENT_VAL_IMGS, val_labels=\$CURRENT_VAL_LABELS\"
+        
+        # Download train images if needed
+        if [ \$CURRENT_TRAIN_IMGS -eq \$EXPECTED_TRAIN ]; then
+            echo '[VM] ✓ Training images already complete, skipping download'
         else
-            echo '[VM] Downloading training labels in parallel...'
-            # Create list of labels needed based on downloaded images
+            echo '[VM] Downloading training images...'
+            cat /tmp/train_images_\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/images/train2017/ 2>/dev/null || true
+            
+            # Verify
+            ACTUAL_TRAIN=\$(ls \$BASE_DIR/images/train2017/*.jpg 2>/dev/null | wc -l)
+            if [ \$ACTUAL_TRAIN -ne \$EXPECTED_TRAIN ]; then
+                echo \"[VM] ⚠ WARNING: Expected \$EXPECTED_TRAIN train images, got \$ACTUAL_TRAIN\"
+            else
+                echo \"[VM] ✓ Train images downloaded successfully\"
+            fi
+        fi
+        
+        # Download train labels if needed
+        if [ \$CURRENT_TRAIN_LABELS -ge \$CURRENT_TRAIN_IMGS ] && [ \$CURRENT_TRAIN_IMGS -eq \$EXPECTED_TRAIN ]; then
+            echo '[VM] ✓ Training labels already complete, skipping download'
+        else
+            echo '[VM] Downloading training labels...'
             cd \$BASE_DIR/images/train2017
             > /tmp/train_labels_list_\${CLIENT_ID}.txt
+            
             for img in *.jpg; do
+                [ -f \"\$img\" ] || continue
                 basename=\"\${img%.jpg}\"
-                if [ ! -f \"../../labels/train2017/\${basename}.txt\" ]; then
+                label_path=\"../../labels/train2017/\${basename}.txt\"
+                if [ ! -f \"\$label_path\" ]; then
                     echo \"gs://\${BUCKET_NAME}/coco/labels/train2017/\${basename}.txt\" >> /tmp/train_labels_list_\${CLIENT_ID}.txt
                 fi
             done
             
-            # Download all labels in parallel using gsutil -m
             if [ -s /tmp/train_labels_list_\${CLIENT_ID}.txt ]; then
                 cat /tmp/train_labels_list_\${CLIENT_ID}.txt | gsutil -m cp -I ../../labels/train2017/ 2>/dev/null || true
             fi
-            rm -f /tmp/train_labels_list_\${CLIENT_ID}.txt
+            
             cd /tmp
-            echo '[VM] Training labels downloaded.'
+            echo '[VM] ✓ Training labels downloaded'
         fi
         
-        # Download val images
-        echo '[VM] Downloading validation images...'
-        cat /tmp/val_images_\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/images/val2017/ 2>/dev/null || true
-        
-        # Download val labels (optimized)
-        CURRENT_VAL_IMGS=\$(ls \$BASE_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
-        CURRENT_VAL_LABELS=\$(ls \$BASE_DIR/labels/val2017/*.txt 2>/dev/null | wc -l)
-        
-        if [ "\$CURRENT_VAL_LABELS" -ge "\$CURRENT_VAL_IMGS" ]; then
-            echo '[VM] Validation labels already sufficient, skipping download'
+        # Download val images if needed
+        if [ \$CURRENT_VAL_IMGS -eq \$EXPECTED_VAL ]; then
+            echo '[VM] ✓ Validation images already complete, skipping download'
         else
-            echo '[VM] Downloading validation labels in parallel...'
-            # Create list of labels needed based on downloaded images
+            echo '[VM] Downloading validation images...'
+            cat /tmp/val_images_\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/images/val2017/ 2>/dev/null || true
+            
+            # Verify
+            ACTUAL_VAL=\$(ls \$BASE_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
+            if [ \$ACTUAL_VAL -ne \$EXPECTED_VAL ]; then
+                echo \"[VM] ⚠ WARNING: Expected \$EXPECTED_VAL val images, got \$ACTUAL_VAL\"
+            else
+                echo \"[VM] ✓ Val images downloaded successfully\"
+            fi
+        fi
+        
+        # Download val labels if needed
+        if [ \$CURRENT_VAL_LABELS -ge \$CURRENT_VAL_IMGS ] && [ \$CURRENT_VAL_IMGS -eq \$EXPECTED_VAL ]; then
+            echo '[VM] ✓ Validation labels already complete, skipping download'
+        else
+            echo '[VM] Downloading validation labels...'
             cd \$BASE_DIR/images/val2017
             > /tmp/val_labels_list_\${CLIENT_ID}.txt
+            
             for img in *.jpg; do
+                [ -f \"\$img\" ] || continue
                 basename=\"\${img%.jpg}\"
-                if [ ! -f \"../../labels/val2017/\${basename}.txt\" ]; then
+                label_path=\"../../labels/val2017/\${basename}.txt\"
+                if [ ! -f \"\$label_path\" ]; then
                     echo \"gs://\${BUCKET_NAME}/coco/labels/val2017/\${basename}.txt\" >> /tmp/val_labels_list_\${CLIENT_ID}.txt
                 fi
             done
             
-            # Download all labels in parallel using gsutil -m
             if [ -s /tmp/val_labels_list_\${CLIENT_ID}.txt ]; then
                 cat /tmp/val_labels_list_\${CLIENT_ID}.txt | gsutil -m cp -I ../../labels/val2017/ 2>/dev/null || true
             fi
-            rm -f /tmp/val_labels_list_\${CLIENT_ID}.txt
+            
             cd /tmp
-            echo '[VM] Validation labels downloaded.'
+            echo '[VM] ✓ Validation labels downloaded'
         fi
         
         # Create data YAML
@@ -279,22 +349,45 @@ names: ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 't
         'hair drier', 'toothbrush']
 EOF
         
-        # Verify
-        TRAIN_COUNT=\$(ls \$BASE_DIR/images/train2017/*.jpg 2>/dev/null | wc -l)
-        VAL_COUNT=\$(ls \$BASE_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
-        TRAIN_LABEL_COUNT=\$(ls \$BASE_DIR/labels/train2017/*.txt 2>/dev/null | wc -l)
-        VAL_LABEL_COUNT=\$(ls \$BASE_DIR/labels/val2017/*.txt 2>/dev/null | wc -l)
+        # Final verification
+        FINAL_TRAIN_IMGS=\$(ls \$BASE_DIR/images/train2017/*.jpg 2>/dev/null | wc -l)
+        FINAL_VAL_IMGS=\$(ls \$BASE_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
+        FINAL_TRAIN_LABELS=\$(ls \$BASE_DIR/labels/train2017/*.txt 2>/dev/null | wc -l)
+        FINAL_VAL_LABELS=\$(ls \$BASE_DIR/labels/val2017/*.txt 2>/dev/null | wc -l)
         
-        echo '[VM] Verification:'
-        echo \"[VM]   Train images: \$TRAIN_COUNT\"
-        echo \"[VM]   Val images: \$VAL_COUNT\"
-        echo \"[VM]   Train labels: \$TRAIN_LABEL_COUNT\"
-        echo \"[VM]   Val labels: \$VAL_LABEL_COUNT\"
+        echo '[VM] ========================================='
+        echo \"[VM] Final Verification for Client \$CLIENT_ID:\"
+        echo '[VM] ========================================='
+        echo \"[VM]   Train images: \$FINAL_TRAIN_IMGS / \$EXPECTED_TRAIN\"
+        echo \"[VM]   Val images: \$FINAL_VAL_IMGS / \$EXPECTED_VAL\"
+        echo \"[VM]   Train labels: \$FINAL_TRAIN_LABELS\"
+        echo \"[VM]   Val labels: \$FINAL_VAL_LABELS\"
+        
+        # Check for mismatches
+        if [ \$FINAL_TRAIN_IMGS -ne \$EXPECTED_TRAIN ]; then
+            echo '[VM]   ⚠ Train images mismatch!'
+            exit 1
+        fi
+        if [ \$FINAL_VAL_IMGS -ne \$EXPECTED_VAL ]; then
+            echo '[VM]   ⚠ Val images mismatch!'
+            exit 1
+        fi
+        if [ \$FINAL_TRAIN_LABELS -lt \$FINAL_TRAIN_IMGS ]; then
+            echo '[VM]   ⚠ Missing train labels!'
+            exit 1
+        fi
+        if [ \$FINAL_VAL_LABELS -lt \$FINAL_VAL_IMGS ]; then
+            echo '[VM]   ⚠ Missing val labels!'
+            exit 1
+        fi
+        
+        echo \"[VM] ✅ Client \$CLIENT_ID partition setup complete and verified!\"
+        echo '[VM] ========================================='
         
         # Cleanup temp files
         rm -f /tmp/train_images_\${CLIENT_ID}.txt /tmp/val_images_\${CLIENT_ID}.txt
-        
-        echo '[VM] Client \$CLIENT_ID partition setup complete'
+        rm -f /tmp/expected_counts_\${CLIENT_ID}.txt
+        rm -f /tmp/train_labels_list_\${CLIENT_ID}.txt /tmp/val_labels_list_\${CLIENT_ID}.txt
     "
     
     if [ $? -eq 0 ]; then

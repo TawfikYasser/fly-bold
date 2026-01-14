@@ -3,7 +3,7 @@
 # Refresh VM IP Addresses
 # Run this script after stopping/starting VMs to update vm-info.txt
 
-set -e
+set -euo pipefail
 
 PROJECT_ID="inf022"
 
@@ -25,54 +25,50 @@ echo_warning() {
 
 # Function to check if VM is running
 check_vm_status() {
-    local vm_name=$1
-    local zone=$2
-    
-    local status=$(gcloud compute instances describe $vm_name \
-        --zone=$zone \
-        --format='get(status)' 2>/dev/null)
-    
-    echo "$status"
+    local vm_name="$1"
+    local zone="$2"
+
+    gcloud compute instances describe "$vm_name" \
+        --zone="$zone" \
+        --format='get(status)' 2>/dev/null || true
 }
 
 # Function to fetch current IP addresses from GCP
 fetch_vm_ips() {
-    local vm_name=$1
-    local zone=$2
-    
-    # Check if VM is running
-    local status=$(check_vm_status $vm_name $zone)
-    
+    local vm_name="$1"
+    local zone="$2"
+
+    local status
+    status="$(check_vm_status "$vm_name" "$zone")"
+
     if [ "$status" != "RUNNING" ]; then
-        echo "  VM $vm_name is $status (not RUNNING). IPs may be unavailable." >&2
+        echo "  VM $vm_name is ${status:-UNKNOWN} (not RUNNING). IPs may be unavailable." >&2
         echo "UNAVAILABLE|UNAVAILABLE"
-        return
+        return 0
     fi
-    
-    # Get internal IP
-    local internal_ip=$(gcloud compute instances describe $vm_name \
-        --zone=$zone \
-        --format='get(networkInterfaces[0].networkIP)' 2>/dev/null)
-    
-    # Get external IP (may not exist for some VMs)
-    local external_ip=$(gcloud compute instances describe $vm_name \
-        --zone=$zone \
-        --format='get(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null)
-    
-    if [ -z "$internal_ip" ]; then
+
+    local internal_ip external_ip
+
+    internal_ip="$(gcloud compute instances describe "$vm_name" \
+        --zone="$zone" \
+        --format='get(networkInterfaces[0].networkIP)' 2>/dev/null || true)"
+
+    external_ip="$(gcloud compute instances describe "$vm_name" \
+        --zone="$zone" \
+        --format='get(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null || true)"
+
+    if [ -z "${internal_ip:-}" ]; then
         internal_ip="UNAVAILABLE"
     fi
-    
-    if [ -z "$external_ip" ]; then
+
+    if [ -z "${external_ip:-}" ]; then
         external_ip="None"
     fi
-    
-    # Send info to stderr
+
     echo "  Status: $status" >&2
     echo "  Internal IP: $internal_ip" >&2
     echo "  External IP: $external_ip" >&2
-    
-    # Return IPs via echo (caller will capture) - this goes to stdout
+
     echo "$internal_ip|$external_ip"
 }
 
@@ -101,9 +97,9 @@ echo "════════════════════════�
 
 # Fetch server IPs
 echo_info "Fetching server IP..."
-local server_ips=$(fetch_vm_ips "flybold-server" "us-central1-a")
-local server_internal=$(echo $server_ips | cut -d'|' -f1)
-local server_external=$(echo $server_ips | cut -d'|' -f2)
+server_ips="$(fetch_vm_ips "flybold-server" "us-central1-a")"
+server_internal="$(echo "$server_ips" | cut -d'|' -f1)"
+server_external="$(echo "$server_ips" | cut -d'|' -f2)"
 
 cat >> vm-info.txt << EOF
 SERVER_VM=flybold-server
@@ -114,16 +110,16 @@ SERVER_EXTERNAL_IP=$server_external
 EOF
 
 # Fetch client IPs
-local client_zones=("us-central1-a" "us-central1-b" "us-central1-c" "us-central1-f" "us-central1-a")
+client_zones=("us-central1-a" "us-central1-b" "us-central1-c" "us-central1-f" "us-central1-a")
 
 for i in $(seq 1 5); do
     echo ""
     echo_info "Fetching Client $i IP..."
-    local zone=${client_zones[$((i-1))]}
-    local client_ips=$(fetch_vm_ips "flybold-client-$i" "$zone")
-    local client_internal=$(echo $client_ips | cut -d'|' -f1)
-    local client_external=$(echo $client_ips | cut -d'|' -f2)
-    
+    zone="${client_zones[$((i-1))]}"
+    client_ips="$(fetch_vm_ips "flybold-client-$i" "$zone")"
+    client_internal="$(echo "$client_ips" | cut -d'|' -f1)"
+    client_external="$(echo "$client_ips" | cut -d'|' -f2)"
+
     cat >> vm-info.txt << EOF
 CLIENT_${i}_VM=flybold-client-${i}
 CLIENT_${i}_ZONE=$zone
@@ -138,20 +134,25 @@ echo "════════════════════════�
 echo_success "vm-info.txt updated with current IPs!"
 echo ""
 
+# Load values once for summary display
+# shellcheck disable=SC1091
+source vm-info.txt
+
 # Display summary
 echo "Current IP Configuration:"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 printf "%-20s %-15s %-15s\n" "VM Name" "Internal IP" "External IP"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-printf "%-20s %-15s %-15s\n" "flybold-server" "$server_internal" "$server_external"
+printf "%-20s %-15s %-15s\n" "flybold-server" "$SERVER_INTERNAL_IP" "$SERVER_EXTERNAL_IP"
+
 for i in $(seq 1 5); do
     CLIENT_VM_VAR="CLIENT_${i}_VM"
     CLIENT_INTERNAL_VAR="CLIENT_${i}_INTERNAL_IP"
     CLIENT_EXTERNAL_VAR="CLIENT_${i}_EXTERNAL_IP"
-    
-    source vm-info.txt
+
     printf "%-20s %-15s %-15s\n" "${!CLIENT_VM_VAR}" "${!CLIENT_INTERNAL_VAR}" "${!CLIENT_EXTERNAL_VAR}"
 done
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo ""
