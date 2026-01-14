@@ -1,62 +1,65 @@
 PARTITION WORKFLOW EXPLANATION
 ===============================
 
-When you run ./run-partition-on-temp-vm.sh:
+When you run `./run-partition-on-temp-vm.sh`:
 
 1. VM Setup
 -----------
-- Creates or reuses temporary VM 'partition-tmp-vm' with 'cloud-platform' OAuth scopes
-- Installs Python, gcloud SDK, and dependencies (numpy, matplotlib, seaborn) via startup script
-- Waits 40 seconds for initialization
+- Creates or reuses temporary VM 'partition-tmp-vm'.
+- Installs Python, gcloud SDK, and dependencies (numpy, matplotlib, seaborn).
 
 2. File Transfer
 ----------------
-- Copies generate_partitions.py, partition-dataset.sh, .env, and vm-info.txt to VM's /tmp directory
-- Makes partition-dataset.sh executable
+- Copies partition scripts (`generate_partitions.py`, `partition-dataset.sh`) and config files (`.env`, `vm-info.txt`) to the VM.
 
-3. Partition Generation (on temp VM via partition-dataset.sh)
--------------------------------------------------------------
-- Loads configuration from .env and vm-info.txt
-- Optionally generates new partition manifest using generate_partitions.py (or reuses existing based on user input)
-- Uploads manifest and distribution plots to GCS bucket
-
-   3a. Inside generate_partitions.py:
-   -----------------------------------
-   * Generates unique Dirichlet alpha values for each client (between alpha_min and alpha_max)
-   * Fetches list of all training images from GCS bucket (train2017)
-   * Downloads all training labels to /tmp/coco_labels_train2017/ (reuses if already downloaded)
-   * Parses labels to create image-to-classes mapping
-   * Uses Dirichlet distribution to partition training images among clients:
-     - For each class, distributes images using client-specific alphas
-     - Creates non-IID (heterogeneous) partitions where each client gets different class distributions
-     - Shuffles and assigns images to ensure randomness
-   * Applies N_TRAIN limit per client (randomly samples if needed)
-   * Computes class distribution statistics for training data
-   * Fetches list of all validation images from GCS bucket (val2017)
-   * Downloads all validation labels (reuses if already downloaded)
-   * Repeats Dirichlet partitioning for validation images with different seed
-   * Applies N_VAL limit per client
-   * Computes class distribution statistics for validation data
-   * Generates visualization plots (heatmap of class distribution and sample counts)
-   * Creates partition manifest JSON containing:
-     - Metadata: seed, num_clients, alpha values, totals
-     - Per-client data: assigned train/val image lists, counts, class distributions
-   * Saves manifest and plots to disk
-
-4. Data Distribution (to client VMs)
+3. Partition Generation (on temp VM)
 ------------------------------------
-- Iterates through 5 client VMs, processing 2 clients per VM in parallel
-- For each client:
-  * Copies partition manifest to client VM
-  * Runs Python script to extract assigned image lists
-  * Downloads training images using parallel 'gsutil -m'
-  * Downloads training labels in parallel (only missing ones)
-  * Downloads validation images using parallel 'gsutil -m'
-  * Downloads validation labels in parallel (only missing ones)
-  * Creates YAML config file with dataset paths
-  * Verifies download counts and cleans up temp files
+- Runs `generate_partitions.py` to calculate how data is divided.
+
+   3a. Partitioning Algorithm (The "Partition First" Logic):
+   ----------------------------------------------------------
+   1. **Configuration**: 
+      - Assigns each client a unique Dirichlet `alpha`.
+      - Assigns each client a random "Target Train Cap" (between `min_train` and `max_train`).
+   
+   2. **Class-by-Class Distribution**:
+      - For every class in COCO (e.g., "Dog", "Cat"):
+        - **IID Client** (Client 0): Immediately takes a fixed 10% slice (1/N) to guarantee uniform distribution.
+        - **Non-IID Clients** (1-9): Compete for the remaining 90% via Dirichlet lottery weights (alpha).
+      - *Result*: Each client receives a raw "bag" of images. Some bags are large (rich clients), some are small (poor clients).
+
+   3. **Splitting & Capping**:
+      - The script looks at the ACTUAL number of images in each client's bag.
+      - **Train Set**: Takes 66% of the bag, but strictly caps it at the "Target Train Cap".
+      - **Validation Set**: Strictly sets it to **50% of the Training Set**.
+      - **Discard**: Any excess images beyond these limits are discarded to maintain strict consistency.
+
+   4. **Output**:
+      - Generates `partition_manifest.json` (the master list).
+      - Generates `client_plots/` to visualize class distributions.
+      - Uploads everything to GCS bucket for backup.
+
+4. Data Distribution (to Client VMs) via `partition-dataset.sh`
+---------------------------------------------------------------
+- Iterates through all 5 client VMs (processing 2 clients per VM).
+- **Parallel Execution**: Sets up both clients on a VM simultaneously.
+
+   4a. For Each Client:
+   --------------------
+   1. **Prepare**: Copies manifest to the VM.
+   2. **Extract**: Reads the manifest to find exactly which images belong to this client.
+   3. **Download**:
+      - Uses `gsutil -m cp` (multi-threaded) to download only the assigned images.
+      - Checks if images already exist to avoid re-downloading.
+   4. **Download Labels**:
+      - Checks for corresponding label files.
+      - Downloads only the missing labels from GCS.
+   5. **Verify**:
+      - Counts final files on disk.
+      - Compares strictly against the manifest values.
+      - Fails if counts do not match exactly.
 
 5. Finalization
 ---------------
-- Copies partition manifest JSON back to local partition_outputs/ directory
-- Reports completion
+- Reports successful distribution.
+- The system is now ready for `deploy-application.sh`.
