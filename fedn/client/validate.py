@@ -19,14 +19,27 @@ def parse_yolo_results(results):
         if metrics is None:
             metrics = {}
     elif isinstance(results, (list, tuple)) and results:
-        first = results[0]
-        if isinstance(first, (list, tuple)) and len(first) >= 4:
+        # Check for standard tuple: (mp, mr, map50, map, box_loss, obj_loss, cls_loss)
+        first = results[0] if isinstance(results[0], (list, tuple)) else results
+        
+        if len(first) >= 4:
             metrics = {
                 "mp": float(first[0]),
                 "mr": float(first[1]),
                 "mAP@0.5": float(first[2]),
                 "mAP": float(first[3]),
             }
+            # Extract loss if available (indices 4, 5, 6 for box, obj, cls)
+            # YOLOv5 returns these if validation includes loss calculation
+            if len(first) >= 7:
+                 box = float(first[4])
+                 obj = float(first[5])
+                 cls = float(first[6])
+                 metrics["box_loss"] = box
+                 metrics["obj_loss"] = obj
+                 metrics["cls_loss"] = cls
+                 metrics["loss"] = box + obj + cls
+
     cleaned = {}
     for k, v in metrics.items():
         if isinstance(v, (int, float)):
@@ -34,11 +47,12 @@ def parse_yolo_results(results):
     return cleaned
 
 
-def run_yolo_val(weights_pt: str, data_yaml: str, img: int):
+def run_yolo_val(weights_pt: str, data_yaml: str, img: int, task: str = "val"):
     try:
         os.environ.setdefault("PYTHONPATH", os.getcwd())
         yval = importlib.import_module("yolov5.val")
-        results = yval.run(weights=weights_pt, data=data_yaml, imgsz=img, task="val", verbose=False)
+        # Run validation
+        results = yval.run(weights=weights_pt, data=data_yaml, imgsz=img, task=task, verbose=False)
         return parse_yolo_results(results)
     except Exception as exc:  # fallback to subprocess
         print(f"In-process val failed ({exc}), falling back to subprocess")
@@ -53,7 +67,7 @@ def run_yolo_val(weights_pt: str, data_yaml: str, img: int):
             "--img",
             str(img),
             "--task",
-            "val",
+            task,
         ]
         proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
         print(proc.stdout[-1000:])
@@ -81,13 +95,33 @@ def validate(in_model_path: str, out_json_path: str):
     tmp_weights = Path(out_json_path).with_suffix(".pt")
     save_state_dict_as_yolo_checkpoint(model.state_dict(), yolo_size, tmp_weights, nc)
 
-    metrics = run_yolo_val(str(tmp_weights), str(data_yaml), img)
-    train_images, val_images = count_images_from_yaml(str(data_yaml))
-    metrics.setdefault("num_train_examples", train_images)
-    metrics.setdefault("num_val_examples", val_images)
-    metrics.setdefault("client_id", client_id)
+    save_state_dict_as_yolo_checkpoint(model.state_dict(), yolo_size, tmp_weights, nc)
 
-    save_metrics(metrics, out_json_path)
+    # 1. Evaluate on Validation Set
+    val_metrics = run_yolo_val(str(tmp_weights), str(data_yaml), img, task="val")
+    
+    # 2. Evaluate on Training Set (to capture training-like metrics for Analyzer)
+    # This approximates "training loss" by running inference on training data
+    train_metrics_eval = run_yolo_val(str(tmp_weights), str(data_yaml), img, task="train")
+
+    # Combine metrics
+    final_report = {}
+    
+    # Add Eval metrics (standard keys like mAP, loss)
+    for k, v in val_metrics.items():
+        final_report[k] = v  # e.g. "loss", "mAP"
+        
+    # Add Training metrics with prefix
+    for k, v in train_metrics_eval.items():
+        # Map "loss" -> "train_loss", "mAP" -> "train_mAP"
+        final_report[f"train_{k}"] = v
+
+    train_images, val_images = count_images_from_yaml(str(data_yaml))
+    final_report.setdefault("num_train_examples", train_images)
+    final_report.setdefault("num_val_examples", val_images)
+    final_report.setdefault("client_id", client_id)
+
+    save_metrics(final_report, out_json_path)
 
 
 def parse_args():

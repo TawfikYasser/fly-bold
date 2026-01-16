@@ -2,7 +2,9 @@ import argparse
 import os
 import subprocess
 import sys
+import sys
 from pathlib import Path
+import csv
 
 import config
 from fedn.utils.helpers.helpers import save_metadata
@@ -68,7 +70,44 @@ def run_yolo_train(state_dict, data_yaml: str, yolo_size: str, epochs: int, img:
         raise FileNotFoundError(f"No trained weights found in {weights_dir}")
 
     new_state = load_yolo_checkpoint_as_state_dict(chosen)
-    return new_state, str(chosen), proc.stdout[-2000:]
+    
+    # Parse results.csv for metrics
+    metrics = {}
+    total_loss = float("nan")
+    results_csv = Path(runs_dir) / run_name / "results.csv"
+    if results_csv.exists():
+        try:
+            with open(results_csv, "r") as f:
+                reader = list(csv.reader(f))
+                if len(reader) > 1:
+                    headers = [h.strip() for h in reader[0]]
+                    values = [float(v) for v in reader[-1]] # Last epoch
+                    
+                    # Map standard YOLOv5 keys
+                    if len(headers) == len(values):
+                        row_dict = dict(zip(headers, values))
+                        
+                        # Train Loss
+                        box = row_dict.get("train/box_loss", 0)
+                        obj = row_dict.get("train/obj_loss", 0)
+                        cls = row_dict.get("train/cls_loss", 0)
+                        total_loss = box + obj + cls
+                        
+                        metrics["train_loss"] = total_loss
+                        metrics["train_box_loss"] = box
+                        metrics["train_obj_loss"] = obj
+                        metrics["train_cls_loss"] = cls
+                        
+                        # Train/Validation Metrics logging
+                        metrics["train_mAP50"] = row_dict.get("metrics/mAP_0.5", 0)
+                        metrics["train_mAP"] = row_dict.get("metrics/mAP_0.5:0.95", 0)
+                        metrics["train_precision"] = row_dict.get("metrics/precision", 0)
+                        metrics["train_recall"] = row_dict.get("metrics/recall", 0)
+                        
+        except Exception as e:
+            print(f"Failed to parse results.csv: {e}")
+
+    return new_state, str(chosen), proc.stdout[-2000:], metrics
 
 
 def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo_size: str, epochs: int, img: int, batch_size: int, lr: float, runs_dir: str, nc: int):
@@ -80,7 +119,7 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
     state_dict = model.state_dict()
 
     run_name = f"client_{client_index}"
-    new_state, weights_path, log_tail = run_yolo_train(
+    new_state, weights_path, log_tail, training_metrics = run_yolo_train(
         state_dict,
         str(data_yaml),
         yolo_size,
@@ -106,7 +145,9 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
         "lr": lr,
         "weights_path": weights_path,
         "yolo_size": yolo_size,
+        "yolo_size": yolo_size,
         "log_tail": log_tail,
+        "metrics": training_metrics # Add metrics to metadata
     }
     save_metadata(metadata, out_model_path)
 
