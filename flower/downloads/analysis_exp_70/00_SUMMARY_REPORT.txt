@@ -1,0 +1,83 @@
+==========================================================================================
+FEDERATED LEARNING EXPERIMENT REPORT
+==========================================================================================
+
+EXPERIMENT CONFIGURATION
+------------------------------------------------------------------------------------------
+  Experiment ID................................ 70
+  Train Images/Client.......................... 1000
+  Val Images/Client............................ 500
+  Total Clients................................ 10
+  Server Rounds................................ 5
+  Local Epochs................................. 3
+  Batch Size................................... 32
+  Learning Rate................................ 0.005
+  YOLO Model................................... s
+  Image Size................................... 512
+  Dirichlet Alpha.............................. 0.7
+
+TRAINING PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Training Score:.................... 0.1205
+  Final Training Score:...................... 0.1220
+  Best Training Score:....................... 0.1347 (Round 1)
+  Training Improvement:...................... 0.0015 (+1.26%)
+
+  Best Training mAP@0.5:..................... 0.0652 (Round 9)
+  Best Training mAP:......................... 0.0484 (Round 9)
+  Final Training Loss:....................... 0.1216
+
+VALIDATION PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Validation Score:.................. 0.1262
+  Final Validation Score:.................... 0.1273
+  Best Validation Score:..................... 0.1385 (Round 1)
+  Validation Improvement:.................... 0.0012 (+0.92%)
+
+  Best Validation mAP@0.5:................... 0.0676 (Round 4)
+  Best Validation mAP:....................... 0.0508 (Round 4)
+  Final Validation Loss:..................... 0.0849
+
+GENERALIZATION ANALYSIS
+------------------------------------------------------------------------------------------
+  Final Generalization Gap:.................. -0.0053
+  Average Generalization Gap:................ -0.0073
+  Maximum Generalization Gap:................ -0.0035
+  Status:.................................... GOOD GENERALIZATION
+
+TIME STATISTICS
+------------------------------------------------------------------------------------------
+  Total Training Time:....................... 373.25 min (6.22 hours)
+  Average Round Duration:.................... 37.33 min
+  Shortest Round:............................ 36.03 min (Round 6)
+  Longest Round:............................. 40.04 min (Round 0)
+
+  Avg Client Training Time:.................. 22.20 min
+  Avg Client Eval Time:...................... 133.10 sec
+  Total Eval Time:........................... 2438.98 sec
+
+COMMUNICATION STATISTICS
+------------------------------------------------------------------------------------------
+  Total Data Transferred:.................... 1316.06 MB (1.285 GB)
+  Average per Round:......................... 131.61 MB
+  Data Transfer Rate:........................ 3.53 MB/min
+
+CLIENT ANALYSIS
+------------------------------------------------------------------------------------------
+  Best Training Client:...................... Client 7 (0.1774)
+  Worst Training Client:..................... Client 0 (0.0906)
+  Training Performance Gap:.................. 0.0868
+
+  Best Validation Client:.................... Client 6 (0.1873)
+  Worst Validation Client:................... Client 0 (0.1060)
+  Validation Performance Gap:................ 0.0813
+
+KEY INSIGHTS
+------------------------------------------------------------------------------------------
+  [+] Training performance improved by 1.3%
+  [+] Validation performance improved by 0.9%
+  [+] Excellent generalization (gap < 0.02)
+  [+] Clients are converging (variance reduced from 0.0334 to 0.0285)
+  [*] Data efficiency: 1129482.4 MB per 0.01 improvement
+
+==========================================================================================

@@ -7,7 +7,7 @@ import re
 
 
 # ==================== CONFIGURATION ====================
-INPUT_FILE = "EXP_YOLOv5_s_detection_42_logs.json"
+INPUT_FILE = "EXP_YOLOv5_s_detection_70_logs.json"
 
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)

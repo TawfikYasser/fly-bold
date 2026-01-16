@@ -27,15 +27,12 @@ fetch_vm_ips() {
     local vm_name=$1
     local zone=$2
     
-    # Send informational output to stderr so it doesn't interfere with return value
     echo -e "  Fetching IPs for $vm_name..." >&2
     
-    # Get internal IP
     local internal_ip=$(gcloud compute instances describe $vm_name \
         --zone=$zone \
         --format='get(networkInterfaces[0].networkIP)' 2>/dev/null)
     
-    # Get external IP (may not exist for some VMs)
     local external_ip=$(gcloud compute instances describe $vm_name \
         --zone=$zone \
         --format='get(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null)
@@ -47,7 +44,6 @@ fetch_vm_ips() {
     
     echo "    Internal: $internal_ip, External: ${external_ip:-None}" >&2
     
-    # Return IPs via echo (caller will capture) - this goes to stdout
     echo "$internal_ip|$external_ip"
 }
 
@@ -55,13 +51,11 @@ fetch_vm_ips() {
 update_vm_info() {
     echo_info "Updating vm-info.txt with current IP addresses..."
     
-    # Backup existing vm-info.txt
     if [ -f "vm-info.txt" ]; then
         cp vm-info.txt vm-info.txt.backup
         echo "  Backed up existing vm-info.txt"
     fi
     
-    # Create new vm-info.txt with current IPs
     cat > vm-info.txt << EOF
 PROJECT_ID=$PROJECT_ID
 REGION=us-central1
@@ -69,7 +63,6 @@ NETWORK=flybold-network
 
 EOF
 
-    # Fetch server IPs
     local server_ips=$(fetch_vm_ips "flybold-server" "us-central1-a")
     local server_internal=$(echo $server_ips | cut -d'|' -f1)
     local server_external=$(echo $server_ips | cut -d'|' -f2)
@@ -82,7 +75,6 @@ SERVER_EXTERNAL_IP=$server_external
 
 EOF
 
-    # Fetch client IPs
     local client_zones=("us-central1-a" "us-central1-b" "us-central1-c" "us-central1-f" "us-central1-a")
     
     for i in $(seq 1 5); do
@@ -111,11 +103,7 @@ fi
 
 # Check if VMs are running and update IPs
 echo_info "Checking VM status and fetching current IPs..."
-
-# Update vm-info.txt with current IPs
 update_vm_info
-
-# Now source the updated vm-info.txt
 source vm-info.txt
 
 echo_success "All VM IPs refreshed successfully!"
@@ -128,6 +116,14 @@ for i in $(seq 1 5); do
     echo "  ${!CLIENT_VM_VAR}: ${!CLIENT_IP_VAR}"
 done
 echo ""
+
+# Clean local cache
+echo_info "Cleaning local Python cache..."
+find ./src -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find ./yolov5 -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find ./src -type f -name "*.pyc" -delete 2>/dev/null || true
+find ./yolov5 -type f -name "*.pyc" -delete 2>/dev/null || true
+echo_success "Local cache cleaned"
 
 # Load Docker image
 if [ ! -f "docker-image-info.txt" ]; then
@@ -153,10 +149,9 @@ if [ -f .env ]; then
     if [[ $use_existing =~ ^[Yy]$ ]]; then
         source .env
         SKIP_PROMPTS=true
-        # IMPORTANT: Always use current server IP from vm-info.txt, not old .env
         echo_warning "Overriding SERVER_INTERNAL_IP with current value from vm-info.txt"
         echo "  Old IP in .env: ${SERVER_INTERNAL_IP}"
-        source vm-info.txt  # Re-source to get current SERVER_INTERNAL_IP
+        source vm-info.txt
         echo "  Current IP: ${SERVER_INTERNAL_IP}"
     else
         SKIP_PROMPTS=false
@@ -168,7 +163,6 @@ fi
 if [ "$SKIP_PROMPTS" = false ]; then
     echo_info "Configuration Parameters"
     
-    # GPU
     read -p "Enable GPU? (y/n) [n]: " gpu_input
     ENABLE_GPU=${gpu_input:-n}
     if [[ $ENABLE_GPU =~ ^[Yy]$ ]]; then
@@ -183,7 +177,6 @@ if [ "$SKIP_PROMPTS" = false ]; then
         NUM_GPUS=0
     fi
     
-    # TLS
     read -p "Enable TLS? (y/n) [n]: " tls_input
     ENABLE_TLS=${tls_input:-n}
     if [[ $ENABLE_TLS =~ ^[Yy]$ ]]; then
@@ -198,14 +191,12 @@ if [ "$SKIP_PROMPTS" = false ]; then
         INSECURE=true
     fi
     
-    # NOTE: N_TRAIN and N_VAL should match partition manifest
     echo_info "Dataset parameters should match partition manifest!"
     read -p "Training images per client [10000]: " N_TRAIN
     N_TRAIN=${N_TRAIN:-10000}
     read -p "Validation images per client [5000]: " N_VAL
     N_VAL=${N_VAL:-5000}
     
-    # FL parameters
     read -p "Number of rounds [30]: " NUM_SERVER_ROUNDS
     NUM_SERVER_ROUNDS=${NUM_SERVER_ROUNDS:-30}
     
@@ -229,9 +220,6 @@ if [ "$SKIP_PROMPTS" = false ]; then
     
     read -p "Image size [512]: " IMG_SIZE
     IMG_SIZE=${IMG_SIZE:-512}
-    
-    read -p "Dirichlet alpha [0.5]: " DIRICHLET_ALPHA
-    DIRICHLET_ALPHA=${DIRICHLET_ALPHA:-0.5}
 fi
 
 # Get/increment run_id
@@ -244,31 +232,12 @@ echo_success "Run ID incremented to $NEXT_RUN_ID"
 RUN_ID=$NEXT_RUN_ID
 
 # Save config
-cat > .env << EOF
-ENABLE_GPU=$ENABLE_GPU
-ENABLE_TLS=$ENABLE_TLS
-INSECURE=$INSECURE
-N_TRAIN=$N_TRAIN
-N_VAL=$N_VAL
-RUN_ID=$RUN_ID
-NUM_SERVER_ROUNDS=$NUM_SERVER_ROUNDS
-NUM_CLIENTS=10
-LOCAL_EPOCHS=$LOCAL_EPOCHS
-BATCH_SIZE=$BATCH_SIZE
-FRACTION_TRAIN=$FRACTION_TRAIN
-FRACTION_EVALUATE=$FRACTION_EVALUATE
-LR=$LR
-YOLO_SIZE=$YOLO_SIZE
-IMG_SIZE=$IMG_SIZE
-DIRICHLET_ALPHA=$DIRICHLET_ALPHA
-NUM_CPUS=$NUM_CPUS
-NUM_GPUS=$NUM_GPUS
-FLWR_SUPERLINK_ADDRESS=0.0.0.0:9092
-BUCKET_NAME=$BUCKET_NAME
-DOCKER_IMAGE=$DOCKER_IMAGE
-SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
-EOF
+# Save updated config to .env using sed (preserve other comments/structure)
+sed -i "s/^RUN_ID=.*/RUN_ID=$RUN_ID/" .env
+sed -i "s|^DOCKER_IMAGE=.*|DOCKER_IMAGE=$DOCKER_IMAGE|" .env
+sed -i "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
 
+# Save config to GCS
 # Save config to GCS
 CONFIG_JSON=$(cat <<EOJSON
 {
@@ -281,9 +250,10 @@ CONFIG_JSON=$(cat <<EOJSON
   "lr": $LR,
   "yolo_size": "$YOLO_SIZE",
   "img_size": $IMG_SIZE,
-  "dirichlet_alpha": $DIRICHLET_ALPHA,
-  "n_train": $N_TRAIN,
-  "n_val": $N_VAL,
+  "min_train": $MIN_TRAIN,
+  "max_train": $MAX_TRAIN,
+  "alpha_min": $DIRICHLET_ALPHA_MIN,
+  "alpha_max": $DIRICHLET_ALPHA_MAX,
   "enable_gpu": $ENABLE_GPU,
   "enable_tls": $ENABLE_TLS,
   "server_internal_ip": "$SERVER_INTERNAL_IP",
@@ -302,10 +272,21 @@ sed -i "s/lr = [0-9.]\+/lr = $LR/" pyproject.toml
 sed -i "s/yolo_size = \"[a-z]\"/yolo_size = \"$YOLO_SIZE\"/" pyproject.toml
 sed -i "s/img_size = [0-9]\+/img_size = $IMG_SIZE/" pyproject.toml
 sed -i "s/batch_size = [0-9]\+/batch_size = $BATCH_SIZE/" pyproject.toml
-sed -i "s/dirichlet_alpha = [0-9.]\+/dirichlet_alpha = $DIRICHLET_ALPHA/" pyproject.toml
 sed -i "s/run_id = [0-9]\+/run_id = $RUN_ID/" pyproject.toml
 sed -i "s|coco_root = \".*\"|coco_root = \"/app/datasets/coco\"|" pyproject.toml
 sed -i "s|gcs_bucket = \".*\"|gcs_bucket = \"$BUCKET_NAME\"|" pyproject.toml
+
+# Increment version in pyproject.toml
+echo_info "Incrementing version in pyproject.toml..."
+CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
+PATCH=$((VERSION_PARTS[2] + 1))
+NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+echo_success "Version incremented from $CURRENT_VERSION to $NEW_VERSION"
+
+# Update YOLOv5 hyperparameters
+sed -i "s/lr0: [0-9.]\+/lr0: $LR/" yolov5/data/hyps/hyp.scratch-low.yaml
 
 if [ "$INSECURE" = "false" ]; then
     sed -i 's/^[[:space:]]*insecure = .*/insecure = false/' pyproject.toml
@@ -320,19 +301,31 @@ echo_success "Configuration saved"
 # Deploy server
 echo_info "Deploying server on $SERVER_VM (IP: $SERVER_INTERNAL_IP)"
 
+# Clean remote cache and setup directories
 gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
     sudo mkdir -p /app/{logs,checkpoints,certs}
     sudo chown -R \$USER:\$USER /app
-"
+    echo 'Cleaning remote Python cache...'
+    sudo find /app/src -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+    sudo find /app/yolov5 -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+    sudo find /app/src -type f -name '*.pyc' -delete 2>/dev/null || true
+    sudo find /app/yolov5 -type f -name '*.pyc' -delete 2>/dev/null || true
+    echo 'Remote cache cleaned'
+" 2>&1 | grep -v "No such file or directory" || true
 
-# Copy files
-gcloud compute scp --recurse ./src $SERVER_VM:/app/ --zone=$SERVER_ZONE --quiet
-gcloud compute scp --recurse ./yolov5 $SERVER_VM:/app/ --zone=$SERVER_ZONE --quiet
-gcloud compute scp requirements.txt pyproject.toml .env $SERVER_VM:/app/ --zone=$SERVER_ZONE --quiet
+# Copy files (with compression, parallel transfers)
+echo "  → Syncing files to server..."
+gcloud compute scp --recurse --compress ./src $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
+PID1=$!
+gcloud compute scp --recurse --compress ./yolov5 $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
+PID2=$!
+wait $PID1 $PID2
+gcloud compute scp --compress requirements.txt pyproject.toml .env $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
 
 if [ "$ENABLE_TLS" = "true" ]; then
-    gcloud compute scp --recurse ./certs $SERVER_VM:/app/ --zone=$SERVER_ZONE --quiet
+    gcloud compute scp --recurse --compress ./certs $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
 fi
+echo "  ✓ Files synced"
 
 # Create server docker-compose
 cat > /tmp/docker-compose-server.yml << 'EOF'
@@ -367,17 +360,20 @@ networks:
     driver: bridge
 EOF
 
-gcloud compute scp /tmp/docker-compose-server.yml $SERVER_VM:/app/docker-compose.yml --zone=$SERVER_ZONE --quiet
+gcloud compute scp /tmp/docker-compose-server.yml $SERVER_VM:/app/docker-compose.yml --zone=$SERVER_ZONE --quiet > /dev/null 2>&1
 
-# Start server
+# Start server with force-recreate
+echo "  → Starting server container..."
 gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
     cd /app
     echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
-    sudo docker compose pull
-    sudo docker compose up -d
+    sudo docker compose pull --quiet
+    sudo docker compose up -d --force-recreate
     sleep 10
+    sudo docker compose exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+    sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
     sudo docker compose ps
-"
+" 2>&1 | grep -E "(NAME|fl-server)" || true
 
 echo_success "Server deployed at $SERVER_INTERNAL_IP"
 
@@ -392,19 +388,29 @@ for i in $(seq 1 5); do
     
     echo_info "Deploying clients on $CLIENT_VM (IP: $CLIENT_IP)"
     
-    # Setup directories
+    # Clean remote cache and setup directories
     gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         sudo mkdir -p /app/{logs,certs}
         sudo chown -R \$USER:\$USER /app
-    "
+        echo 'Cleaning remote Python cache...'
+        sudo find /app/src -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+        sudo find /app/yolov5 -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+        sudo find /app/src -type f -name '*.pyc' -delete 2>/dev/null || true
+        sudo find /app/yolov5 -type f -name '*.pyc' -delete 2>/dev/null || true
+        echo 'Remote cache cleaned'
+    " 2>&1 | grep -v "No such file or directory" || true
     
-    # Copy files
-    gcloud compute scp --recurse ./src $CLIENT_VM:/app/ --zone=$CLIENT_ZONE --quiet
-    gcloud compute scp --recurse ./yolov5 $CLIENT_VM:/app/ --zone=$CLIENT_ZONE --quiet
-    gcloud compute scp requirements.txt pyproject.toml .env $CLIENT_VM:/app/ --zone=$CLIENT_ZONE --quiet
+    # Copy files (with compression, parallel transfers)
+    echo "  → Syncing files to $CLIENT_VM..."
+    gcloud compute scp --recurse --compress ./src $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
+    PID1=$!
+    gcloud compute scp --recurse --compress ./yolov5 $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
+    PID2=$!
+    wait $PID1 $PID2
+    gcloud compute scp --compress requirements.txt pyproject.toml .env $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
     
     if [ "$ENABLE_TLS" = "true" ]; then
-        gcloud compute scp --recurse ./certs $CLIENT_VM:/app/ --zone=$CLIENT_ZONE --quiet
+        gcloud compute scp --recurse --compress ./certs $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
     fi
     
     # Create service account key for GCS access
@@ -412,14 +418,15 @@ for i in $(seq 1 5); do
         gcloud iam service-accounts keys create gcs-key.json \
             --iam-account=default-compute@${PROJECT_ID}.iam.gserviceaccount.com 2>/dev/null || true
     fi
-    gcloud compute scp gcs-key.json $CLIENT_VM:/app/ --zone=$CLIENT_ZONE --quiet
+    gcloud compute scp --compress gcs-key.json $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
+    echo "  ✓ Files synced"
     
     # Calculate client IDs for this VM (2 clients per VM)
     CLIENT_ID_1=$(( (i-1)*2 ))
     CLIENT_ID_2=$(( (i-1)*2 + 1 ))
     
     # Verify pre-partitioned data exists
-    echo_info "Verifying pre-partitioned data on $CLIENT_VM (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
+    echo "  → Verifying pre-partitioned data (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
     VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         set -e
         for CLIENT_ID in $CLIENT_ID_1 $CLIENT_ID_2; do
@@ -427,12 +434,7 @@ for i in $(seq 1 5); do
             
             if [ ! -d \"\$PARTITION_DIR\" ]; then
                 echo \"ERROR: Partition directory not found: \$PARTITION_DIR\"
-                echo \"Please run 03b-partition-dataset.sh before deployment!\"
-                exit 1
-            fi
-            
-            if [ ! -f \"\$PARTITION_DIR/coco_client.yaml\" ]; then
-                echo \"ERROR: YAML config missing for client \$CLIENT_ID\"
+                echo \"Please run partition-dataset.sh before deployment!\"
                 exit 1
             fi
             
@@ -521,10 +523,10 @@ networks:
     driver: bridge
 EOF
     
-    gcloud compute scp /tmp/docker-compose-client-${i}.yml $CLIENT_VM:/app/docker-compose.yml --zone=$CLIENT_ZONE --quiet
+    gcloud compute scp /tmp/docker-compose-client-${i}.yml $CLIENT_VM:/app/docker-compose.yml --zone=$CLIENT_ZONE --quiet > /dev/null 2>&1
 done
 
-echo_success "All clients deployed and data verified"
+echo_success "All clients configured and data verified"
 
 # Start clients
 for i in $(seq 1 5); do
@@ -537,21 +539,26 @@ for i in $(seq 1 5); do
     gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         cd /app
         echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
-        sudo docker compose pull
-        sudo docker compose up -d
+        sudo docker compose pull --quiet
+        sudo docker compose up -d --force-recreate
         sleep 5
+        for CLIENT_ID in \$(sudo docker compose ps --services); do
+            sudo docker compose exec -T \$CLIENT_ID find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+            sudo docker compose exec -T \$CLIENT_ID find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+        done
         sudo docker compose ps
-    "
+    " 2>&1 | grep -E "(NAME|fl-client)" || true
 done
 
 echo_success "Deployment complete!"
 echo ""
-echo "════════════════════════════════════════════════════════"
+echo "═══════════════════════════════════════════════════════════"
 echo "  Run ID: $RUN_ID"
 echo "  Server IP: $SERVER_INTERNAL_IP"
 echo "  All clients connected to: ${SERVER_INTERNAL_IP}:9092"
 echo "  ✅ Using pre-partitioned data from /app/datasets/coco_partitions/"
-echo "════════════════════════════════════════════════════════"
+echo "  ✅ All caches cleaned and containers recreated"
+echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "To start training:"
 echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"

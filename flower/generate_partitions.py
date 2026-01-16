@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Generate deterministic Dirichlet partitions for federated COCO dataset.
-Each client gets a different alpha value to simulate real-world heterogeneity.
+Client 0 gets uniform distribution (alpha=1e6), others get varied alphas.
+Each client gets random train size (1000-5000), val size is 50% of train.
+Uses Flower Datasets partitioning logic on pre-downloaded GCS data.
 """
 
 import sys
@@ -10,7 +12,7 @@ import random
 import argparse
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import numpy as np
 import subprocess
 
@@ -24,6 +26,20 @@ try:
 except ImportError:
     PLOTTING_AVAILABLE = False
     print("Warning: matplotlib/seaborn not available. Skipping plots.")
+
+# COCO 80 class names (in order 0-79)
+COCO_NAMES = [
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 
+    'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 
+    'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 
+    'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket', 
+    'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 
+    'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 
+    'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote', 
+    'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 
+    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
 
 
 def get_gcs_image_list(bucket_name: str, split: str) -> List[str]:
@@ -58,7 +74,8 @@ def get_gcs_image_list(bucket_name: str, split: str) -> List[str]:
 def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Dict[str, List[int]]:
     """
     Download label files from GCS and create mapping: image -> [class_ids].
-    Reuses existing labels if already downloaded and complete.
+    Reuses existing labels if already downloaded.
+    If labels are slightly incomplete, proceed without re-downloading.
     """
     print(f"Preparing labels for {len(images)} images from {split}...")
 
@@ -66,35 +83,48 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
     labels_dir = temp_dir / split
     gcs_labels_path = f"gs://{bucket_name}/coco/labels/{split}/"
 
-    # ---------- NEW: reuse labels if already present ----------
+    # Accept incomplete labels if coverage is high enough
+    MIN_LABEL_COVERAGE = 0.98  # 98% is "good enough" for partitioning
+    expected = len(images)
+
     if labels_dir.exists():
         existing_labels = list(labels_dir.glob("*.txt"))
-        if len(existing_labels) == len(images):
-            print(f"✔ Labels already exist locally ({len(existing_labels)} files). Skipping download.")
+        existing_count = len(existing_labels)
+        coverage = existing_count / expected if expected > 0 else 1.0
+
+        if existing_count >= expected:
+            print(f"✓ Labels directory exists ({existing_count} files). Skipping download.")
+        elif coverage >= MIN_LABEL_COVERAGE:
+            missing = expected - existing_count
+            print(
+                f"⚠ Labels directory incomplete ({existing_count} / {expected}). "
+                f"Missing {missing} (~{(1.0-coverage)*100:.2f}%). "
+                f"Coverage >= {MIN_LABEL_COVERAGE*100:.0f}%, proceeding without re-download."
+            )
+            # Do NOT delete and re-download
         else:
             print(
-                f"⚠ Labels directory exists but incomplete "
-                f"({len(existing_labels)} / {len(images)}). Re-downloading..."
+                f"⚠ Labels directory too incomplete ({existing_count} / {expected}). "
+                f"Coverage {coverage*100:.2f}% < {MIN_LABEL_COVERAGE*100:.0f}%, re-downloading..."
             )
             import shutil
             shutil.rmtree(temp_dir)
 
-    # ---------- Download only if needed ----------
+    # Download only if needed (directory missing, or we deleted it because it was too incomplete)
     if not labels_dir.exists():
         print(f"Downloading labels from {gcs_labels_path} ...")
-        temp_dir.mkdir(exist_ok=True)
+        temp_dir.mkdir(exist_ok=True, parents=True)
         try:
             subprocess.run(
-                ["gsutil", "-m", "cp", "-r", gcs_labels_path, str(temp_dir)],
+                ["gsutil", "-m", "cp", "-r", "-n", gcs_labels_path, str(temp_dir)],
                 check=True
             )
         except subprocess.CalledProcessError as e:
             print(f"Error downloading labels: {e}")
             sys.exit(1)
 
-    # ---------- Parse labels ----------
+    # Parse labels (missing label file => empty classes)
     image_to_classes = {}
-
     for img_name in images:
         label_name = img_name.replace(".jpg", ".txt")
         label_path = labels_dir / label_name
@@ -115,190 +145,157 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
     print(f"Parsed labels for {len(image_to_classes)} images")
     return image_to_classes
 
-def generate_client_alphas(num_clients: int, seed: int, alpha_min: float = 0.1, 
-                          alpha_max: float = 1.5) -> List[float]:
-    """Generate deterministic random alpha values for each client."""
+def generate_client_configs(num_clients: int, seed: int, 
+                            min_train: int = 1000, max_train: int = 5000,
+                            alpha_min: float = 0.1, alpha_max: float = 1.5) -> List[Dict]:
+    """
+    Generate configuration for each client:
+    - Client 0: alpha=1e6 (uniform), random train size
+    - Clients 1-9: varied alphas, random train sizes
+    - Val size = 50% of train size
+    """
     np.random.seed(seed)
-    alphas = np.random.uniform(alpha_min, alpha_max, size=num_clients)
-    return alphas.tolist()
+    random.seed(seed)
+    
+    configs = []
+    
+    for client_id in range(num_clients):
+        # Random train size between min_train and max_train
+        n_train = np.random.randint(min_train, max_train + 1)
+        n_val = n_train // 2  # 50% of train
+        
+        # Client 0 gets uniform distribution
+        if client_id == 0:
+            alpha = 1e6
+        else:
+            alpha = np.random.uniform(alpha_min, alpha_max)
+        
+        configs.append({
+            'client_id': client_id,
+            'alpha': alpha,
+            'n_train': n_train,
+            'n_val': n_val
+        })
+    
+    return configs
 
 
 def partition_images_dirichlet(
     images: List[str],
     image_to_classes: Dict[str, List[int]],
-    num_clients: int,
-    client_alphas: List[float],
-    seed: int
-) -> Dict[int, List[str]]:
+    client_configs: List[Dict],
+    seed: int,
+    source_split: str  # 'train2017' or 'val2017'
+) -> Dict[int, List[Tuple[str, str]]]:
     """
-    Partition images using Dirichlet distribution with different alpha per client.
-    Each client gets images from a non-IID distribution based on their alpha.
+    Partition images using Dirichlet distribution.
+    - IID Clients (alpha > 1000): Get a fixed 1/N share of every class (Uniform).
+    - Non-IID Clients: Share the remaining images via Dirichlet distribution.
+    
+    Returns dict mapping client_id -> [(image_name, source_split), ...]
     """
-    random.seed(seed)
     np.random.seed(seed)
+    random.seed(seed)
     
     # Build class -> images mapping
     class_to_images = defaultdict(list)
     for img, classes in image_to_classes.items():
         if len(classes) == 0:
-            continue  # Skip images without labels
-        for cls in classes:
-            class_to_images[cls].append(img)
+            continue
+        # Use primary class
+        primary_class = classes[0]
+        class_to_images[primary_class].append(img)
     
     all_classes = sorted(class_to_images.keys())
-    print(f"Found {len(all_classes)} classes in dataset")
+    num_clients = len(client_configs)
     
-    # Initialize client assignments
-    client_assignments = {i: [] for i in range(num_clients)}
+    print(f"[{source_split}] Found {len(all_classes)} classes")
+    print(f"[{source_split}] Total images with labels: {sum(len(imgs) for imgs in class_to_images.values())}")
     
-    # For each class, distribute images using Dirichlet
-    for cls in all_classes:
-        imgs = list(set(class_to_images[cls]))  # Unique images
-        n = len(imgs)
-        if n == 0:
-            continue
-        
-        # Use mean of all client alphas for this class
-        # This ensures overall heterogeneity while maintaining consistency
-        alpha_mean = np.mean(client_alphas)
-        proportions = np.random.dirichlet(alpha=np.ones(num_clients) * alpha_mean)
-        
-        # Compute counts per client
-        counts = (proportions * n).astype(int)
-        
-        # Adjust for rounding
-        leftover = n - counts.sum()
-        for i in np.argsort(proportions)[-leftover:]:
-            counts[i] += 1
-        
-        # Shuffle and assign
-        random.shuffle(imgs)
-        idx = 0
-        for client_id in range(num_clients):
-            cnt = counts[client_id]
-            for _ in range(cnt):
-                if idx >= len(imgs):
-                    break
-                img_path = imgs[idx]
-                if img_path not in client_assignments[client_id]:
-                    client_assignments[client_id].append(img_path)
-                idx += 1
-        
-        # Handle any remaining (rare)
-        while idx < len(imgs):
-            for client_id in range(num_clients):
-                if idx >= len(imgs):
-                    break
-                img_path = imgs[idx]
-                if img_path not in client_assignments[client_id]:
-                    client_assignments[client_id].append(img_path)
-                idx += 1
+    # Identify IID and Non-IID clients
+    iid_clients = []
+    non_iid_clients = []
+    non_iid_alphas = []
     
-    return client_assignments
-
-
-def apply_size_limit(assignments: Dict[int, List[str]], 
-                     limit_per_client: int) -> Dict[int, List[str]]:
-    """Randomly sample images to meet N_TRAIN or N_VAL limit per client."""
-    limited = {}
-    for client_id, images in assignments.items():
-        if len(images) > limit_per_client:
-            random.shuffle(images)
-            limited[client_id] = images[:limit_per_client]
+    for cfg in client_configs:
+        cid = cfg['client_id']
+        alpha = cfg['alpha']
+        if alpha > 1000:
+            iid_clients.append(cid)
         else:
-            limited[client_id] = images
-    return limited
+            non_iid_clients.append(cid)
+            non_iid_alphas.append(alpha)
+            
+    print(f"[{source_split}] IID Clients: {iid_clients}")
+    print(f"[{source_split}] Non-IID Clients: {non_iid_clients} (alphas: {non_iid_alphas})")
+    
+    # Initialize assignments
+    client_pools = {i: [] for i in range(num_clients)}
+    
+    # Partition each class
+    for cls in all_classes:
+        imgs = list(set(class_to_images[cls]))
+        random.shuffle(imgs)
+        n_imgs = len(imgs)
+        
+        if n_imgs == 0:
+            continue
+            
+        idx = 0
+        
+        # 1. Assign fixed share to IID clients
+        # We aim for inclusive fairness: every client deserves 1/N of the data if possible.
+        # IID clients get their 1/N slice of THIS class guaranteed.
+        
+        # Calculate share per client
+        share_per_client = n_imgs // num_clients
+        
+        # If share is 0 (rare class), we skip IID assignment or just give nothing.
+        # Let's give IID clients their share first.
+        for cid in iid_clients:
+            end = idx + share_per_client
+            # Assign slice
+            if idx < n_imgs:
+                # If we run out of images (shouldn't happen with math above, but good to be safe)
+                subset = imgs[idx:end]
+                for img in subset:
+                    client_pools[cid].append((img, source_split))
+                idx = end
+        
+        # 2. Assign remainder to Non-IID clients
+        remaining_imgs = imgs[idx:]
+        n_remaining = len(remaining_imgs)
+        
+        if n_remaining > 0 and len(non_iid_clients) > 0:
+            # Dirichlet proportions for non-iid clients
+            proportions = np.random.dirichlet(np.array(non_iid_alphas))
+            
+            # Calculate counts
+            counts = (proportions * n_remaining).astype(int)
+            
+            # Distribute leftovers
+            leftover = n_remaining - counts.sum()
+            if leftover > 0:
+                for i in np.argsort(proportions)[-leftover:]:
+                    counts[i] += 1
+            
+            # Assign
+            rem_idx = 0
+            for i, cid in enumerate(non_iid_clients):
+                count = counts[i]
+                for _ in range(count):
+                    if rem_idx >= n_remaining:
+                        break
+                    client_pools[cid].append((remaining_imgs[rem_idx], source_split))
+                    rem_idx += 1
+    
+    return client_pools
 
 
-def compute_class_distribution(client_assignments: Dict[int, List[str]],
-                               image_to_classes: Dict[str, List[int]]) -> Dict[int, Dict[int, int]]:
-    """Compute class distribution for each client."""
-    client_class_counts = {}
-    
-    for client_id, images in client_assignments.items():
-        class_counts = defaultdict(int)
-        for img in images:
-            classes = image_to_classes.get(img, [])
-            for cls in classes:
-                class_counts[cls] += 1
-        client_class_counts[client_id] = dict(class_counts)
-    
-    return client_class_counts
-
-
-def plot_class_distributions(client_class_counts: Dict[int, Dict[int, int]],
-                             client_alphas: List[float],
-                             output_path: str,
-                             split_name: str):
-    """Generate visualization of class distributions across clients."""
-    if not PLOTTING_AVAILABLE:
-        return
-    
-    num_clients = len(client_class_counts)
-    all_classes = set()
-    for counts in client_class_counts.values():
-        all_classes.update(counts.keys())
-    all_classes = sorted(all_classes)
-    
-    # Create matrix: clients x classes
-    matrix = np.zeros((num_clients, len(all_classes)))
-    for client_id, counts in client_class_counts.items():
-        for cls_idx, cls in enumerate(all_classes):
-            matrix[client_id, cls_idx] = counts.get(cls, 0)
-    
-    # Normalize by row (per client)
-    row_sums = matrix.sum(axis=1, keepdims=True)
-    matrix_norm = np.divide(matrix, row_sums, where=row_sums != 0)
-    
-    # Create figure with subplots
-    fig, axes = plt.subplots(2, 1, figsize=(16, 10))
-    
-    # Plot 1: Heatmap of class distribution
-    ax1 = axes[0]
-    im = ax1.imshow(matrix_norm, aspect='auto', cmap='YlOrRd', interpolation='nearest')
-    ax1.set_xlabel('Class ID', fontsize=12)
-    ax1.set_ylabel('Client ID', fontsize=12)
-    ax1.set_title(f'Class Distribution Across Clients ({split_name})\n'
-                  f'Normalized by Client (Each row sums to 1.0)', fontsize=14)
-    ax1.set_yticks(range(num_clients))
-    ax1.set_yticklabels([f'C{i}\n(α={client_alphas[i]:.2f})' for i in range(num_clients)])
-    
-    # Show only every 5th class on x-axis
-    x_ticks = list(range(0, len(all_classes), 5))
-    ax1.set_xticks(x_ticks)
-    ax1.set_xticklabels([all_classes[i] for i in x_ticks])
-    
-    plt.colorbar(im, ax=ax1, label='Proportion')
-    
-    # Plot 2: Total samples per client
-    ax2 = axes[1]
-    # samples_per_client = [len(images) for images in client_class_counts.keys()]
-    total_samples = [sum(counts.values()) for counts in client_class_counts.values()]
-    
-    x = range(num_clients)
-    bars = ax2.bar(x, total_samples, color='steelblue', alpha=0.7)
-    ax2.set_xlabel('Client ID', fontsize=12)
-    ax2.set_ylabel('Total Samples', fontsize=12)
-    ax2.set_title(f'Sample Count per Client ({split_name})', fontsize=14)
-    ax2.set_xticks(x)
-    ax2.set_xticklabels([f'C{i}\n(α={client_alphas[i]:.2f})' for i in range(num_clients)])
-    ax2.grid(axis='y', alpha=0.3)
-    
-    # Add value labels on bars
-    for i, (bar, val) in enumerate(zip(bars, total_samples)):
-        height = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width()/2., height,
-                f'{val}', ha='center', va='bottom', fontsize=9)
-    
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    plt.close()
-    
-    print(f"Saved class distribution plot: {output_path}")
-
-
-def generate_manifest(bucket_name: str, num_clients: int, n_train: int, n_val: int,
-                     seed: int, alpha_min: float, alpha_max: float) -> dict:
+def generate_manifest(bucket_name: str, num_clients: int, 
+                     min_train: int, max_train: int,
+                     seed: int, alpha_min: float, alpha_max: float,
+                     same_seed_for_val: bool) -> dict:
     """Main function to generate partition manifest."""
     
     print("\n" + "="*70)
@@ -306,63 +303,142 @@ def generate_manifest(bucket_name: str, num_clients: int, n_train: int, n_val: i
     print("="*70)
     print(f"Bucket: {bucket_name}")
     print(f"Clients: {num_clients}")
-    print(f"N_TRAIN per client: {n_train}")
-    print(f"N_VAL per client: {n_val}")
+    print(f"Train size range: [{min_train}, {max_train}]")
+    print(f"Val size: 50% of train")
     print(f"Seed: {seed}")
     print(f"Alpha range: [{alpha_min}, {alpha_max}]")
+    print(f"Client 0: Uniform (α=1e6)")
+    print(f"Same seed for val: {same_seed_for_val}")
     print("="*70 + "\n")
     
-    # Generate client alphas
-    client_alphas = generate_client_alphas(num_clients, seed, alpha_min, alpha_max)
-    print("Client Alpha values:")
-    for i, alpha in enumerate(client_alphas):
-        print(f"  Client {i}: α = {alpha:.4f}")
-    print()
+    # Generate client configurations
+    client_configs = generate_client_configs(
+        num_clients, seed, min_train, max_train, alpha_min, alpha_max
+    )
     
-    # Get training images
-    print("\n--- Processing Training Data ---")
+    # OUTPUT SYNC FIX: Removed initial config print to avoid confusion with final partition results.
+    # The final statistics at the end of the script will show the authoritative configuration.
+    
+    # Get training images and labels
+    print("\n--- Processing Training Split ---")
     train_images = get_gcs_image_list(bucket_name, "train2017")
-    train_image_to_classes = get_gcs_label_mapping(bucket_name, train_images, "train2017")
+    print(f"Total train2017 images: {len(train_images)}")
+    train_labels = get_gcs_label_mapping(bucket_name, train_images, "train2017")
+    print(f"Total train2017 labels: {len(train_labels)}")
     
-    # Partition training data
-    train_assignments = partition_images_dirichlet(
-        train_images, train_image_to_classes, num_clients, client_alphas, seed
-    )
-    
-    # Apply N_TRAIN limit
-    train_assignments = apply_size_limit(train_assignments, n_train)
-    
-    # Compute class distributions
-    train_class_dist = compute_class_distribution(train_assignments, train_image_to_classes)
-
-    # Get validation images
-    print("\n--- Processing Validation Data ---")
+    # Get validation images and labels
+    print("\n--- Processing Validation Split ---")
     val_images = get_gcs_image_list(bucket_name, "val2017")
-    val_image_to_classes = get_gcs_label_mapping(bucket_name, val_images, "val2017")
-    
-    # Partition validation data (non-IID)
-    val_assignments = partition_images_dirichlet(
-        val_images, val_image_to_classes, num_clients, client_alphas, seed + 1000
+    print(f"Total val2017 images: {len(val_images)}")
+    val_labels = get_gcs_label_mapping(bucket_name, val_images, "val2017")
+    print(f"Total val2017 labels: {len(val_labels)}")
+
+    # Partition train2017 data
+    print("\n--- Partitioning Training Data ---")
+    train_pools = partition_images_dirichlet(
+        train_images, train_labels, client_configs, seed, "train2017"
     )
+    print(f"Partitioned train2017 data into {num_clients} clients.")
     
-    # Apply N_VAL limit
-    val_assignments = apply_size_limit(val_assignments, n_val)
+    # Partition val2017 data (with same or different seed)
+    print("\n--- Partitioning Validation Data ---")
+    val_seed = seed if same_seed_for_val else seed + 1000
+    val_pools = partition_images_dirichlet(
+        val_images, val_labels, client_configs, val_seed, "val2017"
+    )
+    print(f"Partitioned val2017 data into {num_clients} clients.")
+
+    # Combine pools and split into train/val for each client
+    print("\n--- Splitting Client Data into Train/Val ---")
+    train_assignments = {}
+    val_assignments = {}
+    all_labels = {**train_labels, **val_labels}
     
-    # Compute validation class distributions
-    val_class_dist = compute_class_distribution(val_assignments, val_image_to_classes)
+    for client_id in range(num_clients):
+        # Combine train2017 and val2017 pools for this client
+        combined_pool = train_pools[client_id] + val_pools[client_id]
+        random.shuffle(combined_pool)  # Mix them up
+        
+        total_received = len(combined_pool)
+        
+        # 1. Calculate Potential Train: 2/3rds of what we received
+        potential_train = int(total_received * (2/3))
+        
+        # 2. Apply Random Cap: Use the random target generated earlier as the maximum limit
+        target_cap = client_configs[client_id]['n_train']
+        n_train = min(potential_train, target_cap)
+        
+        # 3. Strait Validation Enforcement: Val is EXACTLY 50% of the final Train size
+        n_val = int(n_train * 0.5)
+        
+        # Ensure we don't exceed total_received (rare edge case with rounding, but good safety)
+        if n_train + n_val > total_received:
+            # If we somehow don't have enough for the strict 2:1 split of the cap,
+            # we fall back to the potential split which is naturally safe.
+            n_train = potential_train
+            n_val = int(potential_train * 0.5)
+        
+        # Take first n_train for training
+        train_part = combined_pool[:n_train]
+        # Take next n_val for validation
+        val_part = combined_pool[n_train:n_train + n_val]
+        
+        # Update config to reflect reality so stats match
+        client_configs[client_id]['n_train'] = n_train
+        client_configs[client_id]['n_val'] = n_val
+        
+        train_assignments[client_id] = train_part
+        val_assignments[client_id] = val_part
+        
+        print(f"  Client {client_id}: {len(train_part)} train, {len(val_part)} val "
+              f"(from pool of {len(combined_pool)})")
+    
+    print("\n--- Computing Class Distributions ---")
+    
+    # Compute class distributions (for statistics and plots)
+    def get_class_dist(assignments, labels):
+        result = {}
+        for cid, img_list in assignments.items():
+            counts = defaultdict(int)
+            for img_name, _ in img_list:
+                classes = labels.get(img_name, [])
+                if classes:
+                    counts[classes[0]] += 1
+            result[cid] = dict(counts)
+        return result
+    
+    train_class_dist = get_class_dist(train_assignments, all_labels)
+    val_class_dist = get_class_dist(val_assignments, all_labels)
+    
+    # Generate plots
+    print("\n--- Generating Client Plots ---")
+    plots_dir = Path("client_plots")
+    plots_dir.mkdir(exist_ok=True)
+    
+    for client_id in range(num_clients):
+        cfg = client_configs[client_id]
+        plot_path = plots_dir / f"client_{client_id}_distribution.png"
+        
+        plot_client_distribution(
+            client_id=client_id,
+            train_dist=train_class_dist.get(client_id, {}),
+            val_dist=val_class_dist.get(client_id, {}),
+            alpha=cfg['alpha'],
+            n_train=len(train_assignments[client_id]),
+            n_val=len(val_assignments[client_id]),
+            output_path=str(plot_path)
+        )
     
     # Build manifest
     manifest = {
         "metadata": {
             "seed": seed,
             "num_clients": num_clients,
-            "n_train_per_client": n_train,
-            "n_val_per_client": n_val,
+            "min_train_per_client": min_train,
+            "max_train_per_client": max_train,
             "alpha_min": alpha_min,
             "alpha_max": alpha_max,
-            "dirichlet_alphas": client_alphas,
-            "total_train_images": sum(len(imgs) for imgs in train_assignments.values()),
-            "total_val_images": sum(len(imgs) for imgs in val_assignments.values()),
+            "same_seed_for_val": same_seed_for_val,
             "bucket_name": bucket_name
         },
         "partitions": {}
@@ -370,15 +446,30 @@ def generate_manifest(bucket_name: str, num_clients: int, n_train: int, n_val: i
     
     # Add client partitions
     for client_id in range(num_clients):
+        cfg = client_configs[client_id]
+        
+        # Extract image names by source split
+        train_from_train = [img for img, src in train_assignments[client_id] if src == "train2017"]
+        train_from_val = [img for img, src in train_assignments[client_id] if src == "val2017"]
+        val_from_train = [img for img, src in val_assignments[client_id] if src == "train2017"]
+        val_from_val = [img for img, src in val_assignments[client_id] if src == "val2017"]
+        
         manifest["partitions"][f"client_{client_id}"] = {
             "client_id": client_id,
-            "alpha": client_alphas[client_id],
-            "train_images": train_assignments[client_id],
-            "val_images": val_assignments[client_id],
+            "alpha": cfg['alpha'],
+            "n_train_target": cfg['n_train'],
+            "n_val_target": cfg['n_val'],
+            # Images for training (with source split info)
+            "train_images_from_train2017": train_from_train,
+            "train_images_from_val2017": train_from_val,
+            # Images for validation (with source split info)
+            "val_images_from_train2017": val_from_train,
+            "val_images_from_val2017": val_from_val,
+            # Totals
             "train_count": len(train_assignments[client_id]),
             "val_count": len(val_assignments[client_id]),
-            "train_class_distribution": train_class_dist[client_id],
-            "val_class_distribution": val_class_dist[client_id]
+            "train_class_distribution": train_class_dist.get(client_id, {}),
+            "val_class_distribution": val_class_dist.get(client_id, {})
         }
     
     # Print statistics
@@ -388,37 +479,91 @@ def generate_manifest(bucket_name: str, num_clients: int, n_train: int, n_val: i
     for client_id in range(num_clients):
         partition = manifest["partitions"][f"client_{client_id}"]
         print(f"\nClient {client_id} (α={partition['alpha']:.4f}):")
-        print(f"  Train images: {partition['train_count']}")
-        print(f"  Val images: {partition['val_count']}")
+        print(f"  Train images: {partition['train_count']} (target: {partition['n_train_target']})")
+        print(f"  Val images: {partition['val_count']} (target: {partition['n_val_target']})")
         print(f"  Train classes: {len(partition['train_class_distribution'])}")
         print(f"  Val classes: {len(partition['val_class_distribution'])}")
     
+    total_train = sum(p["train_count"] for p in manifest["partitions"].values())
+    total_val = sum(p["val_count"] for p in manifest["partitions"].values())
+    
     print("\n" + "="*70)
     print("TOTALS:")
-    print(f"  Total train images: {manifest['metadata']['total_train_images']}")
-    print(f"  Total val images: {manifest['metadata']['total_val_images']}")
+    print(f"  Total train images: {total_train}")
+    print(f"  Total val images: {total_val}")
     print("="*70 + "\n")
     
     return manifest
+
+
+def plot_client_distribution(client_id: int, 
+                             train_dist: Dict[int, int],
+                             val_dist: Dict[int, int],
+                             alpha: float,
+                             n_train: int,
+                             n_val: int,
+                             output_path: str):
+    """Generate individual plot for one client showing train/val distribution."""
+    if not PLOTTING_AVAILABLE:
+        return
+    
+    # Get all classes present in train or val
+    all_classes = sorted(set(list(train_dist.keys()) + list(val_dist.keys())))
+    if not all_classes:
+        return
+        
+    # Prepare data
+    class_names = [COCO_NAMES[cls] for cls in all_classes]
+    train_counts = [train_dist.get(cls, 0) for cls in all_classes]
+    val_counts = [val_dist.get(cls, 0) for cls in all_classes]
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(20, 8))
+    
+    # Bar positions
+    x = np.arange(len(class_names))
+    width = 0.35
+    
+    # Plot bars
+    bars1 = ax.bar(x - width/2, train_counts, width, label='Train', color='steelblue', alpha=0.8)
+    bars2 = ax.bar(x + width/2, val_counts, width, label='Val', color='coral', alpha=0.8)
+    
+    # Styling
+    ax.set_xlabel('Class Name', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Number of Images', fontsize=14, fontweight='bold')
+    ax.set_title(f'Client {client_id} Data Distribution (α={alpha:.2f}, Train={n_train}, Val={n_val})', 
+                fontsize=16, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(class_names, rotation=45, ha='right', fontsize=9)
+    ax.legend(fontsize=12)
+    ax.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"  ✓ Saved plot: {output_path}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate COCO partitions for FL")
     parser.add_argument("--bucket", required=True, help="GCS bucket name")
     parser.add_argument("--num-clients", type=int, default=10, help="Number of clients")
-    parser.add_argument("--n-train", type=int, default=10000, help="Training images per client")
-    parser.add_argument("--n-val", type=int, default=5000, help="Validation images per client")
+    parser.add_argument("--min-train", type=int, default=1000, help="Min training images per client")
+    parser.add_argument("--max-train", type=int, default=5000, help="Max training images per client")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--alpha-min", type=float, default=0.1, help="Min Dirichlet alpha")
     parser.add_argument("--alpha-max", type=float, default=1.5, help="Max Dirichlet alpha")
+    parser.add_argument("--same-seed-val", action="store_true", 
+                       help="Use same seed for validation (identical distribution)")
     parser.add_argument("--output", default="partition_manifest.json", help="Output JSON file")
     
     args = parser.parse_args()
     
     # Generate manifest
     manifest = generate_manifest(
-        args.bucket, args.num_clients, args.n_train, args.n_val,
-        args.seed, args.alpha_min, args.alpha_max
+        args.bucket, args.num_clients, args.min_train, args.max_train,
+        args.seed, args.alpha_min, args.alpha_max, args.same_seed_val
     )
     
     # Save manifest
@@ -426,6 +571,7 @@ def main():
         json.dump(manifest, f, indent=2)
     
     print(f"\n✅ Partition manifest saved to: {args.output}")
+    print(f"✅ Client plots saved to: client_plots/")
     print("\nNext step: Run partition-dataset.sh to distribute data to VMs")
 
 
