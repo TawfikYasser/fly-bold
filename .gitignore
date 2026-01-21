@@ -1,3 +1,4 @@
 /flower/exp_analyzer/
 *.backup
 /flower/logs/
+/flower/command.txt

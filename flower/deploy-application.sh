@@ -22,6 +22,79 @@ echo_warning() {
     echo -e "\n\033[1;33m[WARNING]\033[0m $1\n"
 }
 
+# SSH/SCP connection settings with timeouts and connection pooling
+SSH_FLAGS=(
+    "-o ConnectTimeout=15"
+    "-o ServerAliveInterval=5"
+    "-o ServerAliveCountMax=3"
+    "-o StrictHostKeyChecking=no"
+    "-o UserKnownHostsFile=/dev/null"
+    "-o ControlMaster=auto"
+    "-o ControlPath=/tmp/ssh-%r@%h:%p"
+    "-o ControlPersist=600"
+    "-o LogLevel=ERROR"
+)
+
+# Helper function: Execute SSH command with retry logic
+ssh_with_retry() {
+    local vm=$1
+    local zone=$2
+    local command=$3
+    local max_retries=${4:-3}
+    local retry_count=0
+    
+    while [ $retry_count -lt $max_retries ]; do
+        if gcloud compute ssh "$vm" --zone="$zone" \
+            ${SSH_FLAGS[@]/#/--ssh-flag=} \
+            --command="$command" 2>&1; then
+            return 0
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            local wait_time=$((retry_count * 3))
+            echo "  ⚠️  SSH command failed, retrying in ${wait_time}s... ($retry_count/$max_retries)" >&2
+            sleep $wait_time
+        fi
+    done
+    
+    echo_error "SSH command failed after $max_retries attempts to $vm" >&2
+    return 1
+}
+
+# Helper function: SCP with retry logic
+scp_with_retry() {
+    local source=$1
+    local destination=$2
+    local zone=$3
+    local recurse=${4:-false}
+    local max_retries=3
+    local retry_count=0
+    
+    local scp_cmd="gcloud compute scp"
+    [ "$recurse" = "true" ] && scp_cmd="$scp_cmd --recurse"
+    scp_cmd="$scp_cmd --compress"
+    
+    while [ $retry_count -lt $max_retries ]; do
+        if $scp_cmd \
+            ${SSH_FLAGS[@]/#/--scp-flag=} \
+            "$source" "$destination" \
+            --zone="$zone" 2>&1 | grep -v "Warning: Permanently added"; then
+            return 0
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            local wait_time=$((retry_count * 3))
+            echo "  ⚠️  SCP failed, retrying in ${wait_time}s... ($retry_count/$max_retries)" >&2
+            sleep $wait_time
+        fi
+    done
+    
+    echo_error "SCP failed after $max_retries attempts" >&2
+    return 1
+}
+
 # Function to fetch current IP addresses from GCP
 fetch_vm_ips() {
     local vm_name=$1
@@ -132,12 +205,6 @@ if [ ! -f "docker-image-info.txt" ]; then
 fi
 DOCKER_IMAGE=$(grep '^DOCKER_IMAGE=' docker-image-info.txt | cut -d'=' -f2)
 
-# Check if partition manifest exists
-if [ ! -f "partition_outputs/partition_manifest.json" ]; then
-    echo_error "partition_manifest.json not found.\n\nPlease run 03b-partition-dataset.sh BEFORE deploying.\nThis script partitions the dataset for all clients."
-    exit 1
-fi
-
 echo_info "Starting Flybold deployment"
 
 # Check for existing .env or prompt for parameters
@@ -220,6 +287,17 @@ if [ "$SKIP_PROMPTS" = false ]; then
     
     read -p "Image size [512]: " IMG_SIZE
     IMG_SIZE=${IMG_SIZE:-512}
+
+    read -p "Dataset choice [1]: " DATASET
+    DATASET=${DATASET:-1}
+
+    read -p "Use pretrained weights? (y/n) [y]: " pretrained_input
+    USE_PRETRAINED=${pretrained_input:-y}
+    if [[ $USE_PRETRAINED =~ ^[Yy]$ ]]; then
+        USE_PRETRAINED=1
+    else
+        USE_PRETRAINED=0
+    fi
 fi
 
 # Get/increment run_id
@@ -238,7 +316,6 @@ sed -i "s|^DOCKER_IMAGE=.*|DOCKER_IMAGE=$DOCKER_IMAGE|" .env
 sed -i "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
 
 # Save config to GCS
-# Save config to GCS
 CONFIG_JSON=$(cat <<EOJSON
 {
   "run_id": $RUN_ID,
@@ -250,8 +327,12 @@ CONFIG_JSON=$(cat <<EOJSON
   "lr": $LR,
   "yolo_size": "$YOLO_SIZE",
   "img_size": $IMG_SIZE,
-  "min_train": $MIN_TRAIN,
-  "max_train": $MAX_TRAIN,
+  "use_pretrained": $USE_PRETRAINED,
+  "min_train": $MIN_TRAIN_IMAGES,
+  "max_train": $MAX_TRAIN_IMAGES,
+  "min_eval": $MIN_VAL_IMAGES,
+  "max_eval": $MAX_VAL_IMAGES,
+  "dataset": $DATASET,
   "alpha_min": $DIRICHLET_ALPHA_MIN,
   "alpha_max": $DIRICHLET_ALPHA_MAX,
   "enable_gpu": $ENABLE_GPU,
@@ -273,6 +354,8 @@ sed -i "s/yolo_size = \"[a-z]\"/yolo_size = \"$YOLO_SIZE\"/" pyproject.toml
 sed -i "s/img_size = [0-9]\+/img_size = $IMG_SIZE/" pyproject.toml
 sed -i "s/batch_size = [0-9]\+/batch_size = $BATCH_SIZE/" pyproject.toml
 sed -i "s/run_id = [0-9]\+/run_id = $RUN_ID/" pyproject.toml
+sed -i "s/dataset = [0-9]\+/dataset = $DATASET/" pyproject.toml
+sed -i "s/use_pretrained = [0-9]\+/use_pretrained = $USE_PRETRAINED/" pyproject.toml
 sed -i "s|coco_root = \".*\"|coco_root = \"/app/datasets/coco\"|" pyproject.toml
 sed -i "s|gcs_bucket = \".*\"|gcs_bucket = \"$BUCKET_NAME\"|" pyproject.toml
 
@@ -425,12 +508,13 @@ for i in $(seq 1 5); do
     CLIENT_ID_1=$(( (i-1)*2 ))
     CLIENT_ID_2=$(( (i-1)*2 + 1 ))
     
-    # Verify pre-partitioned data exists
-    echo "  → Verifying pre-partitioned data (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
+    # Verify pre-partitioned data exists for selected dataset
+    echo "  → Verifying pre-partitioned data for Dataset $DATASET (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
     VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         set -e
+        DATASET=$DATASET
         for CLIENT_ID in $CLIENT_ID_1 $CLIENT_ID_2; do
-            PARTITION_DIR=\"/app/datasets/coco_partitions/client_\${CLIENT_ID}\"
+            PARTITION_DIR=\"/app/datasets_\${DATASET}/coco_partitions/client_\${CLIENT_ID}\"
             
             if [ ! -d \"\$PARTITION_DIR\" ]; then
                 echo \"ERROR: Partition directory not found: \$PARTITION_DIR\"
@@ -442,11 +526,18 @@ for i in $(seq 1 5); do
             VAL_IMG=\$(ls \$PARTITION_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
             
             if [ \$TRAIN_IMG -eq 0 ]; then
-                echo \"ERROR: No training images found for client \$CLIENT_ID\"
+                echo \"ERROR: No training images found for client \$CLIENT_ID in dataset \$DATASET\"
                 exit 1
             fi
             
-            echo \"✅ Client \$CLIENT_ID: Train=\$TRAIN_IMG images, Val=\$VAL_IMG images\"
+            # Verify dataset-specific YAML file exists
+            YAML_FILE=\"\$PARTITION_DIR/coco_client_dataset_\${DATASET}.yaml\"
+            if [ ! -f \"\$YAML_FILE\" ]; then
+                echo \"ERROR: Dataset YAML file not found: \$YAML_FILE\"
+                exit 1
+            fi
+            
+            echo \"✅ Dataset \$DATASET, Client \$CLIENT_ID: Train=\$TRAIN_IMG images, Val=\$VAL_IMG images\"
         done
     " 2>&1)
     
@@ -485,7 +576,7 @@ services:
       - "./yolov5:/app/yolov5"
       - "./logs:/app/logs"
       - "./certs:/app/certs:ro"
-      - "./datasets:/app/datasets"
+      - "./datasets_${DATASET}:/app/datasets_${DATASET}"
       - "./gcs-key.json:/app/gcs-key.json:ro"
       - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
@@ -514,7 +605,7 @@ services:
       - "./yolov5:/app/yolov5"
       - "./logs:/app/logs"
       - "./certs:/app/certs:ro"
-      - "./datasets:/app/datasets"
+      - "./datasets_${DATASET}:/app/datasets_${DATASET}"
       - "./gcs-key.json:/app/gcs-key.json:ro"
       - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
@@ -556,7 +647,7 @@ echo "════════════════════════�
 echo "  Run ID: $RUN_ID"
 echo "  Server IP: $SERVER_INTERNAL_IP"
 echo "  All clients connected to: ${SERVER_INTERNAL_IP}:9092"
-echo "  ✅ Using pre-partitioned data from /app/datasets/coco_partitions/"
+echo "  ✅ Using Dataset $DATASET from /app/datasets_${DATASET}/coco_partitions/"
 echo "  ✅ All caches cleaned and containers recreated"
 echo "═══════════════════════════════════════════════════════════"
 echo ""

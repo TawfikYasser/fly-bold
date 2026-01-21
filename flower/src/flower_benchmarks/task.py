@@ -429,7 +429,7 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
         env["WANDB_MODE"] = "disabled"  # Changed from offline to disabled
         env["WANDB_SILENT"] = "true"
         env["WANDB_DISABLED"] = "true"  # Extra safety
-        env["OMP_NUM_THREADS"] = "4"  # Limit OpenMP threads to avoid resource issues
+        env["OMP_NUM_THREADS"] = "8"  # Limit OpenMP threads to avoid resource issues
 
         # Stream output directly to stdout/stderr so logs are visible in real-time
         proc = subprocess.run(cmd, check=False, env=env)
@@ -543,7 +543,7 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             imgsz=img,
             task='val',
             verbose=True,
-            workers=0,
+            workers=4,
             half=False
         )
         
@@ -610,7 +610,7 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             "--data", data_yaml,
             "--img", str(img),
             "--verbose",
-            "--workers", "0"
+            "--workers", "4"
         ]
         print(f"[yolo_eval] Running subprocess: {' '.join(cmd)}")
 

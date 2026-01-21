@@ -157,9 +157,13 @@ def prepare_client_yolo_dataset_prepartitioned(client_id: int):
     if cache_key in _DATASET_CACHE:
         return _DATASET_CACHE[cache_key]
     
+    dataset_number = int(get_config("dataset", context=None, default=1, type_converter=int))
+
+    print(f"[dataset] Preparing pre-partitioned dataset for client {client_id} (dataset choice {dataset_number})")
+    
     # First-time setup
-    partition_root = f"/app/datasets/coco_partitions/client_{client_id}"
-    data_yaml = os.path.join(partition_root, "coco_client.yaml")
+    partition_root = f"/app/datasets_{dataset_number}/coco_partitions/client_{client_id}"
+    data_yaml = os.path.join(partition_root, f"coco_client_dataset_{dataset_number}.yaml")
     
     # Verify partition exists (only once)
     if not os.path.exists(partition_root):
@@ -285,15 +289,8 @@ def evaluate(msg: Message, context: Context):
     
     print(f"\n[CLIENT {client_id}] Starting evaluation")
     
-    cache_key = f"client_{client_id}"
-    if cache_key in _DATASET_CACHE:
-        data_yaml, partition_root = _DATASET_CACHE[cache_key]
-    else:
-        partition_root = f"/app/datasets/coco_partitions/client_{client_id}"
-        data_yaml = os.path.join(partition_root, "coco_client.yaml")
-    
-    if not os.path.exists(data_yaml):
-        raise FileNotFoundError(f"Pre-partitioned data not found for client {client_id}")
+    # Use the same dataset preparation as train function
+    data_yaml, partition_root = prepare_client_yolo_dataset_prepartitioned(client_id)
     
     server_round = msg.content["config"].get("server-round", 0)
     
