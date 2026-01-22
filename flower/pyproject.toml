@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.92"
+version = "1.0.102"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -78,7 +78,7 @@ clientapp = "flower_benchmarks.client_app:app"
 # Custom config values accessible via `context.run_config`
 [tool.flwr.app.config]
 gcs_bucket = "flybold-coco-inf022"
-num-server-rounds = 10
+num-server-rounds = 5
 fraction-train = 1
 fraction_evaluate = 1
 local-epochs = 3
@@ -87,10 +87,10 @@ use_pretrained = 1
 task = "detection"  # "classification" or "detection"
 yolo_runs_dir = "./yolov5/runs/train"  # Runs dir for YOLO training
 yolo_size = "s"  # n, s, m, l, or x
-img_size = 512
-batch_size = 32
+img_size = 640
+batch_size = 24
 dataset = 1  # Dataset choice (1 = 100% IID, 2 = 50% IID + 50% non-IID, 3 = 20% IID + 80% non-IID, 4 = 100% non-IID)
-run_id = 22
+run_id = 34
 
 # Default federation to use when running the app
 [tool.flwr.federations]

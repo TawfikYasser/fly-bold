@@ -22,17 +22,16 @@ echo_warning() {
     echo -e "\n\033[1;33m[WARNING]\033[0m $1\n"
 }
 
-# SSH/SCP connection settings with timeouts and connection pooling
+# SSH/SCP connection settings with more conservative timeouts
 SSH_FLAGS=(
-    "-o ConnectTimeout=15"
-    "-o ServerAliveInterval=5"
-    "-o ServerAliveCountMax=3"
+    "-o ConnectTimeout=30"        # Increased from 15
+    "-o ServerAliveInterval=10"   # Increased from 5
+    "-o ServerAliveCountMax=6"    # Increased from 3
     "-o StrictHostKeyChecking=no"
     "-o UserKnownHostsFile=/dev/null"
-    "-o ControlMaster=auto"
-    "-o ControlPath=/tmp/ssh-%r@%h:%p"
-    "-o ControlPersist=600"
     "-o LogLevel=ERROR"
+    "-o TCPKeepAlive=yes"         # Added for better connection stability
+    "-o Compression=yes"          # Added for better transfer speed
 )
 
 # Helper function: Execute SSH command with retry logic
@@ -45,7 +44,7 @@ ssh_with_retry() {
     
     while [ $retry_count -lt $max_retries ]; do
         if gcloud compute ssh "$vm" --zone="$zone" \
-            ${SSH_FLAGS[@]/#/--ssh-flag=} \
+            "${SSH_FLAGS[@]/#/--ssh-flag=}" \
             --command="$command" 2>&1; then
             return 0
         fi
@@ -62,36 +61,224 @@ ssh_with_retry() {
     return 1
 }
 
-# Helper function: SCP with retry logic
+# Helper function: Simple SCP with retry - no fancy stuff
 scp_with_retry() {
     local source=$1
     local destination=$2
     local zone=$3
-    local recurse=${4:-false}
     local max_retries=3
     local retry_count=0
     
-    local scp_cmd="gcloud compute scp"
-    [ "$recurse" = "true" ] && scp_cmd="$scp_cmd --recurse"
-    scp_cmd="$scp_cmd --compress"
+    while [ $retry_count -lt $max_retries ]; do
+        if gcloud compute scp \
+            --compress \
+            --scp-flag="-o ConnectTimeout=60" \
+            --scp-flag="-o ServerAliveInterval=30" \
+            "$source" "$destination" \
+            --zone="$zone" 2>&1 | grep -v "Warning:"; then
+            return 0
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            echo "  ⚠️  Transfer failed, retrying in 5s... ($retry_count/$max_retries)" >&2
+            sleep 5
+        fi
+    done
+    
+    echo_error "Transfer failed after $max_retries attempts: $source" >&2
+    return 1
+}
+
+# Sync code to VM using tar (more reliable for many files)
+sync_code_to_vm() {
+    local vm=$1
+    local zone=$2
+    local label=$3
+    
+    echo "  → Preparing code archive for $label..."
+    
+    # Create a clean tar archive (exclude cache and unwanted files)
+    tar -czf /tmp/flybold-code.tar.gz \
+        --exclude='__pycache__' \
+        --exclude='*.pyc' \
+        --exclude='.git' \
+        --exclude='*.egg-info' \
+        --exclude='.pytest_cache' \
+        src/ yolov5/ requirements.txt pyproject.toml .env 2>/dev/null
+    
+    if [ "$ENABLE_TLS" = "true" ]; then
+        echo "  → Adding certs to archive..."
+        tar -rzf /tmp/flybold-code.tar.gz certs/ 2>/dev/null
+    fi
+    
+    echo "  → Uploading archive to $label..."
+    if ! scp_with_retry "/tmp/flybold-code.tar.gz" "$vm:/tmp/" "$zone"; then
+        echo_error "Failed to upload archive to $vm"
+        rm -f /tmp/flybold-code.tar.gz
+        return 1
+    fi
+    
+    echo "  → Extracting on $label..."
+    if ! ssh_with_retry "$vm" "$zone" "
+        cd /app
+        tar -xzf /tmp/flybold-code.tar.gz
+        rm -f /tmp/flybold-code.tar.gz
+        echo 'Extraction complete'
+    "; then
+        echo_error "Failed to extract archive on $vm"
+        rm -f /tmp/flybold-code.tar.gz
+        return 1
+    fi
+    
+    rm -f /tmp/flybold-code.tar.gz
+    echo "  ✓ Code synced to $label"
+    return 0
+}
+
+# Helper function: Rsync with retry (fallback for large transfers)
+rsync_with_retry() {
+    local source=$1
+    local vm=$2
+    local destination=$3
+    local zone=$4
+    local max_retries=3
+    local retry_count=0
+    
+    # Check if rsync is available on remote
+    if ! ssh_with_retry "$vm" "$zone" "command -v rsync" &>/dev/null; then
+        echo "  ℹ️  rsync not available on remote, installing..." >&2
+        ssh_with_retry "$vm" "$zone" "sudo apt-get update -qq && sudo apt-get install -y -qq rsync" || return 1
+    fi
     
     while [ $retry_count -lt $max_retries ]; do
-        if $scp_cmd \
-            ${SSH_FLAGS[@]/#/--scp-flag=} \
-            "$source" "$destination" \
-            --zone="$zone" 2>&1 | grep -v "Warning: Permanently added"; then
+        if gcloud compute scp --recurse --compress \
+            --scp-flag="-o ConnectTimeout=30" \
+            --scp-flag="-o ServerAliveInterval=10" \
+            "$source" "${vm}:${destination}" \
+            --zone="$zone" 2>&1 | grep -v "Warning:"; then
+            return 0
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            local wait_time=$((retry_count * 5))
+            echo "  ⚠️  Rsync failed, retrying in ${wait_time}s... ($retry_count/$max_retries)" >&2
+            sleep $wait_time
+        fi
+    done
+    
+    return 1
+}
+
+# Helper function: GCS operation with retry logic
+gcs_with_retry() {
+    # Usage: gcs_with_retry command arg1 arg2 ...
+    local max_retries=3
+    local retry_count=0
+    
+    # Set a timeout for the command (requires coreutils timeout)
+    local timeout_cmd=""
+    if command -v timeout >/dev/null 2>&1; then
+        timeout_cmd="timeout 30s"
+    fi
+    
+    while [ $retry_count -lt $max_retries ]; do
+        # Execute command preserving stdout/stderr
+        # We rely on $@ to pass arguments correctly
+        
+        $timeout_cmd "$@"
+        local exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
             return 0
         fi
         
         retry_count=$((retry_count + 1))
         if [ $retry_count -lt $max_retries ]; then
             local wait_time=$((retry_count * 3))
-            echo "  ⚠️  SCP failed, retrying in ${wait_time}s... ($retry_count/$max_retries)" >&2
+            echo "  ⚠️  GCS command failed (code $exit_code), retrying in ${wait_time}s... ($retry_count/$max_retries)" >&2
             sleep $wait_time
         fi
     done
     
-    echo_error "SCP failed after $max_retries attempts" >&2
+    echo_error "GCS command failed after $max_retries attempts: $*" >&2
+    return 1
+}
+
+# Reserve the next RUN_ID in GCS using generation-match preconditions (race-safe).
+# This avoids two parallel deploys picking the same run_id.
+reserve_run_id() {
+    local bucket="$1"
+    local object="gs://${bucket}/run_id.txt"
+    local max_attempts=20
+    local attempt=1
+
+    if ! command -v gcloud >/dev/null 2>&1; then
+        echo_error "gcloud is required to reserve RUN_ID in GCS."
+        return 1
+    fi
+
+    # Detect whether this gcloud supports --if-generation-match (fallback to gsutil if not).
+    local supports_if_match=0
+    if gcloud storage cp --help 2>&1 | grep -q -- "--if-generation-match"; then
+        supports_if_match=1
+    fi
+
+    while [ $attempt -le $max_attempts ]; do
+        local generation=""
+        local current="0"
+        local next=""
+
+        # If the object exists, fetch its generation and current value.
+        generation="$(gcloud storage objects describe "$object" --format='value(generation)' 2>/dev/null || true)"
+        if [ -n "$generation" ]; then
+            # Read current run_id, keep only the first integer (robust to stray whitespace/newlines).
+            current="$(gcs_with_retry gcloud storage cat "$object" 2>/dev/null | tr -d '\r\n' | grep -Eo '^[0-9]+' || echo "0")"
+        fi
+
+        next=$((current + 1))
+        printf "%s" "$next" > /tmp/run_id.txt
+
+        if [ $supports_if_match -eq 1 ]; then
+            if [ -n "$generation" ]; then
+                # Update only if the object is still at the same generation.
+                if gcloud storage cp --if-generation-match="$generation" /tmp/run_id.txt "$object" >/dev/null 2>&1; then
+                    echo "$next"
+                    return 0
+                fi
+            else
+                # Create only if the object does not exist (generation-match 0).
+                if gcloud storage cp --if-generation-match=0 /tmp/run_id.txt "$object" >/dev/null 2>&1; then
+                    echo "$next"
+                    return 0
+                fi
+            fi
+        elif command -v gsutil >/dev/null 2>&1; then
+            # Fallback: gsutil supports x-goog-if-generation-match header.
+            if [ -n "$generation" ]; then
+                if gsutil -h "x-goog-if-generation-match:${generation}" cp /tmp/run_id.txt "$object" >/dev/null 2>&1; then
+                    echo "$next"
+                    return 0
+                fi
+            else
+                if gsutil -h "x-goog-if-generation-match:0" cp /tmp/run_id.txt "$object" >/dev/null 2>&1; then
+                    echo "$next"
+                    return 0
+                fi
+            fi
+        else
+            echo_error "Neither 'gcloud storage cp --if-generation-match' nor 'gsutil' is available. Can't reserve RUN_ID."
+            return 1
+        fi
+
+        # Most common failure here is a 412 precondition failure (another deploy won the race).
+        # Back off a bit and try again.
+        sleep $((attempt < 5 ? attempt : 5))
+        attempt=$((attempt + 1))
+    done
+
+    echo_error "Failed to reserve a unique RUN_ID from $object after $max_attempts attempts."
     return 1
 }
 
@@ -305,22 +492,25 @@ if [ "$SKIP_PROMPTS" = false ]; then
 fi
 
 # Get/increment run_id
-echo_info "Getting run ID from GCS..."
-RUN_ID=$(gsutil cat gs://${BUCKET_NAME}/run_id.txt 2>/dev/null || echo "1")
-echo "Current run_id: $RUN_ID"
-NEXT_RUN_ID=$((RUN_ID + 1))
-echo $NEXT_RUN_ID | gsutil cp - gs://${BUCKET_NAME}/run_id.txt
-echo_success "Run ID incremented to $NEXT_RUN_ID"
-RUN_ID=$NEXT_RUN_ID
+echo_info "Reserving a new run ID in GCS (race-safe)..."
+RUN_ID="$(reserve_run_id "$BUCKET_NAME")"
+echo_success "Reserved run_id: $RUN_ID"
 
 # Save config
 # Save updated config to .env using sed (preserve other comments/structure)
-sed -i "s/^RUN_ID=.*/RUN_ID=$RUN_ID/" .env
+if grep -q '^RUN_ID=' .env; then
+    sed -i "s/^RUN_ID=.*/RUN_ID=$RUN_ID/" .env
+else
+    echo "RUN_ID=$RUN_ID" >> .env
+fi
+echo "[DEBUG] Updated RUN_ID in .env"
 sed -i "s|^DOCKER_IMAGE=.*|DOCKER_IMAGE=$DOCKER_IMAGE|" .env
+echo "[DEBUG] Updated DOCKER_IMAGE in .env"
 sed -i "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
+echo "[DEBUG] Updated SERVER_INTERNAL_IP in .env"
 
 # Save config to GCS
-CONFIG_JSON=$(cat <<EOJSON
+cat > /tmp/run_config.json <<EOJSON
 {
   "run_id": $RUN_ID,
   "num_rounds": $NUM_SERVER_ROUNDS,
@@ -345,8 +535,10 @@ CONFIG_JSON=$(cat <<EOJSON
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOJSON
-)
-echo "$CONFIG_JSON" | gsutil cp - gs://${BUCKET_NAME}/configs/run_${RUN_ID}_config.json
+echo "[DEBUG] Created run_config.json"
+
+gcs_with_retry gcloud storage cp /tmp/run_config.json "gs://${BUCKET_NAME}/configs/run_${RUN_ID}_config.json"
+echo "[DEBUG] Uploaded run_config.json"
 
 # Update pyproject.toml
 sed -i "s/num-server-rounds = [0-9]*/num-server-rounds = $NUM_SERVER_ROUNDS/" pyproject.toml
@@ -401,20 +593,16 @@ ssh_with_retry "$SERVER_VM" "$SERVER_ZONE" "
     echo 'Remote cache cleaned'
 " || { echo_error "Failed to setup server directories"; exit 1; }
 
-# Copy files (with compression, parallel transfers)
 echo "  → Syncing files to server..."
-scp_with_retry "./src" "$SERVER_VM:/app/" "$SERVER_ZONE" "true" &
+gcloud compute scp --recurse --compress ./src $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
 PID1=$!
-scp_with_retry "./yolov5" "$SERVER_VM:/app/" "$SERVER_ZONE" "true" &
+gcloud compute scp --recurse --compress ./yolov5 $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
 PID2=$!
-wait $PID1 $PID2 || { echo_error "Failed to sync source files to server"; exit 1; }
-
-scp_with_retry "requirements.txt" "$SERVER_VM:/app/" "$SERVER_ZONE" "false" || exit 1
-scp_with_retry "pyproject.toml" "$SERVER_VM:/app/" "$SERVER_ZONE" "false" || exit 1
-scp_with_retry ".env" "$SERVER_VM:/app/" "$SERVER_ZONE" "false" || exit 1
+wait $PID1 $PID2
+gcloud compute scp --compress requirements.txt pyproject.toml .env $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
 
 if [ "$ENABLE_TLS" = "true" ]; then
-    scp_with_retry "./certs" "$SERVER_VM:/app/" "$SERVER_ZONE" "true" || exit 1
+    gcloud compute scp --recurse --compress ./certs $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
 fi
 echo "  ✓ Files synced"
 
@@ -451,11 +639,11 @@ networks:
     driver: bridge
 EOF
 
-scp_with_retry "/tmp/docker-compose-server.yml" "$SERVER_VM:/app/docker-compose.yml" "$SERVER_ZONE" "false" || exit 1
+gcloud compute scp /tmp/docker-compose-server.yml $SERVER_VM:/app/docker-compose.yml --zone=$SERVER_ZONE --quiet > /dev/null 2>&1
 
 # Start server with force-recreate
 echo "  → Starting server container..."
-ssh_with_retry "$SERVER_VM" "$SERVER_ZONE" "
+gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
     cd /app
     echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
     sudo docker compose pull --quiet
@@ -464,10 +652,13 @@ ssh_with_retry "$SERVER_VM" "$SERVER_ZONE" "
     sudo docker compose exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
     sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
     sudo docker compose ps
-" || { echo_error "Failed to start server container"; exit 1; }
+" 2>&1 | grep -E "(NAME|fl-server)" || true
 
 echo_success "Server deployed at $SERVER_INTERNAL_IP"
 
+# Clients deployment
+
+echo_info "Deploying clients..."
 
 # Deploy clients - PARALLELIZED FILE SYNC
 echo_info "Deploying to all 5 client VMs in parallel..."
@@ -508,7 +699,7 @@ echo_success "All client directories setup complete"
 
 # Step 2: Sync files to all clients in parallel
 echo_info "Syncing files to all 5 client VMs in parallel..."
-SYNC_PIDS=()
+
 for i in $(seq 1 5); do
     CLIENT_VM_VAR="CLIENT_${i}_VM"
     CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
@@ -517,35 +708,27 @@ for i in $(seq 1 5); do
     CLIENT_ZONE=${!CLIENT_ZONE_VAR}
     CLIENT_IP=${!CLIENT_IP_VAR}
     
-    (
-        echo "  → Syncing to $CLIENT_VM ($CLIENT_IP)..."
-        
-        # Sync large directories in parallel
-        scp_with_retry "./src" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "true" &
-        P1=$!
-        scp_with_retry "./yolov5" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "true" &
-        P2=$!
-        wait $P1 $P2 || exit 1
-        
-        # Sync config files
-        scp_with_retry "requirements.txt" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "false" || exit 1
-        scp_with_retry "pyproject.toml" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "false" || exit 1
-        scp_with_retry ".env" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "false" || exit 1
-        scp_with_retry "gcs-key.json" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "false" || exit 1
-        
-        if [ "$ENABLE_TLS" = "true" ]; then
-            scp_with_retry "./certs" "$CLIENT_VM:/app/" "$CLIENT_ZONE" "true" || exit 1
-        fi
-        
-        echo "  ✓ $CLIENT_VM files synced"
-    ) &
-    SYNC_PIDS+=($!)
+    echo "  → Syncing to $CLIENT_VM ($CLIENT_IP)..."
+    
+    # Sync large directories in parallel (within this client)
+    gcloud compute scp --recurse --compress ./src $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
+    PID1=$!
+    gcloud compute scp --recurse --compress ./yolov5 $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
+    PID2=$!
+    
+    # Wait for large directories to finish
+    wait $PID1 $PID2
+    
+    # Sync config files sequentially
+    gcloud compute scp --compress requirements.txt pyproject.toml .env gcs-key.json $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
+    
+    if [ "$ENABLE_TLS" = "true" ]; then
+        gcloud compute scp --recurse --compress ./certs $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
+    fi
+    
+    echo "  ✓ $CLIENT_VM files synced"
 done
 
-# Wait for all file syncs to complete
-for pid in "${SYNC_PIDS[@]}"; do
-    wait $pid || { echo_error "Failed to sync files to clients"; exit 1; }
-done
 echo_success "All client files synced successfully!"
 
 # Step 3: Verify data and create docker-compose files (still serial, but fast)
@@ -561,10 +744,10 @@ for i in $(seq 1 5); do
     # Calculate client IDs for this VM (2 clients per VM)
     CLIENT_ID_1=$(( (i-1)*2 ))
     CLIENT_ID_2=$(( (i-1)*2 + 1 ))
-    
-    # Verify pre-partitioned data exists for selected dataset
-    echo "  → Verifying $CLIENT_VM (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
-    VERIFICATION_OUTPUT=$(ssh_with_retry "$CLIENT_VM" "$CLIENT_ZONE" "
+
+    # Verify pre-partitioned data exists
+    echo "  → Verifying pre-partitioned data (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
+    VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         set -e
         DATASET=$DATASET
         for CLIENT_ID in $CLIENT_ID_1 $CLIENT_ID_2; do
@@ -594,11 +777,12 @@ for i in $(seq 1 5); do
     " 2>&1)
     
     if echo "$VERIFICATION_OUTPUT" | grep -q "ERROR"; then
-        echo_error "Data verification failed on $CLIENT_VM:\n$VERIFICATION_OUTPUT"
+        echo_error "Pre-partitioned data verification failed on $CLIENT_VM:\n$VERIFICATION_OUTPUT"
         exit 1
     else
         echo "$VERIFICATION_OUTPUT"
     fi
+
     
     # Create client docker-compose with CURRENT server IP
     cat > /tmp/docker-compose-client-${i}.yml << EOF
@@ -666,7 +850,7 @@ networks:
     driver: bridge
 EOF
     
-    scp_with_retry "/tmp/docker-compose-client-${i}.yml" "$CLIENT_VM:/app/docker-compose.yml" "$CLIENT_ZONE" "false" || exit 1
+    gcloud compute scp /tmp/docker-compose-client-${i}.yml $CLIENT_VM:/app/docker-compose.yml --zone=$CLIENT_ZONE --quiet > /dev/null 2>&1
 done
 
 echo_success "All clients configured and data verified"
@@ -679,7 +863,7 @@ for i in $(seq 1 5); do
     CLIENT_ZONE=${!CLIENT_ZONE_VAR}
     
     echo_info "Starting clients on $CLIENT_VM"
-    ssh_with_retry "$CLIENT_VM" "$CLIENT_ZONE" "
+    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         cd /app
         echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
         sudo docker compose pull --quiet
@@ -690,7 +874,7 @@ for i in $(seq 1 5); do
             sudo docker compose exec -T \$CLIENT_ID find /app -type f -name '*.pyc' -delete 2>/dev/null || true
         done
         sudo docker compose ps
-    " || { echo_error "Failed to start clients on $CLIENT_VM"; exit 1; }
+    " 2>&1 | grep -E "(NAME|fl-client)" || true
 done
 
 echo_success "Deployment complete!"

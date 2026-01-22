@@ -186,13 +186,12 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     print(f"Data Transferred:  {total_data_mb:.2f} MB")
     print(f"{'='*70}\n")
     
-    # âœ… FIXED: Return aggregated metrics for Flower (not empty dict)
+    # FIXED: Return aggregated metrics for Flower (not empty dict)
     return MetricRecord({
         "train_loss": round_train_loss,
         "train_accuracy": round_train_acc_aggregated,
         "train_mAP": round_train_acc_mAP,
     })
-
 
 def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_key: str) -> MetricRecord:
     """
