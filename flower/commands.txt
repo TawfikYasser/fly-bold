@@ -1,0 +1,8 @@
+gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr stop 15887296516076396226'
+
+gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr log 15887296516076396226'
+
+gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr run .'
+
+
+./deploy-application.sh && ./manage-clients.sh stop --all && ./manage-clients.sh server-fresh && gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr run .' && ./manage-clients.sh start --all

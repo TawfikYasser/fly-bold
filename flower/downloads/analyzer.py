@@ -639,6 +639,143 @@ def plot_communication_overhead(df_rounds, output_dir):
     plt.close()
 
 
+def plot_per_client_analysis(df_clients, output_dir):
+    """Generate individual plots for each client showing train/val accuracy and round times"""
+    clients = sorted(df_clients['client_id'].unique())
+    
+    for client_id in clients:
+        # Filter data for this client
+        client_data = df_clients[df_clients['client_id'] == client_id].sort_values('round_id')
+        
+        if client_data.empty:
+            continue
+        
+        # Create figure with 2x2 subplots
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle(f'Client {client_id} Performance Analysis', 
+                     fontsize=16, fontweight='bold', y=0.995)
+        
+        rounds = client_data['round_id'].values
+        
+        # 1. Train vs Val Aggregated Score
+        ax = axes[0, 0]
+        ax.plot(rounds, client_data['train_agg'], 
+                marker='o', linewidth=2.5, markersize=8, label='Training', 
+                color='#2E86AB', alpha=0.8)
+        ax.plot(rounds, client_data['eval_agg'], 
+                marker='s', linewidth=2.5, markersize=8, label='Validation', 
+                color='#A23B72', alpha=0.8)
+        
+        # Fill area between
+        ax.fill_between(rounds, client_data['train_agg'], client_data['eval_agg'],
+                        alpha=0.2, color='gray')
+        
+        # Annotations on last point
+        last_train_agg = client_data['train_agg'].iloc[-1]
+        last_eval_agg = client_data['eval_agg'].iloc[-1]
+        last_round = rounds[-1]
+        
+        ax.annotate(f'{last_train_agg:.3f}', (last_round, last_train_agg),
+                   textcoords="offset points", xytext=(5, 5), 
+                   ha='left', fontsize=9, fontweight='bold', color='#2E86AB')
+        ax.annotate(f'{last_eval_agg:.3f}', (last_round, last_eval_agg),
+                   textcoords="offset points", xytext=(5, -12), 
+                   ha='left', fontsize=9, fontweight='bold', color='#A23B72')
+        
+        ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Score', fontsize=11)
+        ax.set_title('Aggregated Score (Train vs Val)', fontsize=13, fontweight='bold', pad=10)
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_xticks(rounds)
+        
+        # 2. Train vs Val mAP@0.5
+        ax = axes[0, 1]
+        ax.plot(rounds, client_data['train_mAP50'], 
+                marker='o', linewidth=2.5, markersize=8, label='Training', 
+                color='#F18F01', alpha=0.8)
+        ax.plot(rounds, client_data['eval_mAP50'], 
+                marker='s', linewidth=2.5, markersize=8, label='Validation', 
+                color='#C73E1D', alpha=0.8)
+        
+        # Fill area between
+        ax.fill_between(rounds, client_data['train_mAP50'], client_data['eval_mAP50'],
+                        alpha=0.2, color='gray')
+        
+        # Annotations on last point
+        last_train_map50 = client_data['train_mAP50'].iloc[-1]
+        last_eval_map50 = client_data['eval_mAP50'].iloc[-1]
+        
+        ax.annotate(f'{last_train_map50:.3f}', (last_round, last_train_map50),
+                   textcoords="offset points", xytext=(5, 5), 
+                   ha='left', fontsize=9, fontweight='bold', color='#F18F01')
+        ax.annotate(f'{last_eval_map50:.3f}', (last_round, last_eval_map50),
+                   textcoords="offset points", xytext=(5, -12), 
+                   ha='left', fontsize=9, fontweight='bold', color='#C73E1D')
+        
+        ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+        ax.set_ylabel('mAP@0.5', fontsize=11)
+        ax.set_title('mAP@0.5 (Train vs Val)', fontsize=13, fontweight='bold', pad=10)
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_xticks(rounds)
+        
+        # 3. Train vs Val mAP@0.5:0.95
+        ax = axes[1, 0]
+        ax.plot(rounds, client_data['train_mAP'], 
+                marker='o', linewidth=2.5, markersize=8, label='Training', 
+                color='#6A994E', alpha=0.8)
+        ax.plot(rounds, client_data['eval_mAP'], 
+                marker='s', linewidth=2.5, markersize=8, label='Validation', 
+                color='#BC4B51', alpha=0.8)
+        
+        # Fill area between
+        ax.fill_between(rounds, client_data['train_mAP'], client_data['eval_mAP'],
+                        alpha=0.2, color='gray')
+        
+        # Annotations on last point
+        last_train_map = client_data['train_mAP'].iloc[-1]
+        last_eval_map = client_data['eval_mAP'].iloc[-1]
+        
+        ax.annotate(f'{last_train_map:.3f}', (last_round, last_train_map),
+                   textcoords="offset points", xytext=(5, 5), 
+                   ha='left', fontsize=9, fontweight='bold', color='#6A994E')
+        ax.annotate(f'{last_eval_map:.3f}', (last_round, last_eval_map),
+                   textcoords="offset points", xytext=(5, -12), 
+                   ha='left', fontsize=9, fontweight='bold', color='#BC4B51')
+        
+        ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+        ax.set_ylabel('mAP@0.5:0.95', fontsize=11)
+        ax.set_title('mAP@0.5:0.95 (Train vs Val)', fontsize=13, fontweight='bold', pad=10)
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_xticks(rounds)
+        
+        # 4. Training Time per Round
+        ax = axes[1, 1]
+        train_time_min = client_data['train_time'] / 60
+        
+        bars = ax.bar(rounds, train_time_min, color='#2E86AB', alpha=0.7, 
+                     edgecolor='black', linewidth=1.5)
+        ax.plot(rounds, train_time_min, 'ro-', linewidth=2, markersize=8)
+        
+        # Add value annotations on bars
+        for round_id, time_val in zip(rounds, train_time_min):
+            ax.text(round_id, time_val, f'{time_val:.1f}m', 
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+        
+        ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Training Time (minutes)', fontsize=11)
+        ax.set_title('Training Time per Round', fontsize=13, fontweight='bold', pad=10)
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_xticks(rounds)
+        
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/08_client_{client_id}_analysis.png", 
+                    dpi=300, bbox_inches='tight')
+        plt.close()
+
+
 def generate_summary_report(df_rounds, df_clients, output_dir):
     """Generate comprehensive text summary"""
     summary = []
@@ -853,6 +990,7 @@ def main():
         ("Time analysis", plot_time_analysis, (df_clients, df_rounds)),
         ("Convergence analysis", plot_convergence_analysis, (df_rounds, df_clients)),
         ("Communication overhead", plot_communication_overhead, (df_rounds,)),
+        ("Per-client analysis", plot_per_client_analysis, (df_clients,)),
     ]
 
     for desc, plot_func, args in plots:

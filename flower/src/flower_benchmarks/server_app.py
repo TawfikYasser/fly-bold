@@ -8,7 +8,7 @@ import json
 from typing import List, Tuple, Dict, Optional
 from flwr.app import ArrayRecord, Context, MetricRecord, RecordDict, ConfigRecord
 from flwr.serverapp import Grid, ServerApp
-from flwr.serverapp.strategy import FedAvg
+from flwr.serverapp.strategy import FedAvg, FedProx
 from flower_benchmarks.task import Net
 
 # Ensure parent directory is in sys.path

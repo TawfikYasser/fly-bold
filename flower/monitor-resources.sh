@@ -7,10 +7,16 @@ PROJECT_ID="inf022"
 
 # Load VM info
 if [ ! -f "vm-info.txt" ]; then
-    echo "ERROR: vm-info.txt not found"
+    echo "ERROR: vm-info.txt not found. Run deploy-application.sh first."
     exit 1
 fi
 source vm-info.txt
+
+# Verify critical variables are loaded
+if [ -z "$SERVER_VM" ] || [ -z "$SERVER_ZONE" ]; then
+    echo "ERROR: Server VM info not loaded from vm-info.txt"
+    exit 1
+fi
 
 # Load .env for RUN_ID
 if [ ! -f ".env" ]; then

@@ -2,3 +2,4 @@
 .docker_password
 *.backup
 /flower/logs/
+/flower/command.txt

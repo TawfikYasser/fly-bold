@@ -3,7 +3,19 @@
 # Manage Flybold Clients
 set -e
 
+# Load VM info
+if [ ! -f "vm-info.txt" ]; then
+    echo "ERROR: vm-info.txt not found. Run deploy-application.sh first."
+    exit 1
+fi
+
 source vm-info.txt
+
+# Verify critical variables are loaded
+if [ -z "$SERVER_VM" ] || [ -z "$SERVER_ZONE" ]; then
+    echo "ERROR: Server VM info not loaded from vm-info.txt"
+    exit 1
+fi
 
 show_usage() {
     cat << EOF
@@ -39,7 +51,7 @@ get_vm_for_client() {
     local client_id=$1
     local vm_num=$((client_id / 2 + 1))
     
-    if [ $vm_num -gt 5 ]; then
+    if [ $vm_num -gt 5 ] || [ $vm_num -lt 1 ]; then
         echo "ERROR: Invalid client ID $client_id (must be 0-9)"
         exit 1
     fi
@@ -49,6 +61,15 @@ get_vm_for_client() {
     
     VM_NAME=${!VM_VAR}
     VM_ZONE=${!ZONE_VAR}
+    
+    # Verify the variables were loaded
+    if [ -z "$VM_NAME" ] || [ -z "$VM_ZONE" ]; then
+        echo "ERROR: Failed to load VM info for client $client_id"
+        echo "  vm_num=$vm_num, VM_VAR=$VM_VAR, ZONE_VAR=$ZONE_VAR"
+        echo "  VM_NAME=$VM_NAME, VM_ZONE=$VM_ZONE"
+        echo "Please ensure vm-info.txt is properly configured."
+        exit 1
+    fi
 }
 
 show_status() {

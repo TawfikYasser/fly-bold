@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Generate deterministic Dirichlet partitions for federated COCO dataset.
-Client 0 gets uniform distribution (alpha=1e6), others get varied alphas.
-Each client gets random train size (1000-5000), val size is 50% of train.
+Supports 4 dataset configurations with varying IID/non-IID distributions.
+Each client gets random train size and random val size (independently).
 Uses Flower Datasets partitioning logic on pre-downloaded GCS data.
 """
 
@@ -42,8 +42,45 @@ COCO_NAMES = [
 ]
 
 
+def get_alpha_for_client(dataset_id: int, client_id: int, seed: int) -> float:
+    """
+    Determine alpha based on dataset type and client ID.
+    
+    Dataset 1: All clients IID (alpha=1e6)
+    Dataset 2: Clients 0-4 IID, Clients 5-9 non-IID (0.5-1.5)
+    Dataset 3: Clients 0-1 IID, Clients 2-9 non-IID (0.5-1.5)
+    Dataset 4: All clients non-IID (0.5-1.5)
+    """
+    # Use deterministic seed per client to ensure reproducibility
+    np.random.seed(seed + dataset_id * 1000 + client_id)
+    
+    if dataset_id == 1:
+        return 1e6  # All IID
+    elif dataset_id == 2:
+        return 1e6 if client_id <= 4 else np.random.uniform(0.5, 1.5)
+    elif dataset_id == 3:
+        return 1e6 if client_id <= 1 else np.random.uniform(0.5, 1.5)
+    elif dataset_id == 4:
+        return np.random.uniform(0.5, 1.5)  # All non-IID
+    else:
+        raise ValueError(f"Invalid dataset_id: {dataset_id}. Must be 1-4.")
+
+
 def get_gcs_image_list(bucket_name: str, split: str) -> List[str]:
-    """Get list of image filenames from GCS bucket."""
+    """Get list of image filenames from GCS bucket. Uses cache if available."""
+    cache_file = Path(f"/tmp/coco_image_list_{split}.txt")
+    
+    # Check if cache exists and is recent (less than 1 hour old)
+    if cache_file.exists():
+        import time
+        file_age = time.time() - cache_file.stat().st_mtime
+        if file_age < 3600:  # 1 hour
+            print(f"✓ Using cached image list for {split} (age: {int(file_age/60)} minutes)")
+            with open(cache_file, 'r') as f:
+                images = [line.strip() for line in f if line.strip()]
+            print(f"Found {len(images)} images in {split} (from cache)")
+            return sorted(images)
+    
     gcs_path = f"gs://{bucket_name}/coco/images/{split}/"
     print(f"Fetching image list from {gcs_path}...")
     
@@ -61,6 +98,11 @@ def get_gcs_image_list(bucket_name: str, split: str) -> List[str]:
             if line.endswith('.jpg'):
                 filename = line.split('/')[-1]
                 images.append(filename)
+        
+        # Save to cache
+        with open(cache_file, 'w') as f:
+            for img in images:
+                f.write(f"{img}\n")
         
         print(f"Found {len(images)} images in {split}")
         return sorted(images)
@@ -93,7 +135,27 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
         coverage = existing_count / expected if expected > 0 else 1.0
 
         if existing_count >= expected:
-            print(f"✓ Labels directory exists ({existing_count} files). Skipping download.")
+            print(f"✓ Labels directory exists with sufficient files ({existing_count} >= {expected}). Skipping download.")
+            # Parse and return immediately
+            image_to_classes = {}
+            for img_name in images:
+                label_name = img_name.replace(".jpg", ".txt")
+                label_path = labels_dir / label_name
+                classes = []
+                if label_path.exists():
+                    with open(label_path, "r") as f:
+                        for line in f:
+                            parts = line.strip().split()
+                            if parts:
+                                try:
+                                    classes.append(int(float(parts[0])))
+                                except ValueError:
+                                    pass
+                image_to_classes[img_name] = classes
+            
+            print(f"Parsed labels for {len(image_to_classes)} images (from cache)")
+            return image_to_classes
+            
         elif coverage >= MIN_LABEL_COVERAGE:
             missing = expected - existing_count
             print(
@@ -101,7 +163,7 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
                 f"Missing {missing} (~{(1.0-coverage)*100:.2f}%). "
                 f"Coverage >= {MIN_LABEL_COVERAGE*100:.0f}%, proceeding without re-download."
             )
-            # Do NOT delete and re-download
+            # Use existing labels without re-downloading
         else:
             print(
                 f"⚠ Labels directory too incomplete ({existing_count} / {expected}). "
@@ -109,6 +171,7 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
             )
             import shutil
             shutil.rmtree(temp_dir)
+            print(f"Deleted incomplete labels directory: {temp_dir}")
 
     # Download only if needed (directory missing, or we deleted it because it was too incomplete)
     if not labels_dir.exists():
@@ -145,30 +208,27 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
     print(f"Parsed labels for {len(image_to_classes)} images")
     return image_to_classes
 
-def generate_client_configs(num_clients: int, seed: int, 
-                            min_train: int = 1000, max_train: int = 5000,
-                            alpha_min: float = 0.1, alpha_max: float = 1.5) -> List[Dict]:
+
+def generate_client_configs(num_clients: int, seed: int, dataset_id: int,
+                            min_train: int, max_train: int,
+                            min_val: int, max_val: int) -> List[Dict]:
     """
-    Generate configuration for each client:
-    - Client 0: alpha=1e6 (uniform), random train size
-    - Clients 1-9: varied alphas, random train sizes
-    - Val size = 50% of train size
+    Generate configuration for each client based on dataset type.
+    Train and val sizes are independently randomized.
     """
-    np.random.seed(seed)
-    random.seed(seed)
+    np.random.seed(seed + dataset_id * 10000)
+    random.seed(seed + dataset_id * 10000)
     
     configs = []
     
     for client_id in range(num_clients):
-        # Random train size between min_train and max_train
+        # Random train size
         n_train = np.random.randint(min_train, max_train + 1)
-        n_val = n_train // 2  # 50% of train
+        # Random val size (independent)
+        n_val = np.random.randint(min_val, max_val + 1)
         
-        # Client 0 gets uniform distribution
-        if client_id == 0:
-            alpha = 1e6
-        else:
-            alpha = np.random.uniform(alpha_min, alpha_max)
+        # Get alpha based on dataset type
+        alpha = get_alpha_for_client(dataset_id, client_id, seed)
         
         configs.append({
             'client_id': client_id,
@@ -244,19 +304,11 @@ def partition_images_dirichlet(
         idx = 0
         
         # 1. Assign fixed share to IID clients
-        # We aim for inclusive fairness: every client deserves 1/N of the data if possible.
-        # IID clients get their 1/N slice of THIS class guaranteed.
-        
-        # Calculate share per client
         share_per_client = n_imgs // num_clients
         
-        # If share is 0 (rare class), we skip IID assignment or just give nothing.
-        # Let's give IID clients their share first.
         for cid in iid_clients:
             end = idx + share_per_client
-            # Assign slice
             if idx < n_imgs:
-                # If we run out of images (shouldn't happen with math above, but good to be safe)
                 subset = imgs[idx:end]
                 for img in subset:
                     client_pools[cid].append((img, source_split))
@@ -294,30 +346,35 @@ def partition_images_dirichlet(
 
 def generate_manifest(bucket_name: str, num_clients: int, 
                      min_train: int, max_train: int,
-                     seed: int, alpha_min: float, alpha_max: float,
+                     min_val: int, max_val: int,
+                     seed: int, dataset_id: int,
                      same_seed_for_val: bool) -> dict:
     """Main function to generate partition manifest."""
     
+    # Dataset description
+    dataset_descriptions = {
+        1: "All clients IID (α=1e6)",
+        2: "Clients 0-4 IID, Clients 5-9 non-IID (α=0.5-1.5)",
+        3: "Clients 0-1 IID, Clients 2-9 non-IID (α=0.5-1.5)",
+        4: "All clients non-IID (α=0.5-1.5)"
+    }
+    
     print("\n" + "="*70)
-    print("COCO Dataset Partitioning for Federated Learning")
+    print(f"COCO Dataset Partitioning - Dataset {dataset_id}")
     print("="*70)
+    print(f"Configuration: {dataset_descriptions[dataset_id]}")
     print(f"Bucket: {bucket_name}")
     print(f"Clients: {num_clients}")
     print(f"Train size range: [{min_train}, {max_train}]")
-    print(f"Val size: 50% of train")
+    print(f"Val size range: [{min_val}, {max_val}]")
     print(f"Seed: {seed}")
-    print(f"Alpha range: [{alpha_min}, {alpha_max}]")
-    print(f"Client 0: Uniform (α=1e6)")
     print(f"Same seed for val: {same_seed_for_val}")
     print("="*70 + "\n")
     
     # Generate client configurations
     client_configs = generate_client_configs(
-        num_clients, seed, min_train, max_train, alpha_min, alpha_max
+        num_clients, seed, dataset_id, min_train, max_train, min_val, max_val
     )
-    
-    # OUTPUT SYNC FIX: Removed initial config print to avoid confusion with final partition results.
-    # The final statistics at the end of the script will show the authoritative configuration.
     
     # Get training images and labels
     print("\n--- Processing Training Split ---")
@@ -357,33 +414,20 @@ def generate_manifest(bucket_name: str, num_clients: int,
     for client_id in range(num_clients):
         # Combine train2017 and val2017 pools for this client
         combined_pool = train_pools[client_id] + val_pools[client_id]
-        random.shuffle(combined_pool)  # Mix them up
+        random.shuffle(combined_pool)
         
         total_received = len(combined_pool)
         
-        # 1. Calculate Potential Train: 2/3rds of what we received
-        potential_train = int(total_received * (2/3))
-        
-        # 2. Apply Random Cap: Use the random target generated earlier as the maximum limit
-        target_cap = client_configs[client_id]['n_train']
-        n_train = min(potential_train, target_cap)
-        
-        # 3. Strait Validation Enforcement: Val is EXACTLY 50% of the final Train size
-        n_val = int(n_train * 0.5)
-        
-        # Ensure we don't exceed total_received (rare edge case with rounding, but good safety)
-        if n_train + n_val > total_received:
-            # If we somehow don't have enough for the strict 2:1 split of the cap,
-            # we fall back to the potential split which is naturally safe.
-            n_train = potential_train
-            n_val = int(potential_train * 0.5)
+        # Use target sizes from config
+        n_train = min(client_configs[client_id]['n_train'], total_received)
+        n_val = min(client_configs[client_id]['n_val'], total_received - n_train)
         
         # Take first n_train for training
         train_part = combined_pool[:n_train]
         # Take next n_val for validation
         val_part = combined_pool[n_train:n_train + n_val]
         
-        # Update config to reflect reality so stats match
+        # Update config to reflect reality
         client_configs[client_id]['n_train'] = n_train
         client_configs[client_id]['n_val'] = n_val
         
@@ -412,7 +456,7 @@ def generate_manifest(bucket_name: str, num_clients: int,
     
     # Generate plots
     print("\n--- Generating Client Plots ---")
-    plots_dir = Path("client_plots")
+    plots_dir = Path(f"client_plots_dataset_{dataset_id}")
     plots_dir.mkdir(exist_ok=True)
     
     for client_id in range(num_clients):
@@ -426,18 +470,21 @@ def generate_manifest(bucket_name: str, num_clients: int,
             alpha=cfg['alpha'],
             n_train=len(train_assignments[client_id]),
             n_val=len(val_assignments[client_id]),
-            output_path=str(plot_path)
+            output_path=str(plot_path),
+            dataset_id=dataset_id
         )
     
     # Build manifest
     manifest = {
         "metadata": {
+            "dataset_id": dataset_id,
+            "dataset_description": dataset_descriptions[dataset_id],
             "seed": seed,
             "num_clients": num_clients,
             "min_train_per_client": min_train,
             "max_train_per_client": max_train,
-            "alpha_min": alpha_min,
-            "alpha_max": alpha_max,
+            "min_val_per_client": min_val,
+            "max_val_per_client": max_val,
             "same_seed_for_val": same_seed_for_val,
             "bucket_name": bucket_name
         },
@@ -474,7 +521,7 @@ def generate_manifest(bucket_name: str, num_clients: int,
     
     # Print statistics
     print("\n" + "="*70)
-    print("PARTITION STATISTICS")
+    print(f"PARTITION STATISTICS - Dataset {dataset_id}")
     print("="*70)
     for client_id in range(num_clients):
         partition = manifest["partitions"][f"client_{client_id}"]
@@ -502,7 +549,8 @@ def plot_client_distribution(client_id: int,
                              alpha: float,
                              n_train: int,
                              n_val: int,
-                             output_path: str):
+                             output_path: str,
+                             dataset_id: int):
     """Generate individual plot for one client showing train/val distribution."""
     if not PLOTTING_AVAILABLE:
         return
@@ -531,7 +579,7 @@ def plot_client_distribution(client_id: int,
     # Styling
     ax.set_xlabel('Class Name', fontsize=14, fontweight='bold')
     ax.set_ylabel('Number of Images', fontsize=14, fontweight='bold')
-    ax.set_title(f'Client {client_id} Data Distribution (α={alpha:.2f}, Train={n_train}, Val={n_val})', 
+    ax.set_title(f'Dataset {dataset_id} - Client {client_id} Distribution (α={alpha:.2f}, Train={n_train}, Val={n_val})', 
                 fontsize=16, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels(class_names, rotation=45, ha='right', fontsize=9)
@@ -548,12 +596,14 @@ def plot_client_distribution(client_id: int,
 def main():
     parser = argparse.ArgumentParser(description="Generate COCO partitions for FL")
     parser.add_argument("--bucket", required=True, help="GCS bucket name")
+    parser.add_argument("--dataset-id", type=int, required=True, choices=[1, 2, 3, 4],
+                       help="Dataset ID (1-4) for different IID/non-IID configurations")
     parser.add_argument("--num-clients", type=int, default=10, help="Number of clients")
-    parser.add_argument("--min-train", type=int, default=1000, help="Min training images per client")
-    parser.add_argument("--max-train", type=int, default=5000, help="Max training images per client")
+    parser.add_argument("--min-train-images", type=int, required=True, help="Min training images per client")
+    parser.add_argument("--max-train-images", type=int, required=True, help="Max training images per client")
+    parser.add_argument("--min-val-images", type=int, required=True, help="Min validation images per client")
+    parser.add_argument("--max-val-images", type=int, required=True, help="Max validation images per client")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--alpha-min", type=float, default=0.1, help="Min Dirichlet alpha")
-    parser.add_argument("--alpha-max", type=float, default=1.5, help="Max Dirichlet alpha")
     parser.add_argument("--same-seed-val", action="store_true", 
                        help="Use same seed for validation (identical distribution)")
     parser.add_argument("--output", default="partition_manifest.json", help="Output JSON file")
@@ -562,17 +612,20 @@ def main():
     
     # Generate manifest
     manifest = generate_manifest(
-        args.bucket, args.num_clients, args.min_train, args.max_train,
-        args.seed, args.alpha_min, args.alpha_max, args.same_seed_val
+        args.bucket, args.num_clients, 
+        args.min_train_images, args.max_train_images,
+        args.min_val_images, args.max_val_images,
+        args.seed, args.dataset_id, args.same_seed_val
     )
     
-    # Save manifest
-    with open(args.output, 'w') as f:
+    # Save manifest with dataset-specific name
+    output_file = f"partition_manifest_dataset_{args.dataset_id}.json"
+    with open(output_file, 'w') as f:
         json.dump(manifest, f, indent=2)
     
-    print(f"\n✅ Partition manifest saved to: {args.output}")
-    print(f"✅ Client plots saved to: client_plots/")
-    print("\nNext step: Run partition-dataset.sh to distribute data to VMs")
+    print(f"\n✅ Partition manifest saved to: {output_file}")
+    print(f"✅ Client plots saved to: client_plots_dataset_{args.dataset_id}/")
+    print("\nNext step: Continue with partition-dataset.sh for remaining datasets")
 
 
 if __name__ == "__main__":
