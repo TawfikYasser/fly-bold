@@ -92,6 +92,11 @@ fi
 
 if [ "$SKIP_DEPLOY" = false ]; then
   # deploy-application.sh asks "Enable TLS (self-signed)? (y/n) [n]:"
+  info "Zipping local FEDn code..."
+  # Zip the current directory (fedn) from the parent directory to create ../fedn.zip
+  # ensuring it unzips into a 'fedn' folder as expected by deploy script
+  (cd .. && zip -qr fedn.zip fedn -x "fedn/.git/*" "fedn/venv/*" "fedn/downloads/*" "fedn/__pycache__/*")
+  
   echo "n" | ./deploy-application.sh
 fi
 
@@ -131,7 +136,9 @@ cd /app/fly-bold-fedn
 # Ensure pip is installed
 sudo apt-get update && sudo apt-get install -y python3-pip
 
-python3 -m pip install --no-cache-dir fedn pymongo
+python3 -m pip install --no-cache-dir pymongo
+# Install FEDn from local source (uploaded to /app/fly-bold-fedn/fedn)
+python3 -m pip install --no-cache-dir -e /app/fly-bold-fedn/fedn
 
 echo 'Starting run_session.py remote execution...'
 python3 -u run_session.py

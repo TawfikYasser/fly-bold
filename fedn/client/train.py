@@ -12,9 +12,13 @@ from fedn.utils.helpers.helpers import save_metadata
 from model import compile_model, load_parameters, save_parameters
 from yolo_utils import count_images_from_yaml, load_yolo_checkpoint_as_state_dict, save_state_dict_as_yolo_checkpoint
 import yaml
+import json
 
 
-def run_yolo_train(state_dict, data_yaml: str, yolo_size: str, epochs: int, img: int, batch: int, lr: float, runs_dir: str, run_name: str):
+def run_yolo_train(state_dict, data_yaml: str, yolo_size: str, epochs: int, img: int, batch: int, lr: float, runs_dir: str, run_name: str, mu: float = 0.0):
+    if mu > 0:
+        print(f"FedProx: mu parameter received ({mu}). Standard YOLOv5 training does not support proximal term. Please implement custom training loop or use modified YOLOv5.")
+
     tmp_weights = Path(runs_dir) / f"{run_name}_init.pt"
     save_state_dict_as_yolo_checkpoint(state_dict, yolo_size, tmp_weights)
 
@@ -118,6 +122,21 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
     model = load_parameters(in_model_path, yolo_size=yolo_size, nc=nc)
     state_dict = model.state_dict()
 
+    # Check for FedProx 'mu' parameter in the input model's metadata
+    mu = 0.0
+    try:
+        metadata_path = in_model_path + "-metadata"
+        if os.path.exists(metadata_path):
+            with open(metadata_path, "r") as f:
+                input_metadata = json.load(f)
+                # Check for 'mu' or 'proximal_mu'
+                mu = input_metadata.get("mu") or input_metadata.get("proximal_mu") or 0.0
+                if mu:
+                    mu = float(mu)
+                    print(f"FedProx: mu parameter received ({mu}).")
+    except Exception as e:
+        print(f"FedProx: Failed to read input metadata: {e}")
+
     run_name = f"client_{client_index}"
     new_state, weights_path, log_tail, training_metrics = run_yolo_train(
         state_dict,
@@ -129,6 +148,7 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
         lr,
         runs_dir,
         run_name,
+        mu=mu
     )
 
     updated_model = compile_model(yolo_size, nc)
@@ -145,11 +165,35 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
         "lr": lr,
         "weights_path": weights_path,
         "yolo_size": yolo_size,
-        "yolo_size": yolo_size,
         "log_tail": log_tail,
-        "metrics": training_metrics # Add metrics to metadata
+        "metrics": training_metrics, # Add metrics to metadata
+        "mu": mu # Propagate mu to output metadata if needed for tracking
     }
     save_metadata(metadata, out_model_path)
+
+
+def proximal_loss(loss, model, server_model, mu):
+    """
+    Reference implementation of FedProx proximal term calculation.
+    
+    Args:
+        loss (torch.Tensor): The original loss value.
+        model (torch.nn.Module): The local model being trained.
+        server_model (torch.nn.Module): The global model from the previous round.
+        mu (float): The proximal term coefficient.
+        
+    Returns:
+        torch.Tensor: The modified loss with the proximal term added.
+    """
+    if mu <= 0:
+        return loss
+        
+    proximal_term = 0.0
+    for w, w_t in zip(model.parameters(), server_model.parameters()):
+        proximal_term += (w - w_t).norm(2)**2
+        
+    return loss + (mu / 2) * proximal_term
+
 
 
 def parse_args():

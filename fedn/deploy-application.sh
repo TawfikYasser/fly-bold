@@ -36,7 +36,7 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -a
 # Ensure user owns /app so we can SCP to it and install unzip and python deps
 # We aggressively clean the destination first, INCLUDING docker-compose files and STORAGE (to kill zombies)
 # CRITICAL: Stop containers FIRST so they don't hold onto deleted file handles (fixes MinIO SlowDown/Unwritable error)
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo docker ps -aq | xargs -r sudo docker rm -f && sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml /app/storage && sudo mkdir -p /app/fly-bold-fedn /app/storage && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip python3-pip && pip3 install fedn pymongo" >/dev/null
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo docker ps -aq | xargs -r sudo docker rm -f && sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml /app/storage && sudo mkdir -p /app/fly-bold-fedn /app/storage && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip python3-pip && pip3 install pymongo" >/dev/null
 
 # Copy Zip
 info "Copying fedn.zip to server..."
@@ -45,6 +45,8 @@ gcloud compute scp ../fedn.zip "$SERVER_VM":/app/fedn.zip --zone="$SERVER_ZONE" 
 # Unzip and fix structure (zip contains fedn/ folder, so we unzip to /app then rename fedn -> fly-bold-fedn)
 info "Unzipping on server..."
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip" >/dev/null
+# Install fedn from source
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="pip3 install --no-cache-dir -e /app/fly-bold-fedn/fedn" >/dev/null
 
 # Copy configs from local fedn/config
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
@@ -140,7 +142,7 @@ services:
     container_name: fedn-client-${CLIENT_ID_1}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
     extra_hosts:
       - "combiner:${SERVER_INTERNAL_IP}"
     shm_size: '4gb'
@@ -157,7 +159,7 @@ services:
     container_name: fedn-client-${CLIENT_ID_2}
     working_dir: /app
     entrypoint: ""
-    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir fedn torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
     extra_hosts:
       - "combiner:${SERVER_INTERNAL_IP}"
     shm_size: '4gb'

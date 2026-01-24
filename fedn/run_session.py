@@ -160,10 +160,22 @@ def run_simulation():
     rounds_to_run = 5
     print(f"Starting session ({rounds_to_run} rounds) with model {model_id}...")
     try:
+        aggregator_kwargs = {"mu": 0.1}
         if model_id:
-            result = client.start_session(rounds=rounds_to_run, round_timeout=7200, model_id=model_id)
+            result = client.start_session(
+                rounds=rounds_to_run,
+                round_timeout=7200,
+                model_id=model_id,
+                aggregator="fedprox",
+                aggregator_kwargs=aggregator_kwargs
+            )
         else:
-            result = client.start_session(rounds=rounds_to_run, round_timeout=7200)
+            result = client.start_session(
+                rounds=rounds_to_run,
+                round_timeout=7200,
+                aggregator="fedprox",
+                aggregator_kwargs=aggregator_kwargs
+            )
             
         print(f"Session started: {result}")
         session_id = result.get("session_id") or result.get("id")

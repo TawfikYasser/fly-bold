@@ -100,21 +100,12 @@ def validate(in_model_path: str, out_json_path: str):
     # 1. Evaluate on Validation Set
     val_metrics = run_yolo_val(str(tmp_weights), str(data_yaml), img, task="val")
     
-    # 2. Evaluate on Training Set (to capture training-like metrics for Analyzer)
-    # This approximates "training loss" by running inference on training data
-    train_metrics_eval = run_yolo_val(str(tmp_weights), str(data_yaml), img, task="train")
-
     # Combine metrics
     final_report = {}
     
     # Add Eval metrics (standard keys like mAP, loss)
     for k, v in val_metrics.items():
         final_report[k] = v  # e.g. "loss", "mAP"
-        
-    # Add Training metrics with prefix
-    for k, v in train_metrics_eval.items():
-        # Map "loss" -> "train_loss", "mAP" -> "train_mAP"
-        final_report[f"train_{k}"] = v
 
     train_images, val_images = count_images_from_yaml(str(data_yaml))
     final_report.setdefault("num_train_examples", train_images)
