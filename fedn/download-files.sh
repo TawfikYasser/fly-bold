@@ -9,8 +9,8 @@ echo "=== FEDn File Downloader ==="
 # Find regular files (preserve stderr for actual errors, only suppress 'permission denied' type messages)
 FILES=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type f \( -name '*.json' -o -name '*.log' -o -name '*.npz' -o -name '*.tar.gz' -o -name '*.yaml' \) 2>/dev/null | sort") || { echo "Warning: SSH command for files failed"; FILES=""; }
 
-# Check for analysis_plots directory
-PLOTS_DIR=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type d -name 'analysis_plots' 2>/dev/null") || { echo "Warning: SSH command for plots dir failed"; PLOTS_DIR=""; }
+# Check for analysis output directories
+PLOTS_DIR=$(gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="find /app -maxdepth 3 -type d \( -name 'analysis_plots' -o -name 'analysis_runs' \) 2>/dev/null") || { echo "Warning: SSH command for plots dir failed"; PLOTS_DIR=""; }
 
 if [ -n "$PLOTS_DIR" ]; then
   FILES="$FILES
@@ -43,7 +43,7 @@ if [ "$sel" = "all" ]; then
   for f in "${FARR[@]}"; do
     [ -z "$f" ] && continue
     echo "Downloading $f"
-    if [[ "$f" == *"analysis_plots"* ]]; then
+    if [[ "$f" == *"analysis_plots"* ]] || [[ "$f" == *"analysis_runs"* ]]; then
         gcloud compute scp --recurse "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
     else
         gcloud compute scp "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
@@ -53,7 +53,7 @@ elif [ "$sel" = "analysis" ]; then
     echo "Downloading ONLY analysis results..."
     FOUND=false
     for f in "${FARR[@]}"; do
-      if [[ "$f" == *"analysis_plots"* ]] || [[ "$f" == *"EXP_DB_Dump"* ]] || [[ "$f" == *"EXP_Reconstructed"* ]] || [[ "$f" == *"reconstructed_logs"* ]]; then
+        if [[ "$f" == *"analysis_plots"* ]] || [[ "$f" == *"analysis_runs"* ]] || [[ "$f" == *"EXP_DB_Dump"* ]] || [[ "$f" == *"EXP_Reconstructed"* ]] || [[ "$f" == *"reconstructed_logs"* ]]; then
           echo "Downloading $f"
           gcloud compute scp --recurse "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
           FOUND=true
@@ -69,7 +69,7 @@ else
     f=${FARR[$n]:-}
     [ -z "$f" ] && { echo "Invalid $n"; continue; }
     echo "Downloading $f"
-    if [[ "$f" == *"analysis_plots"* ]]; then
+    if [[ "$f" == *"analysis_plots"* ]] || [[ "$f" == *"analysis_runs"* ]]; then
         gcloud compute scp --recurse "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet
     else
         gcloud compute scp "$SERVER_VM:$f" ./downloads/ --zone="$SERVER_ZONE" --quiet

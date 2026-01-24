@@ -8,6 +8,10 @@ success(){ echo -e "\n[SUCCESS] $1\n"; }
 warn(){ echo -e "\n[WARN] $1\n"; }
 fail(){ echo -e "\n[ERROR] $1\n"; exit 1; }
 
+# Experiment ID (timestamp-based). Override by setting EXP_ID in env.
+EXP_ID=${EXP_ID:-EXP_$(date +%Y%m%d_%H%M%S)}
+info "Experiment ID: $EXP_ID"
+
 # Pre-checks
 
 # Try to load password from file
@@ -128,6 +132,9 @@ fi
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
 set -e
 cd /app/fly-bold-fedn
+EXP_ID=\"$EXP_ID\"
+REMOTE_OUT_DIR=\"/app/fly-bold-fedn/analysis_runs/$EXP_ID\"
+mkdir -p \"$REMOTE_OUT_DIR\"
 
 # Install pymongo if not already
 # Standard user installation (no sudo needed as we own /app, or use --user/env)
@@ -156,15 +163,15 @@ python3 -m pip install --no-cache-dir matplotlib pandas
 echo 'Running Experiment Analyzer...'
 # Dump reconstructed logs (validations) to JSON
 if [ -n "$SESSION_ID" ]; then
-  python3 -u experiment_analyzer.py --dump-stdout --session-id "$SESSION_ID" > reconstructed_logs.json
-  python3 -u experiment_analyzer.py --out analysis_plots --session-id "$SESSION_ID"
+  python3 -u experiment_analyzer.py --dump-stdout --session-id "$SESSION_ID" > \"$REMOTE_OUT_DIR/reconstructed_logs.json\"
+  python3 -u experiment_analyzer.py --out \"$REMOTE_OUT_DIR\" --session-id "$SESSION_ID"
 else
-  python3 -u experiment_analyzer.py --dump-stdout > reconstructed_logs.json
-  python3 -u experiment_analyzer.py --out analysis_plots
+  python3 -u experiment_analyzer.py --dump-stdout > \"$REMOTE_OUT_DIR/reconstructed_logs.json\"
+  python3 -u experiment_analyzer.py --out \"$REMOTE_OUT_DIR\"
 fi
 
 # Try to find the latest log file and generate detailed report
-LOG_FILE=$(ls -t /app/fly-bold-fedn/analysis_plots/EXP_*_logs.json 2>/dev/null | head -n 1)
+LOG_FILE=$(ls -t \"$REMOTE_OUT_DIR\"/EXP_*_logs.json 2>/dev/null | head -n 1)
 if [ -n "$LOG_FILE" ]; then
   echo "Generating detailed report from latest log: $LOG_FILE..."
   if [ -n "$SESSION_ID" ]; then
@@ -183,19 +190,22 @@ echo "analysis" | ./download-files.sh
 # 6. Local Processing & Report Generation
 info "STEP 6: Generating Verified Report Locally"
 LATEST_DUMP=$(ls -t downloads/EXP_DB_Dump_*_logs.json 2>/dev/null | head -n 1)
-RECONSTRUCTED_LOG="downloads/reconstructed_logs.json"
+LOCAL_OUT_DIR="downloads/analysis_runs/$EXP_ID"
+RECONSTRUCTED_LOG="$LOCAL_OUT_DIR/reconstructed_logs.json"
+mkdir -p "$LOCAL_OUT_DIR"
+MERGED_LOGS_PATH="$LOCAL_OUT_DIR/merged_logs_${EXP_ID}.json"
 
 if [ -f "$LATEST_DUMP" ] && [ -f "$RECONSTRUCTED_LOG" ]; then
     echo "Found latest dump: $LATEST_DUMP"
     echo "Found reconstructed logs: $RECONSTRUCTED_LOG"
     
     echo "Merging logs to recover training times..."
-    python3 merge_logs.py "$RECONSTRUCTED_LOG" "$LATEST_DUMP" "downloads/merged_logs.json"
+    python3 merge_logs.py "$RECONSTRUCTED_LOG" "$LATEST_DUMP" "$MERGED_LOGS_PATH"
     
     echo "Generating final verified report..."
-    python3 experiment_analyzer.py --logs "downloads/merged_logs.json" --out "downloads/analysis_plots/"
+    python3 experiment_analyzer.py --logs "$MERGED_LOGS_PATH" --out "$LOCAL_OUT_DIR/analysis_plots"
     
-    echo "Report generated: downloads/analysis_plots/00_detailed_report.txt"
+    echo "Report generated: $LOCAL_OUT_DIR/analysis_plots/00_detailed_report.txt"
 else
     warn "Could not find necessary log files for local report generation."
 fi
