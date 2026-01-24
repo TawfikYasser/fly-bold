@@ -46,7 +46,7 @@ gcloud compute scp ../fedn.zip "$SERVER_VM":/app/fedn.zip --zone="$SERVER_ZONE" 
 info "Unzipping on server..."
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip" >/dev/null
 # Install fedn from source
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="pip3 install --no-cache-dir -e /app/fly-bold-fedn/fedn" >/dev/null
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="pip3 install --no-cache-dir /app/fly-bold-fedn/fedn" >/dev/null
 
 # Copy configs from local fedn/config
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
@@ -153,6 +153,7 @@ services:
       - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
       - /app/datasets:/app/datasets
+      - /app/datasets_1:/app/datasets_1
   fedn-client-${CLIENT_ID_2}:
     image: ${DOCKER_IMAGE}
     user: "0:0"
@@ -170,6 +171,7 @@ services:
       - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
       - /app/datasets:/app/datasets
+      - /app/datasets_1:/app/datasets_1
 networks:
   default:
     driver: bridge

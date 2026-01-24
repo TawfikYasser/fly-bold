@@ -10,6 +10,7 @@ import time
 import config
 from fedn.utils.helpers.helpers import save_metadata
 
+from data import resolve_client_yaml
 from model import compile_model, load_parameters, save_parameters
 from yolo_utils import count_images_from_yaml, load_yolo_checkpoint_as_state_dict, save_state_dict_as_yolo_checkpoint
 import yaml
@@ -116,9 +117,7 @@ def run_yolo_train(state_dict, data_yaml: str, yolo_size: str, epochs: int, img:
 
 
 def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo_size: str, epochs: int, img: int, batch_size: int, lr: float, runs_dir: str, nc: int):
-    data_yaml = Path(data_root) / f"client_{client_index}" / "coco_client.yaml"
-    if not data_yaml.exists():
-        raise FileNotFoundError(f"Missing client data yaml: {data_yaml}")
+    data_yaml = resolve_client_yaml(data_root, client_index)
 
     model = load_parameters(in_model_path, yolo_size=yolo_size, nc=nc)
     state_dict = model.state_dict()

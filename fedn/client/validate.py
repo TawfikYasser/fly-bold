@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import config
+from data import resolve_client_yaml
 from fedn.utils.helpers.helpers import save_metrics
 
 from model import load_parameters
@@ -226,11 +227,7 @@ def validate(in_model_path: str, out_json_path: str):
     img = config.IMG_SIZE
     nc = config.YOLO_NC
 
-    data_yaml = Path(data_root) / f"client_{client_id}" / "coco_client.yaml"
-    if not data_yaml.exists():
-        raise FileNotFoundError(
-            f"Missing client data yaml at {data_yaml}. Ensure the packaged dataset is available."
-        )
+    data_yaml = resolve_client_yaml(data_root, client_id)
 
     model = load_parameters(in_model_path, yolo_size=yolo_size, nc=nc)
     tmp_weights = Path(out_json_path).with_suffix(".pt")

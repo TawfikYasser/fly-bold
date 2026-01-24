@@ -7,6 +7,23 @@ import yaml
 
 import config
 
+CLIENT_YAML_NAMES = ("coco_client.yaml", "coco_client_dataset_1.yaml")
+
+
+def resolve_client_yaml_path(client_dir: Path) -> Path:
+    for name in CLIENT_YAML_NAMES:
+        candidate = client_dir / name
+        if candidate.exists():
+            return candidate
+    expected = ", ".join(CLIENT_YAML_NAMES)
+    raise FileNotFoundError(
+        f"Missing client data yaml in {client_dir}. Expected one of: {expected}"
+    )
+
+
+def resolve_client_yaml(data_root: str, client_id: int) -> Path:
+    return resolve_client_yaml_path(Path(data_root) / f"client_{client_id}")
+
 
 def ensure_client_split(data_root: str, keep_index: int) -> Path:
     """Ensure the desired client split exists locally, downloading if missing."""
@@ -25,11 +42,11 @@ def ensure_client_split(data_root: str, keep_index: int) -> Path:
     
     if pre_partitioned_dir.exists():
         print(f"Found pre-partitioned data at {pre_partitioned_dir}")
-        yaml_path = pre_partitioned_dir / "coco_client.yaml"
-        if yaml_path.exists():
-             return pre_partitioned_dir
-        else:
-             print(f"Warning: {pre_partitioned_dir} exists but missing coco_client.yaml")
+        try:
+            resolve_client_yaml_path(pre_partitioned_dir)
+            return pre_partitioned_dir
+        except FileNotFoundError as exc:
+            print(f"Warning: {exc}")
 
     else:
         raise FileNotFoundError(

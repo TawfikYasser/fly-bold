@@ -1,0 +1,202 @@
+[
+    {
+        "round_id": 1,
+        "round_duration": 2682.3429703712463,
+        "round_eval_acc": {
+            "aggregated": 0.12640547882662698,
+            "mAP@0.5": 0.12640547882662698
+        },
+        "clients_logs": [
+            {
+                "client_id": "465d7432-a9e6-4993-b662-77c93f1426c4"
+            },
+            {
+                "client_id": "d0a1c594-9175-422a-b1cf-aa28f8588b10"
+            },
+            {
+                "client_id": "b7c33867-4b8e-44d8-a21d-903ed6abc4f1"
+            },
+            {
+                "client_id": "4457271b-8beb-47aa-a401-303b140ca05c"
+            },
+            {
+                "client_id": "22259351-4ead-4c8d-994a-98b83430e520"
+            },
+            {
+                "client_id": "28e523a2-76b9-4724-a32e-f7db62f5e768"
+            },
+            {
+                "client_id": "a8f19bf1-08a0-46b3-bcf3-781cdcb2f44c"
+            },
+            {
+                "client_id": "81f5c1be-4055-44f3-8b04-72a5fa12cc3c"
+            },
+            {
+                "client_id": "7dcc37f8-ed05-46f7-92e6-d9b10c2dc6f5"
+            },
+            {
+                "client_id": "a18e234a-b6f2-420d-84dd-cb99d4418e35"
+            }
+        ]
+    },
+    {
+        "round_id": 2,
+        "round_duration": 2677.590605020523,
+        "round_eval_acc": {
+            "aggregated": 0.12651221772654608,
+            "mAP@0.5": 0.12651221772654608
+        },
+        "clients_logs": [
+            {
+                "client_id": "465d7432-a9e6-4993-b662-77c93f1426c4"
+            },
+            {
+                "client_id": "22259351-4ead-4c8d-994a-98b83430e520"
+            },
+            {
+                "client_id": "81f5c1be-4055-44f3-8b04-72a5fa12cc3c"
+            },
+            {
+                "client_id": "a18e234a-b6f2-420d-84dd-cb99d4418e35"
+            },
+            {
+                "client_id": "d0a1c594-9175-422a-b1cf-aa28f8588b10"
+            },
+            {
+                "client_id": "a8f19bf1-08a0-46b3-bcf3-781cdcb2f44c"
+            },
+            {
+                "client_id": "7dcc37f8-ed05-46f7-92e6-d9b10c2dc6f5"
+            },
+            {
+                "client_id": "28e523a2-76b9-4724-a32e-f7db62f5e768"
+            },
+            {
+                "client_id": "b7c33867-4b8e-44d8-a21d-903ed6abc4f1"
+            },
+            {
+                "client_id": "4457271b-8beb-47aa-a401-303b140ca05c"
+            }
+        ]
+    },
+    {
+        "round_id": 3,
+        "round_duration": 2638.4567041397095,
+        "round_eval_acc": {
+            "aggregated": 0.12553472481113215,
+            "mAP@0.5": 0.12553472481113215
+        },
+        "clients_logs": [
+            {
+                "client_id": "d0a1c594-9175-422a-b1cf-aa28f8588b10"
+            },
+            {
+                "client_id": "28e523a2-76b9-4724-a32e-f7db62f5e768"
+            },
+            {
+                "client_id": "b7c33867-4b8e-44d8-a21d-903ed6abc4f1"
+            },
+            {
+                "client_id": "465d7432-a9e6-4993-b662-77c93f1426c4"
+            },
+            {
+                "client_id": "4457271b-8beb-47aa-a401-303b140ca05c"
+            },
+            {
+                "client_id": "81f5c1be-4055-44f3-8b04-72a5fa12cc3c"
+            },
+            {
+                "client_id": "a8f19bf1-08a0-46b3-bcf3-781cdcb2f44c"
+            },
+            {
+                "client_id": "a18e234a-b6f2-420d-84dd-cb99d4418e35"
+            },
+            {
+                "client_id": "7dcc37f8-ed05-46f7-92e6-d9b10c2dc6f5"
+            },
+            {
+                "client_id": "22259351-4ead-4c8d-994a-98b83430e520"
+            }
+        ]
+    },
+    {
+        "round_id": 4,
+        "round_duration": 2609.6882541179657,
+        "round_eval_acc": {
+            "aggregated": 0.12467382737493418,
+            "mAP@0.5": 0.12467382737493418
+        },
+        "clients_logs": [
+            {
+                "client_id": "465d7432-a9e6-4993-b662-77c93f1426c4"
+            },
+            {
+                "client_id": "b7c33867-4b8e-44d8-a21d-903ed6abc4f1"
+            },
+            {
+                "client_id": "4457271b-8beb-47aa-a401-303b140ca05c"
+            },
+            {
+                "client_id": "d0a1c594-9175-422a-b1cf-aa28f8588b10"
+            },
+            {
+                "client_id": "28e523a2-76b9-4724-a32e-f7db62f5e768"
+            },
+            {
+                "client_id": "22259351-4ead-4c8d-994a-98b83430e520"
+            },
+            {
+                "client_id": "7dcc37f8-ed05-46f7-92e6-d9b10c2dc6f5"
+            },
+            {
+                "client_id": "a8f19bf1-08a0-46b3-bcf3-781cdcb2f44c"
+            },
+            {
+                "client_id": "81f5c1be-4055-44f3-8b04-72a5fa12cc3c"
+            },
+            {
+                "client_id": "a18e234a-b6f2-420d-84dd-cb99d4418e35"
+            }
+        ]
+    },
+    {
+        "round_id": 5,
+        "round_duration": 2717.7891771793365,
+        "round_eval_acc": {
+            "aggregated": NaN,
+            "mAP@0.5": NaN
+        },
+        "clients_logs": [
+            {
+                "client_id": "d0a1c594-9175-422a-b1cf-aa28f8588b10"
+            },
+            {
+                "client_id": "28e523a2-76b9-4724-a32e-f7db62f5e768"
+            },
+            {
+                "client_id": "465d7432-a9e6-4993-b662-77c93f1426c4"
+            },
+            {
+                "client_id": "4457271b-8beb-47aa-a401-303b140ca05c"
+            },
+            {
+                "client_id": "22259351-4ead-4c8d-994a-98b83430e520"
+            },
+            {
+                "client_id": "b7c33867-4b8e-44d8-a21d-903ed6abc4f1"
+            },
+            {
+                "client_id": "7dcc37f8-ed05-46f7-92e6-d9b10c2dc6f5"
+            },
+            {
+                "client_id": "a8f19bf1-08a0-46b3-bcf3-781cdcb2f44c"
+            },
+            {
+                "client_id": "81f5c1be-4055-44f3-8b04-72a5fa12cc3c"
+            },
+            {
+                "client_id": "a18e234a-b6f2-420d-84dd-cb99d4418e35"
+            }
+        ]
+    }
+]

@@ -129,12 +129,12 @@ if [[ "$START_TRAINING" != "y" ]]; then
   exit 0
 fi
 
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
+REMOTE_CMD=$(cat <<'EOF'
 set -e
 cd /app/fly-bold-fedn
-EXP_ID=\"$EXP_ID\"
-REMOTE_OUT_DIR=\"/app/fly-bold-fedn/analysis_runs/$EXP_ID\"
-mkdir -p \"$REMOTE_OUT_DIR\"
+EXP_ID="__EXP_ID__"
+REMOTE_OUT_DIR="/app/fly-bold-fedn/analysis_runs/$EXP_ID"
+mkdir -p "$REMOTE_OUT_DIR"
 
 # Install pymongo if not already
 # Standard user installation (no sudo needed as we own /app, or use --user/env)
@@ -145,7 +145,7 @@ sudo apt-get update && sudo apt-get install -y python3-pip
 
 python3 -m pip install --no-cache-dir pymongo
 # Install FEDn from local source (uploaded to /app/fly-bold-fedn/fedn)
-python3 -m pip install --no-cache-dir -e /app/fly-bold-fedn/fedn
+python3 -m pip install --no-cache-dir /app/fly-bold-fedn/fedn
 
 echo 'Starting run_session.py remote execution...'
 python3 -u run_session.py
@@ -153,7 +153,7 @@ python3 -u run_session.py
 # Capture session id if available
 SESSION_ID=""
 if [ -f session-id.txt ]; then
-  SESSION_ID=$(cat session-id.txt | tr -d '[:space:]')
+  SESSION_ID="$(cat session-id.txt | tr -d '[:space:]')"
   echo "Session ID: $SESSION_ID"
 fi
 
@@ -163,15 +163,15 @@ python3 -m pip install --no-cache-dir matplotlib pandas
 echo 'Running Experiment Analyzer...'
 # Dump reconstructed logs (validations) to JSON
 if [ -n "$SESSION_ID" ]; then
-  python3 -u experiment_analyzer.py --dump-stdout --session-id "$SESSION_ID" > \"$REMOTE_OUT_DIR/reconstructed_logs.json\"
-  python3 -u experiment_analyzer.py --out \"$REMOTE_OUT_DIR\" --session-id "$SESSION_ID"
+  python3 -u experiment_analyzer.py --dump-stdout --session-id "$SESSION_ID" > "$REMOTE_OUT_DIR/reconstructed_logs.json"
+  python3 -u experiment_analyzer.py --out "$REMOTE_OUT_DIR" --session-id "$SESSION_ID"
 else
-  python3 -u experiment_analyzer.py --dump-stdout > \"$REMOTE_OUT_DIR/reconstructed_logs.json\"
-  python3 -u experiment_analyzer.py --out \"$REMOTE_OUT_DIR\"
+  python3 -u experiment_analyzer.py --dump-stdout > "$REMOTE_OUT_DIR/reconstructed_logs.json"
+  python3 -u experiment_analyzer.py --out "$REMOTE_OUT_DIR"
 fi
 
 # Try to find the latest log file and generate detailed report
-LOG_FILE=$(ls -t \"$REMOTE_OUT_DIR\"/EXP_*_logs.json 2>/dev/null | head -n 1)
+LOG_FILE="$(ls -t "$REMOTE_OUT_DIR"/EXP_*_logs.json 2>/dev/null | head -n 1)"
 if [ -n "$LOG_FILE" ]; then
   echo "Generating detailed report from latest log: $LOG_FILE..."
   if [ -n "$SESSION_ID" ]; then
@@ -180,7 +180,10 @@ if [ -n "$LOG_FILE" ]; then
     python3 -u experiment_analyzer.py --logs "$LOG_FILE"
   fi
 fi
-"
+EOF
+)
+REMOTE_CMD=${REMOTE_CMD/__EXP_ID__/$EXP_ID}
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command "$REMOTE_CMD"
 
 # 5. Download Results
 info "STEP 5: Downloading Results"

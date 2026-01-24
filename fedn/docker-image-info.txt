@@ -1,2 +1,2 @@
 DOCKER_IMAGE=anirudhsengar/fedn-runtime:latest
-BUILD_DATE=Mon Jan  5 13:19:05 UTC 2026
+BUILD_DATE=Sat Jan 24 08:11:09 UTC 2026
