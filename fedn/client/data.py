@@ -20,7 +20,7 @@ def ensure_client_split(data_root: str, keep_index: int) -> Path:
 
     # Check for pre-partitioned data
     # The default location for pre-partitioned data
-    pre_partitioned_root = Path(os.getenv("PRE_PARTITIONED_ROOT", "/app/datasets/coco_partitions"))
+    pre_partitioned_root = Path(os.getenv("PRE_PARTITIONED_ROOT", "/app/datasets_1/coco_partitions"))
     pre_partitioned_dir = pre_partitioned_root / f"client_{keep_index}"
     
     if pre_partitioned_dir.exists():

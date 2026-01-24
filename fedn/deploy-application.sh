@@ -148,7 +148,7 @@ services:
     shm_size: '4gb'
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
-      YOLO_SPLITS_TARGET: /app/datasets/coco_partitions
+      YOLO_SPLITS_TARGET: /app/datasets_1/coco_partitions
     volumes:
       - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
@@ -165,7 +165,7 @@ services:
     shm_size: '4gb'
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
-      YOLO_SPLITS_TARGET: /app/datasets/coco_partitions
+      YOLO_SPLITS_TARGET: /app/datasets_1/coco_partitions
     volumes:
       - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs

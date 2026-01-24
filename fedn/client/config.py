@@ -76,7 +76,7 @@ YOLO_NC = _get_int("YOLO_NC", 80)
 # Paths (normalize to absolute to avoid CWD issues)
 _data_root_raw = os.getenv(
     "YOLO_SPLITS_TARGET",
-    "/app/datasets/coco_partitions",
+    "/app/datasets_1/coco_partitions",
 )
 DATA_ROOT = _resolve_under_base(_data_root_raw)
 
