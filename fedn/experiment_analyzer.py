@@ -47,26 +47,93 @@ def get_mongo_connection():
         logger.error(f"Failed to connect to MongoDB: {e}")
         return None
 
-def fetch_data(db):
+def fetch_data(db, session_id: str = None):
     """Fetch raw data from MongoDB collections"""
     logger.info("Fetching data from MongoDB...")
     
     # 1. Fetch Rounds
-    rounds_cursor = db['control.rounds'].find().sort("round_id", 1)
+    rounds_query = {}
+    if session_id:
+        rounds_query = {"round_config.session_id": session_id}
+    rounds_projection = {
+        "round_id": 1,
+        "status": 1,
+        "round_config": 1,
+        "round_data": 1,
+        "combiners": 1,
+        "committed_at": 1,
+        "updated_at": 1,
+    }
+    rounds_cursor = db['control.rounds'].find(rounds_query, rounds_projection).sort("round_id", 1)
     rounds_data = list(rounds_cursor)
     logger.info(f"Fetched {len(rounds_data)} rounds")
 
     # 2. Fetch Validations
-    validations_cursor = db['control.validations'].find()
+    validations_query = {}
+    if session_id:
+        validations_query = {"session_id": session_id}
+    validations_projection = {
+        "model_id": 1,
+        "modelId": 1,
+        "data": 1,
+        "round_id": 1,
+        "session_id": 1,
+        "sender": 1,
+        "timestamp": 1,
+        "committed_at": 1,
+    }
+    validations_cursor = db['control.validations'].find(validations_query, validations_projection)
     validations_data = list(validations_cursor)
     logger.info(f"Fetched {len(validations_data)} validations")
 
     # 3. Fetch Status (for client training time)
-    status_cursor = db['control.status'].find({"status": "Model update completed."})
+    status_query = {"status": "Model update completed."}
+    if session_id:
+        status_query["session_id"] = session_id
+    status_projection = {
+        "data": 1,
+        "session_id": 1,
+        "status": 1,
+        "timestamp": 1,
+        "committed_at": 1,
+        "sender": 1,
+    }
+    status_cursor = db['control.status'].find(status_query, status_projection)
     status_data = list(status_cursor)
     logger.info(f"Fetched {len(status_data)} status completion logs")
 
-    return rounds_data, validations_data, status_data
+    # 4. Fetch Metrics (optional)
+    metrics_data = []
+    try:
+        metrics_query = {}
+        if session_id:
+            metrics_query = {"session_id": session_id}
+        metrics_projection = {
+            "key": 1,
+            "value": 1,
+            "round_id": 1,
+            "session_id": 1,
+            "sender": 1,
+            "timestamp": 1,
+        }
+        metrics_cursor = db['control.metrics'].find(metrics_query, metrics_projection)
+        metrics_data = list(metrics_cursor)
+        logger.info(f"Fetched {len(metrics_data)} metrics")
+    except Exception:
+        # Metrics collection may not exist in older deployments
+        pass
+
+    if session_id:
+        round_ids = {r.get("round_id") for r in rounds_data if r.get("round_id") is not None}
+
+        def _is_validation_for_session(v):
+            rid = v.get("round_id")
+            return rid in round_ids if rid is not None else True
+
+        # If round_id is not set in validations, keep them (session_id query already applied)
+        validations_data = [v for v in validations_data if _is_validation_for_session(v)]
+
+    return rounds_data, validations_data, status_data, metrics_data
 
 def export_to_json(df_rounds, df_clients, output_dir):
     """Reconstruct experiment log JSON from DataFrames"""
@@ -134,96 +201,29 @@ def export_to_json(df_rounds, df_clients, output_dir):
         traceback.print_exc()
         return None
 
-def main():
-    parser = argparse.ArgumentParser(description="FedN Analyzer")
-    parser.add_argument("--mock", action="store_true", help="Use mock data")
-    parser.add_argument("--out", default="analysis_plots", help="Output directory")
-    parser.add_argument("--logs", help="Path to logs JSON file for detailed report")
-    parser.add_argument("--dump-stdout", action="store_true", help="Print reconstructed logs to stdout")
-    args = parser.parse_args()
-    
-    output_dir = Path(args.out)
-    output_dir.mkdir(exist_ok=True)
-    
-    # Direct Log Parsing Mode (No DB)
-    if args.logs:
-        logger.info(f"Generating report from logs: {args.logs}")
-        generate_detailed_report(args.logs, output_dir)
-        return
-
-    # Data Fetching
-    if args.mock:
-        df_rounds, df_clients = mock_data_generator()
-    else:
-        db = get_mongo_connection()
-        if db is None:
-            return
-        rounds_raw, val_raw = fetch_data(db)
-        df_rounds, df_clients = process_data(rounds_raw, val_raw)
-        
-    if df_rounds.empty:
-        logger.error("No valid data found to process.")
-        return
-
-    # Stdout Dump Mode
-    if args.dump_stdout:
-        # Reconstruct data structure
-        export_data = []
-        for _, row in df_rounds.iterrows():
-            rid = int(row['round_id'])
-            round_clients = df_clients[df_clients['round_id'] == rid]
-            client_logs = []
-            for _, c_row in round_clients.iterrows():
-                client_logs.append({
-                    'name': str(c_row['client_id']),
-                    'client_eval_num_examples': 500,
-                    'client_train_num_examples': int(c_row.get('train_examples', 1000))
-                })
-            
-            round_obj = {
-                'round_id': rid,
-                'round_duration': float(row.get('duration', 0)),
-                'round_eval_acc': {
-                    'aggregated': float(row.get('eval_agg', 0)),
-                    'mAP@0.5': float(row.get('eval_mAP50', 0)),
-                    'mAP': float(row.get('eval_mAP', 0)),
-                    'mr': float(row.get('eval_mr', 0)),
-                    'mp': float(row.get('eval_mp', 0))
-                },
-                'clients_logs': client_logs,
-                'lr': 0.005
-            }
-            export_data.append(round_obj)
-            
-        def default(o):
-            if isinstance(o, (np.int_, np.intc, np.intp, np.int8,
-                            np.int16, np.int32, np.int64, np.uint8,
-                            np.uint16, np.uint32, np.uint64)):
-                return int(o)
-            elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
-                return float(o)
-            elif isinstance(o, (np.ndarray,)):
-                return o.tolist()
-            return str(o)
-            
-        # Print ONLY the JSON to stdout
-        print(json.dumps(export_data, indent=2, default=default))
-        return
-
-    # Normal Analysis Mode
-    # generate_summary_statistics(df_rounds, df_clients, output_dir)
-    plot_metrics(df_rounds, df_clients, output_dir)
-    
-    # Export Reconstructed JSON and Generate Detailed Report
-    json_path = export_to_json(df_rounds, df_clients, output_dir)
-    if json_path:
-        logger.info(f"Generating detailed report from reconstructed logs...")
-        generate_detailed_report(json_path, output_dir)
-    
-    logger.info("Analysis complete.")
-
-def process_data(rounds_data, validations_data, status_data=[]):
+def process_data(rounds_data, validations_data, status_data=None, metrics_data=None):
     """Process raw MongoDB data into structured DataFrames"""
+    if status_data is None:
+        status_data = []
+    if metrics_data is None:
+        metrics_data = []
+
+    def _normalize_round_id(value):
+        try:
+            if hasattr(value, 'item'):
+                value = value.item()
+            return int(value)
+        except Exception:
+            return value
+
+    def _round_sort_key(value):
+        try:
+            return int(value)
+        except Exception:
+            return str(value)
+
+    # Ensure rounds are processed in numeric order when possible
+    rounds_data = sorted(rounds_data, key=lambda r: _round_sort_key(r.get('round_id')))
     
     # --- Process Validations ---
     # Validation data map: model_id -> metrics
@@ -234,9 +234,10 @@ def process_data(rounds_data, validations_data, status_data=[]):
     
     # 1. Map from combiners
     for r in rounds_data:
-        rid = r.get('round_id')
-        if rid is None: continue
-        
+        rid = _normalize_round_id(r.get('round_id'))
+        if rid is None:
+            continue
+
         combiners = r.get('combiners', [])
         if isinstance(combiners, list):
             for c in combiners:
@@ -244,6 +245,15 @@ def process_data(rounds_data, validations_data, status_data=[]):
                     model_to_round[str(c.get('model_id'))] = rid
         if 'model_id' in r:
             model_to_round[str(r['model_id'])] = rid
+
+    # Map round_config.model_id to the producing round (previous round)
+    sorted_rounds = sorted(rounds_data, key=lambda r: _round_sort_key(r.get('round_id')))
+    for idx in range(1, len(sorted_rounds)):
+        prev_round_id = _normalize_round_id(sorted_rounds[idx - 1].get('round_id'))
+        rc = sorted_rounds[idx].get('round_config') or {}
+        rc_model_id = rc.get('model_id')
+        if rc_model_id:
+            model_to_round[str(rc_model_id)] = prev_round_id
             
     # 2. Heuristic temporal mapping for missing links
     # Identify unique validated models and sort by time
@@ -260,9 +270,9 @@ def process_data(rounds_data, validations_data, status_data=[]):
     
     # Map strictly index -> index to rounds
     for idx, mid in enumerate(unique_val_model_ids):
-        if idx < len(rounds_data):
-            r = rounds_data[idx]
-            rid = r.get('round_id')
+        if idx < len(sorted_rounds):
+            r = sorted_rounds[idx]
+            rid = _normalize_round_id(r.get('round_id'))
             if str(mid) not in model_to_round:
                model_to_round[str(mid)] = rid
 
@@ -278,9 +288,12 @@ def process_data(rounds_data, validations_data, status_data=[]):
             data = json.loads(data_str) if isinstance(data_str, str) else data_str
             
             # Identify Client
-            sender_name = v.get('sender', {}).get('name', 'unknown')
-            client_id_match = re.search(r'(\d+)$', sender_name)
-            client_id = client_id_match.group(1) if client_id_match else sender_name
+            sender = v.get('sender', {}) or {}
+            client_id = sender.get('client_id') or sender.get('clientId')
+            if not client_id:
+                sender_name = sender.get('name', 'unknown')
+                client_id_match = re.search(r'(\d+)$', sender_name)
+                client_id = client_id_match.group(1) if client_id_match else sender_name
             
             # Identify Round
             mid = v.get('model_id') or v.get('modelId')
@@ -301,29 +314,41 @@ def process_data(rounds_data, validations_data, status_data=[]):
             # --- Extract Training Metrics (if available from previous validation-on-train run) ---
             # Our updated validate.py puts 'train_loss' etc in the main keys
             
+            normalized_round_id = _normalize_round_id(round_id)
+
+            raw_eval_loss = data.get('loss', data.get('eval_loss', data.get('client_eval_loss', np.nan)))
+            if (raw_eval_loss == 0 or raw_eval_loss == 0.0) and (
+                float(data.get('box_loss', 0.0)) == 0.0 and
+                float(data.get('obj_loss', 0.0)) == 0.0 and
+                float(data.get('cls_loss', 0.0)) == 0.0
+            ):
+                raw_eval_loss = np.nan
+
             client_records.append({
-                'round_id': getattr(round_id, 'item', lambda: round_id)() if hasattr(round_id, 'item') else round_id, # handle numpy scalar
+                'round_id': normalized_round_id,
                 'client_id': client_id,
-                'eval_mr': float(data.get('mr', data.get('eval_mr', np.nan))),
-                'eval_mp': float(data.get('mp', data.get('eval_mp', np.nan))),
-                'eval_mAP50': float(data.get('mAP@0.5', data.get('eval_mAP50', np.nan))),
-                'eval_mAP': float(data.get('mAP', data.get('eval_mAP', np.nan))),
-                'eval_agg': float(data.get('aggregated', data.get('eval_agg', data.get('mAP@0.5', np.nan)))), # Default agg to mAP@0.5 if not explicit
-                'eval_examples': int(data.get('num_val_examples', 0)),
-                'eval_loss': float(data.get('loss', data.get('eval_loss', np.nan))),
+                'eval_mr': float(data.get('mr', data.get('eval_mr', data.get('client_eval_acc_mr', np.nan)))),
+                'eval_mp': float(data.get('mp', data.get('eval_mp', data.get('client_eval_acc_mp', np.nan)))),
+                'eval_mAP50': float(data.get('mAP@0.5', data.get('eval_mAP50', data.get('client_eval_acc_mAP@0.5', np.nan)))),
+                'eval_mAP': float(data.get('mAP', data.get('eval_mAP', data.get('client_eval_acc_mAP', np.nan)))),
+                'eval_agg': float(data.get('aggregated', data.get('eval_agg', data.get('mAP@0.5', data.get('client_eval_acc_mAP@0.5', np.nan))))), # Default agg to mAP@0.5 if not explicit
+                'eval_examples': int(data.get('num_val_examples', data.get('num-examples', 0))),
+                'eval_loss': float(raw_eval_loss) if not pd.isna(raw_eval_loss) else np.nan,
                 
                 # Training metrics (from validate.py validation-on-train)
-                'train_loss': float(data.get('train_loss', np.nan)),
-                'train_mAP': float(data.get('train_mAP', np.nan)),
-                'train_mAP50': float(data.get('train_mAP@0.5', np.nan)),
-                'train_mp': float(data.get('train_mp', np.nan)),
-                'train_mr': float(data.get('train_mr', np.nan)),
+                'train_loss': float(data.get('train_loss', data.get('client_train_loss', np.nan))),
+                'train_mAP': float(data.get('train_mAP', data.get('client_train_acc_mAP', np.nan))),
+                'train_mAP50': float(data.get('train_mAP@0.5', data.get('client_train_acc_mAP@0.5', np.nan))),
+                'train_mp': float(data.get('train_mp', data.get('client_train_acc_mp', np.nan))),
+                'train_mr': float(data.get('train_mr', data.get('client_train_acc_mr', np.nan))),
                 'train_agg': float(data.get('train_mAP@0.5', np.nan)), # Proxy agg
                 'train_examples': int(data.get('num_train_examples', 0)),
                 
                 # Time Placeholders (will fill from status logs)
                 'train_time': np.nan,
-                'eval_time': np.nan
+                'eval_time': float(data.get('eval_time', data.get('client_eval_time', np.nan))),
+                'data_received_from_server': float(data.get('data_received_from_server', np.nan)),
+                'data_sent_to_server': float(data.get('data_sent_to_server', np.nan))
             })
             
         except Exception as e:
@@ -364,6 +389,8 @@ def process_data(rounds_data, validations_data, status_data=[]):
                          training_meta = meta.get('training_metadata', {})
                          t_metrics = training_meta.get('metrics', {})
                          lr = training_meta.get('lr')
+                         round_duration = training_meta.get('round_duration')
+                         train_examples = training_meta.get('num_examples')
                          
                          key = (str(r_id), str(c_id))
                          if key not in client_status_map:
@@ -374,21 +401,143 @@ def process_data(rounds_data, validations_data, status_data=[]):
                         
                          if lr is not None:
                              client_status_map[key]['lr'] = float(lr)
+
+                         if round_duration is not None:
+                             try:
+                                 client_status_map[key]['round_duration'] = float(round_duration)
+                             except Exception:
+                                 pass
+
+                         if train_examples is not None:
+                             try:
+                                 client_status_map[key]['train_examples'] = int(train_examples)
+                             except Exception:
+                                 pass
                              
                          # Extract metrics provided by updated train.py
                          for m_key, m_val in t_metrics.items():
                              # m_key like 'train_loss', 'train_mAP'
-                             client_status_map[key][m_key] = float(m_val)
+                             try:
+                                 client_status_map[key][m_key] = float(m_val)
+                             except Exception:
+                                 client_status_map[key][m_key] = m_val
+
+                             # Map Flower-style keys to internal names
+                             if m_key == 'client_train_loss':
+                                 client_status_map[key]['train_loss'] = float(m_val)
+                             if m_key == 'client_train_acc_mr':
+                                 client_status_map[key]['train_mr'] = float(m_val)
+                             if m_key == 'client_train_acc_mp':
+                                 client_status_map[key]['train_mp'] = float(m_val)
+                             if m_key == 'client_train_acc_mAP@0.5':
+                                 client_status_map[key]['train_mAP50'] = float(m_val)
+                             if m_key == 'client_train_acc_mAP':
+                                 client_status_map[key]['train_mAP'] = float(m_val)
+                             if m_key == 'client_train_time':
+                                 client_status_map[key]['train_time'] = float(m_val)
+                             if m_key == 'data_received_from_server':
+                                 client_status_map[key]['data_received_from_server'] = float(m_val)
+                             if m_key == 'data_sent_to_server':
+                                 client_status_map[key]['data_sent_to_server'] = float(m_val)
+
+                             # Map precision/recall to mp/mr for plotting
+                             if m_key == 'train_precision':
+                                 client_status_map[key]['train_mp'] = float(m_val)
+                             if m_key == 'train_recall':
+                                 client_status_map[key]['train_mr'] = float(m_val)
 
         except Exception as e:
             continue
 
     df_clients = pd.DataFrame(client_records)
 
+    # Add status-only records for rounds without validations
+    if client_status_map:
+        existing_keys = set()
+        if not df_clients.empty:
+            existing_keys = {(str(r), str(c)) for r, c in zip(df_clients['round_id'], df_clients['client_id'])}
+
+        status_only_records = []
+        for (r_id, c_id), metrics in client_status_map.items():
+            if (str(r_id), str(c_id)) in existing_keys:
+                continue
+            try:
+                normalized_round_id = int(r_id)
+            except Exception:
+                normalized_round_id = r_id
+
+            status_only_records.append({
+                'round_id': normalized_round_id,
+                'client_id': c_id,
+                'eval_mr': np.nan,
+                'eval_mp': np.nan,
+                'eval_mAP50': np.nan,
+                'eval_mAP': np.nan,
+                'eval_agg': np.nan,
+                'eval_examples': 0,
+                'eval_loss': np.nan,
+                'train_loss': metrics.get('train_loss', np.nan),
+                'train_mAP': metrics.get('train_mAP', np.nan),
+                'train_mAP50': metrics.get('train_mAP50', np.nan),
+                'train_mp': metrics.get('train_mp', np.nan),
+                'train_mr': metrics.get('train_mr', np.nan),
+                'train_precision': metrics.get('train_precision', np.nan),
+                'train_recall': metrics.get('train_recall', np.nan),
+                'train_agg': metrics.get('train_mAP50', np.nan),
+                'train_examples': metrics.get('train_examples', 0),
+                'train_time': metrics.get('train_time', np.nan),
+                'eval_time': np.nan,
+                'lr': metrics.get('lr', np.nan),
+                'data_received_from_server': metrics.get('data_received_from_server', np.nan),
+                'data_sent_to_server': metrics.get('data_sent_to_server', np.nan),
+            })
+
+        if status_only_records:
+            df_clients = pd.concat([df_clients, pd.DataFrame(status_only_records)], ignore_index=True)
+
+    # --- Process Metrics Store (optional) ---
+    if metrics_data:
+        metric_map = {}
+        for m in metrics_data:
+            key = m.get('key')
+            value = m.get('value')
+            round_id = m.get('round_id')
+            sender = m.get('sender', {}) or {}
+            client_id = sender.get('client_id') or sender.get('clientId')
+            if not client_id:
+                sender_name = sender.get('name', 'unknown')
+                match = re.search(r'(\d+)$', sender_name)
+                client_id = match.group(1) if match else sender_name
+
+            if key is None or value is None or round_id is None:
+                continue
+            try:
+                round_id = int(round_id)
+            except Exception:
+                pass
+
+            metric_key = (str(round_id), str(client_id))
+            if metric_key not in metric_map:
+                metric_map[metric_key] = {}
+            metric_map[metric_key][key] = value
+
+        if not df_clients.empty:
+            def merge_metric_store(row):
+                rid = str(row['round_id'])
+                cid = str(row['client_id'])
+                return pd.Series(metric_map.get((rid, cid), {}))
+
+            metric_updates = df_clients.apply(merge_metric_store, axis=1)
+            for col in metric_updates.columns:
+                if col in df_clients.columns:
+                    df_clients[col] = metric_updates[col].combine_first(df_clients[col])
+                else:
+                    df_clients[col] = metric_updates[col]
+
     # Merge status info
     if not df_clients.empty:
         # Columns to potentially fill/overwrite
-        cols_to_merge = ['train_time', 'lr', 'train_loss', 'train_mAP', 'train_mAP50', 'train_mp', 'train_mr']
+        cols_to_merge = ['train_time', 'lr', 'train_loss', 'train_mAP', 'train_mAP50', 'train_mp', 'train_mr', 'train_precision', 'train_recall', 'round_duration', 'data_received_from_server', 'data_sent_to_server']
         
         def merge_status_metrics(row):
             rid = str(row['round_id'])
@@ -404,15 +553,26 @@ def process_data(rounds_data, validations_data, status_data=[]):
         # Apply updates
         status_updates = df_clients.apply(merge_status_metrics, axis=1)
         for col in status_updates.columns:
-            # Fill NaNs or overwrite?
-            # Prefer Status Metric if it exists.
-            # If df_clients[col] is NaN, fill it.
-            # If df_clients[col] has value (from validate.py), overwrite?
-            # User implies native is better. Let's overwrite.
             if col in df_clients.columns:
-                 df_clients[col].update(status_updates[col])
+                df_clients[col] = status_updates[col].combine_first(df_clients[col])
             else:
-                 df_clients[col] = status_updates[col]
+                df_clients[col] = status_updates[col]
+
+        # Derive train_agg from train_mAP50 when missing
+        if 'train_agg' in df_clients.columns and 'train_mAP50' in df_clients.columns:
+            df_clients.loc[df_clients['train_agg'].isna(), 'train_agg'] = df_clients['train_mAP50']
+
+        # Map train precision/recall (if present) to train_mp/train_mr
+        if 'train_precision' in df_clients.columns:
+            if 'train_mp' in df_clients.columns:
+                df_clients.loc[df_clients['train_mp'].isna(), 'train_mp'] = df_clients['train_precision']
+            else:
+                df_clients['train_mp'] = df_clients['train_precision']
+        if 'train_recall' in df_clients.columns:
+            if 'train_mr' in df_clients.columns:
+                df_clients.loc[df_clients['train_mr'].isna(), 'train_mr'] = df_clients['train_recall']
+            else:
+                df_clients['train_mr'] = df_clients['train_recall']
 
     # Drop duplicates if any
     if not df_clients.empty:
@@ -424,10 +584,7 @@ def process_data(rounds_data, validations_data, status_data=[]):
     for r in rounds_data:
         rid_raw = r.get('round_id')
         if rid_raw is None: continue
-        try:
-             rid = int(rid_raw)
-        except:
-             rid = rid_raw
+        rid = _normalize_round_id(rid_raw)
         
         # Calculate Aggregated Eval Metrics for this round from clients
         # (Since rounds DB entry often lacks the aggregated result)
@@ -437,11 +594,41 @@ def process_data(rounds_data, validations_data, status_data=[]):
              round_clients = df_clients[df_clients['round_id'] == rid]
         
         # Base round info
+        # Derive duration from FEDn combiner training time (preferred)
+        duration = 0.0
+        combiners = r.get('combiners', []) or []
+        for c in combiners:
+            if not isinstance(c, dict):
+                continue
+            if c.get('time_exec_training') is not None:
+                duration = float(c.get('time_exec_training'))
+                break
+        if duration == 0.0:
+            # Fallback to combiner combination time, then commit time
+            for c in combiners:
+                if not isinstance(c, dict):
+                    continue
+                c_data = c.get('data') or {}
+                if c_data.get('time_combination') is not None:
+                    duration = float(c_data.get('time_combination'))
+                    break
+        if duration == 0.0:
+            round_data = r.get('round_data') or {}
+            rd_time_commit = round_data.get('time_commit')
+            if rd_time_commit is not None:
+                duration = float(rd_time_commit)
+
+        # Additional reduce timings if available
+        reduce_data = (r.get('round_data') or {}).get('reduce') or {}
+
         rec = {
             'round_id': rid,
-            'duration': float(r.get('round_duration', 0) if 'round_duration' in r else 0),
+            'duration': duration,
             'data_mb': float(r.get('data_transferred_mb', 0) if 'data_transferred_mb' in r else 0),
             'lr': np.nan, # Default
+            'reduce_time_aggregate_model': reduce_data.get('time_aggregate_model'),
+            'reduce_time_fetch_model': reduce_data.get('time_fetch_model'),
+            'reduce_time_load_model': reduce_data.get('time_load_model'),
             
             # Train Metrics (Aggregate)
             'train_mr': np.nan,
@@ -468,6 +655,8 @@ def process_data(rounds_data, validations_data, status_data=[]):
             rec['eval_mAP50'] = round_clients['eval_mAP50'].mean()
             rec['eval_mAP'] = round_clients['eval_mAP'].mean()
             rec['eval_agg'] = round_clients['eval_agg'].mean()
+            if 'eval_loss' in round_clients: rec['eval_loss'] = round_clients['eval_loss'].mean()
+            if 'eval_time' in round_clients: rec['eval_time'] = round_clients['eval_time'].mean()
             
             # Aggregate Training Metrics (from status/workaround)
             if 'train_loss' in round_clients: rec['train_loss'] = round_clients['train_loss'].mean()
@@ -477,12 +666,27 @@ def process_data(rounds_data, validations_data, status_data=[]):
             if 'train_mr' in round_clients: rec['train_mr'] = round_clients['train_mr'].mean()
             if 'train_agg' in round_clients: rec['train_agg'] = round_clients['train_agg'].mean()
             if 'lr' in round_clients: rec['lr'] = round_clients['lr'].mean()
+
+            # Derive data transfer from client metrics if missing in round record
+            if (rec.get('data_mb', 0) == 0 or pd.isna(rec.get('data_mb'))) and 'data_received_from_server' in round_clients and 'data_sent_to_server' in round_clients:
+                try:
+                    total_bytes = (round_clients['data_received_from_server'].fillna(0) + round_clients['data_sent_to_server'].fillna(0)).sum()
+                    rec['data_mb'] = float(total_bytes) / (1024 ** 2)
+                except Exception:
+                    pass
             
         round_records.append(rec)
         
     df_rounds = pd.DataFrame(round_records)
-    
+
+    if not df_rounds.empty and 'round_id' in df_rounds.columns:
+        df_rounds = df_rounds.sort_values(by='round_id', key=lambda s: s.map(_round_sort_key)).reset_index(drop=True)
+
+    if not df_clients.empty and 'round_id' in df_clients.columns:
+        df_clients = df_clients.sort_values(by='round_id', key=lambda s: s.map(_round_sort_key)).reset_index(drop=True)
+
     return df_rounds, df_clients
+
 
 def mock_data_generator():
     """Generate realistic mock data similar to Flower experiment"""
@@ -540,15 +744,16 @@ def mock_data_generator():
     
     return df_rounds, df_clients
 
-# ==================== PLOTTING FUNCTIONS ====================
 
 def plot_train_vs_eval_metrics(df_rounds, output_dir):
     """Plot training vs evaluation metrics side by side"""
     try:
+        if not df_rounds.empty and 'round_id' in df_rounds.columns:
+            df_rounds = df_rounds.sort_values(by='round_id').reset_index(drop=True)
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-        fig.suptitle('Training vs Validation Performance Over Rounds', 
+        fig.suptitle('Training vs Validation Performance Over Rounds',
                      fontsize=16, fontweight='bold', y=0.995)
-        
+
         metrics = [
             ('mr', 'Mean Recall (mR)'),
             ('mp', 'Mean Precision (mP)'),
@@ -556,74 +761,81 @@ def plot_train_vs_eval_metrics(df_rounds, output_dir):
             ('mAP', 'mAP@0.5:0.95'),
             ('agg', 'Aggregated Score'),
         ]
-        
+
         for idx, (metric, title) in enumerate(metrics):
             row, col = idx // 3, idx % 3
             ax = axes[row, col]
-            
+
             # Check if columns exist
             if f'train_{metric}' not in df_rounds.columns or f'eval_{metric}' not in df_rounds.columns:
                 continue
 
-            # Plot both train and eval
-            ax.plot(df_rounds['round_id'], df_rounds[f'train_{metric}'], 
-                    marker='o', linewidth=2.5, markersize=8, label='Training', 
-                    color='#2E86AB', alpha=0.8)
-            ax.plot(df_rounds['round_id'], df_rounds[f'eval_{metric}'], 
-                    marker='s', linewidth=2.5, markersize=8, label='Validation', 
-                    color='#A23B72', alpha=0.8)
-            
-            # Fill area between for visualization
-            ax.fill_between(df_rounds['round_id'], 
-                            df_rounds[f'train_{metric}'].fillna(0), 
+            train_series = df_rounds[f'train_{metric}']
+            eval_series = df_rounds[f'eval_{metric}']
+            train_mask = train_series.notna()
+            eval_mask = eval_series.notna()
+
+            # Fill area between for visualization (draw first so lines stay visible)
+            ax.fill_between(df_rounds['round_id'],
+                            df_rounds[f'train_{metric}'].fillna(0),
                             df_rounds[f'eval_{metric}'].fillna(0),
-                            alpha=0.2, color='gray')
-            
+                            alpha=0.2, color='gray', zorder=1)
+
+            # Plot both train and eval (avoid connecting across NaNs)
+            ax.plot(df_rounds.loc[train_mask, 'round_id'], df_rounds.loc[train_mask, f'train_{metric}'],
+                    marker='o', linewidth=2.5, markersize=8, label='Training',
+                    color='#2E86AB', alpha=0.9, zorder=3)
+            ax.plot(df_rounds.loc[eval_mask, 'round_id'], df_rounds.loc[eval_mask, f'eval_{metric}'],
+                    marker='s', linewidth=2.5, markersize=8, label='Validation',
+                    color='#A23B72', alpha=0.9, zorder=3)
+
             # Annotations on last point
             if not df_rounds.empty:
                 last_train = df_rounds[f'train_{metric}'].iloc[-1]
                 last_eval = df_rounds[f'eval_{metric}'].iloc[-1]
                 last_round = df_rounds['round_id'].iloc[-1]
-                
+
                 if not np.isnan(last_train):
-                    ax.annotate(f'{last_train:.3f}', 
+                    ax.annotate(f'{last_train:.3f}',
                                (last_round, last_train),
-                               textcoords="offset points", xytext=(5, 5), 
+                               textcoords="offset points", xytext=(5, 5),
                                ha='left', fontsize=9, fontweight='bold', color='#2E86AB')
                 if not np.isnan(last_eval):
-                    ax.annotate(f'{last_eval:.3f}', 
+                    ax.annotate(f'{last_eval:.3f}',
                                (last_round, last_eval),
-                               textcoords="offset points", xytext=(5, -12), 
+                               textcoords="offset points", xytext=(5, -12),
                                ha='left', fontsize=9, fontweight='bold', color='#A23B72')
-            
+
             ax.set_xlabel('Round', fontsize=11, fontweight='bold')
             ax.set_ylabel(title.split('(')[0].strip(), fontsize=11)
             ax.set_title(title, fontsize=12, fontweight='bold', pad=10)
             ax.legend(loc='best', fontsize=10)
             ax.grid(True, alpha=0.3, linestyle='--')
             ax.set_xticks(df_rounds['round_id'])
-        
+
         # Loss comparison in the 6th subplot
         fig.delaxes(axes[1, 2])
         if 'train_loss' in df_rounds.columns and 'eval_loss' in df_rounds.columns:
             ax_loss = fig.add_subplot(2, 3, 6)
-            
-            ax_loss.plot(df_rounds['round_id'], df_rounds['train_loss'], 
-                        marker='o', linewidth=2.5, markersize=8, label='Training', 
-                        color='#C73E1D', alpha=0.8)
-            ax_loss.plot(df_rounds['round_id'], df_rounds['eval_loss'], 
-                        marker='s', linewidth=2.5, markersize=8, label='Validation', 
-                        color='#F18F01', alpha=0.8)
-            
+
+            train_mask = df_rounds['train_loss'].notna()
+            eval_mask = df_rounds['eval_loss'].notna()
+            ax_loss.plot(df_rounds.loc[train_mask, 'round_id'], df_rounds.loc[train_mask, 'train_loss'],
+                        marker='o', linewidth=2.5, markersize=8, label='Training',
+                        color='#C73E1D', alpha=0.9, zorder=3)
+            ax_loss.plot(df_rounds.loc[eval_mask, 'round_id'], df_rounds.loc[eval_mask, 'eval_loss'],
+                        marker='s', linewidth=2.5, markersize=8, label='Validation',
+                        color='#F18F01', alpha=0.9, zorder=3)
+
             ax_loss.set_xlabel('Round', fontsize=11, fontweight='bold')
             ax_loss.set_ylabel('Loss', fontsize=11)
             ax_loss.set_title('Training vs Validation Loss', fontsize=12, fontweight='bold', pad=10)
             ax_loss.legend(loc='best', fontsize=10)
             ax_loss.grid(True, alpha=0.3, linestyle='--')
             ax_loss.set_xticks(df_rounds['round_id'])
-        
+
         plt.tight_layout()
-        plt.savefig(f"{output_dir}/01_train_vs_eval_metrics.png", 
+        plt.savefig(f"{output_dir}/01_train_vs_eval_metrics.png",
                     dpi=300, bbox_inches='tight')
         plt.close()
     except Exception as e:
@@ -634,9 +846,9 @@ def plot_generalization_gap(df_rounds, output_dir):
     """Plot the generalization gap (train - eval) for all metrics"""
     try:
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-        fig.suptitle('Generalization Gap Analysis (Training - Validation)', 
+        fig.suptitle('Generalization Gap Analysis (Training - Validation)',
                      fontsize=16, fontweight='bold')
-        
+
         metrics = [
             ('mr', 'Mean Recall Gap'),
             ('mp', 'Mean Precision Gap'),
@@ -645,12 +857,12 @@ def plot_generalization_gap(df_rounds, output_dir):
             ('agg', 'Aggregated Score Gap'),
             ('loss', 'Loss Gap (Train - Val)')
         ]
-        
+
         valid_metrics_count = 0
         for idx, (metric, title) in enumerate(metrics):
             row, col = idx // 3, idx % 3
             ax = axes[row, col]
-            
+
             gap = None
             if metric == 'loss':
                  if 'train_loss' in df_rounds.columns and 'eval_loss' in df_rounds.columns:
@@ -661,42 +873,42 @@ def plot_generalization_gap(df_rounds, output_dir):
 
             if gap is None:
                 continue
-            
+
             valid_metrics_count += 1
-            
+
             # Color based on whether gap is positive (overfitting) or negative
             colors = ['#C73E1D' if g > 0 else '#6A994E' for g in gap.fillna(0)]
-            
-            bars = ax.bar(df_rounds['round_id'], gap, color=colors, alpha=0.7, 
-                         edgecolor='black', linewidth=1.5)
+
+            ax.bar(df_rounds['round_id'], gap, color=colors, alpha=0.7,
+                   edgecolor='black', linewidth=1.5)
             ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, linewidth=2)
-            
+
             # Add value annotations
-            for i, (r, g) in enumerate(zip(df_rounds['round_id'], gap)):
+            for r, g in zip(df_rounds['round_id'], gap):
                 if not np.isnan(g):
-                    ax.text(r, g, f'{g:.3f}', 
-                           ha='center', va='bottom' if g > 0 else 'top', 
+                    ax.text(r, g, f'{g:.3f}',
+                           ha='center', va='bottom' if g > 0 else 'top',
                            fontsize=9, fontweight='bold')
-            
+
             ax.set_xlabel('Round', fontsize=11, fontweight='bold')
             ax.set_ylabel('Gap', fontsize=11)
             ax.set_title(title, fontsize=12, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.3, axis='y')
             ax.set_xticks(df_rounds['round_id'])
-            
+
             # Add interpretation text
             if not gap.empty:
                 avg_gap = gap.mean()
                 status = "Overfitting" if avg_gap > 0.02 else "Good Generalization"
                 color = '#C73E1D' if avg_gap > 0.02 else '#6A994E'
-                ax.text(0.02, 0.98, f'Avg: {avg_gap:.3f}\n{status}', 
+                ax.text(0.02, 0.98, f'Avg: {avg_gap:.3f}\n{status}',
                        transform=ax.transAxes, fontsize=9,
                        verticalalignment='top',
                        bbox=dict(boxstyle='round', facecolor=color, alpha=0.3))
-        
+
         if valid_metrics_count > 0:
             plt.tight_layout()
-            plt.savefig(f"{output_dir}/02_generalization_gap.png", 
+            plt.savefig(f"{output_dir}/02_generalization_gap.png",
                         dpi=300, bbox_inches='tight')
             plt.close()
     except Exception as e:
@@ -706,48 +918,52 @@ def plot_generalization_gap(df_rounds, output_dir):
 def plot_client_performance_heatmap(df_clients, output_dir):
     """Heatmap showing each client's performance across rounds"""
     try:
-        if df_clients.empty: return
+        if df_clients.empty:
+            return
 
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-        fig.suptitle('Client Performance Evolution', 
+        fig.suptitle('Client Performance Evolution',
                      fontsize=15, fontweight='bold')
-        
+
         metrics_data = [
             ('train_agg', 'Training Aggregated Score', axes[0, 0]),
             ('eval_agg', 'Validation Aggregated Score', axes[0, 1]),
             ('train_mAP50', 'Training mAP@0.5', axes[1, 0]),
             ('eval_mAP50', 'Validation mAP@0.5', axes[1, 1])
         ]
-        
+
         valid_plots = 0
         for metric, title, ax in metrics_data:
             if metric not in df_clients.columns or 'round_id' not in df_clients.columns:
                 continue
-                
+
             pivot = df_clients.pivot(index='client_id', columns='round_id', values=metric)
-            if pivot.empty: continue
-            
+            if pivot.empty:
+                continue
+
             valid_plots += 1
-            
+
             # Create heatmap
             min_val = pivot.values.min()
             max_val = pivot.values.max()
-            if np.isnan(min_val): min_val = 0
-            if np.isnan(max_val): max_val = 1
-            
-            im = ax.imshow(pivot.values, cmap='RdYlGn', aspect='auto', 
-                          vmin=min_val*0.95, vmax=max_val*1.02)
-            
+            if np.isnan(min_val):
+                min_val = 0
+            if np.isnan(max_val):
+                max_val = 1
+
+            im = ax.imshow(pivot.values, cmap='RdYlGn', aspect='auto',
+                          vmin=min_val * 0.95, vmax=max_val * 1.02)
+
             # Set ticks
             ax.set_xticks(np.arange(len(pivot.columns)))
             ax.set_yticks(np.arange(len(pivot.index)))
             ax.set_xticklabels([f'R{c}' for c in pivot.columns], fontsize=10)
             ax.set_yticklabels([f'C{i}' for i in pivot.index], fontsize=10)
-            
+
             # Add colorbar
             cbar = plt.colorbar(im, ax=ax)
             cbar.set_label(title, rotation=270, labelpad=20, fontsize=11)
-            
+
             # Annotate cells
             for i in range(len(pivot.index)):
                 for j in range(len(pivot.columns)):
@@ -755,16 +971,16 @@ def plot_client_performance_heatmap(df_clients, output_dir):
                     if not np.isnan(value):
                         text_color = 'white' if value < pivot.values.mean() else 'black'
                         ax.text(j, i, f'{value:.2f}',
-                               ha="center", va="center", color=text_color, 
+                               ha="center", va="center", color=text_color,
                                fontsize=8, fontweight='bold')
-            
+
             ax.set_xlabel('Round', fontsize=12, fontweight='bold')
             ax.set_ylabel('Client ID', fontsize=12, fontweight='bold')
             ax.set_title(title, fontsize=13, fontweight='bold', pad=10)
-        
+
         if valid_plots > 0:
             plt.tight_layout()
-            plt.savefig(f"{output_dir}/03_client_performance_heatmap.png", 
+            plt.savefig(f"{output_dir}/03_client_performance_heatmap.png",
                         dpi=300, bbox_inches='tight')
             plt.close()
     except Exception as e:
@@ -1172,6 +1388,149 @@ def plot_communication_overhead(df_rounds, output_dir):
         logger.error(f"Error plotting communication overhead: {e}")
 
 
+def plot_per_client_analysis(df_clients, output_dir):
+    """Generate individual plots for each client showing train/val accuracy and round times"""
+    try:
+        if df_clients.empty:
+            return
+
+        clients = sorted(df_clients['client_id'].unique())
+
+        for client_id in clients:
+            client_data = df_clients[df_clients['client_id'] == client_id].sort_values('round_id')
+            if client_data.empty:
+                continue
+
+            fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+            fig.suptitle(f'Client {client_id} Performance Analysis',
+                         fontsize=16, fontweight='bold', y=0.995)
+
+            rounds = client_data['round_id'].values
+
+            # 1. Train vs Val Aggregated Score
+            ax = axes[0, 0]
+            ax.fill_between(rounds,
+                            client_data['train_agg'].fillna(0),
+                            client_data['eval_agg'].fillna(0),
+                            alpha=0.2, color='gray', zorder=1)
+            ax.plot(rounds, client_data['train_agg'],
+                    marker='o', linewidth=2.5, markersize=8, label='Training',
+                    color='#2E86AB', alpha=0.9, zorder=3)
+            ax.plot(rounds, client_data['eval_agg'],
+                    marker='s', linewidth=2.5, markersize=8, label='Validation',
+                    color='#A23B72', alpha=0.9, zorder=3)
+
+            if len(rounds) > 0:
+                last_round = rounds[-1]
+                last_train_agg = client_data['train_agg'].iloc[-1]
+                last_eval_agg = client_data['eval_agg'].iloc[-1]
+                if not np.isnan(last_train_agg):
+                    ax.annotate(f'{last_train_agg:.3f}', (last_round, last_train_agg),
+                                textcoords="offset points", xytext=(5, 5),
+                                ha='left', fontsize=9, fontweight='bold', color='#2E86AB')
+                if not np.isnan(last_eval_agg):
+                    ax.annotate(f'{last_eval_agg:.3f}', (last_round, last_eval_agg),
+                                textcoords="offset points", xytext=(5, -12),
+                                ha='left', fontsize=9, fontweight='bold', color='#A23B72')
+
+            ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Score', fontsize=11)
+            ax.set_title('Aggregated Score (Train vs Val)', fontsize=13, fontweight='bold', pad=10)
+            ax.legend(loc='best', fontsize=10)
+            ax.grid(True, alpha=0.3, linestyle='--')
+            ax.set_xticks(rounds)
+
+            # 2. Train vs Val mAP@0.5
+            ax = axes[0, 1]
+            ax.fill_between(rounds,
+                            client_data['train_mAP50'].fillna(0),
+                            client_data['eval_mAP50'].fillna(0),
+                            alpha=0.2, color='gray', zorder=1)
+            ax.plot(rounds, client_data['train_mAP50'],
+                    marker='o', linewidth=2.5, markersize=8, label='Training',
+                    color='#F18F01', alpha=0.9, zorder=3)
+            ax.plot(rounds, client_data['eval_mAP50'],
+                    marker='s', linewidth=2.5, markersize=8, label='Validation',
+                    color='#C73E1D', alpha=0.9, zorder=3)
+
+            if len(rounds) > 0:
+                last_round = rounds[-1]
+                last_train_map50 = client_data['train_mAP50'].iloc[-1]
+                last_eval_map50 = client_data['eval_mAP50'].iloc[-1]
+                if not np.isnan(last_train_map50):
+                    ax.annotate(f'{last_train_map50:.3f}', (last_round, last_train_map50),
+                                textcoords="offset points", xytext=(5, 5),
+                                ha='left', fontsize=9, fontweight='bold', color='#F18F01')
+                if not np.isnan(last_eval_map50):
+                    ax.annotate(f'{last_eval_map50:.3f}', (last_round, last_eval_map50),
+                                textcoords="offset points", xytext=(5, -12),
+                                ha='left', fontsize=9, fontweight='bold', color='#C73E1D')
+
+            ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+            ax.set_ylabel('mAP@0.5', fontsize=11)
+            ax.set_title('mAP@0.5 (Train vs Val)', fontsize=13, fontweight='bold', pad=10)
+            ax.legend(loc='best', fontsize=10)
+            ax.grid(True, alpha=0.3, linestyle='--')
+            ax.set_xticks(rounds)
+
+            # 3. Train vs Val mAP@0.5:0.95
+            ax = axes[1, 0]
+            ax.fill_between(rounds,
+                            client_data['train_mAP'].fillna(0),
+                            client_data['eval_mAP'].fillna(0),
+                            alpha=0.2, color='gray', zorder=1)
+            ax.plot(rounds, client_data['train_mAP'],
+                    marker='o', linewidth=2.5, markersize=8, label='Training',
+                    color='#6A994E', alpha=0.9, zorder=3)
+            ax.plot(rounds, client_data['eval_mAP'],
+                    marker='s', linewidth=2.5, markersize=8, label='Validation',
+                    color='#BC4B51', alpha=0.9, zorder=3)
+
+            if len(rounds) > 0:
+                last_round = rounds[-1]
+                last_train_map = client_data['train_mAP'].iloc[-1]
+                last_eval_map = client_data['eval_mAP'].iloc[-1]
+                if not np.isnan(last_train_map):
+                    ax.annotate(f'{last_train_map:.3f}', (last_round, last_train_map),
+                                textcoords="offset points", xytext=(5, 5),
+                                ha='left', fontsize=9, fontweight='bold', color='#6A994E')
+                if not np.isnan(last_eval_map):
+                    ax.annotate(f'{last_eval_map:.3f}', (last_round, last_eval_map),
+                                textcoords="offset points", xytext=(5, -12),
+                                ha='left', fontsize=9, fontweight='bold', color='#BC4B51')
+
+            ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+            ax.set_ylabel('mAP@0.5:0.95', fontsize=11)
+            ax.set_title('mAP@0.5:0.95 (Train vs Val)', fontsize=13, fontweight='bold', pad=10)
+            ax.legend(loc='best', fontsize=10)
+            ax.grid(True, alpha=0.3, linestyle='--')
+            ax.set_xticks(rounds)
+
+            # 4. Training Time per Round
+            ax = axes[1, 1]
+            train_time_min = client_data['train_time'] / 60
+            ax.bar(rounds, train_time_min, color='#2E86AB', alpha=0.7,
+                   edgecolor='black', linewidth=1.5)
+            ax.plot(rounds, train_time_min, 'ro-', linewidth=2, markersize=8)
+
+            for round_id, time_val in zip(rounds, train_time_min):
+                ax.text(round_id, time_val, f'{time_val:.1f}m',
+                        ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+            ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Training Time (minutes)', fontsize=11)
+            ax.set_title('Training Time per Round', fontsize=13, fontweight='bold', pad=10)
+            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_xticks(rounds)
+
+            plt.tight_layout()
+            plt.savefig(f"{output_dir}/08_client_{client_id}_analysis.png",
+                        dpi=300, bbox_inches='tight')
+            plt.close()
+    except Exception as e:
+        logger.error(f"Error plotting per-client analysis: {e}")
+
+
 def generate_summary_report(df_rounds, df_clients, output_dir):
     """Generate comprehensive text summary"""
     summary = []
@@ -1203,17 +1562,23 @@ def generate_summary_report(df_rounds, df_clients, output_dir):
         train_initial = df_rounds.iloc[0]['train_agg']
         train_final = df_rounds.iloc[-1]['train_agg']
         train_best = df_rounds['train_agg'].max()
-        train_best_round = df_rounds['train_agg'].idxmax()
-        
+        train_best_idx = df_rounds['train_agg'].idxmax()
+        train_best_round = df_rounds.loc[train_best_idx, 'round_id'] if pd.notna(train_best_idx) else train_best_idx
+
         summary.append(f"  Initial Training Score:.................... {train_initial:.4f}")
         summary.append(f"  Final Training Score:...................... {train_final:.4f}")
         summary.append(f"  Best Training Score:....................... {train_best:.4f} (Round {train_best_round})")
-        summary.append(f"  Training Improvement:...................... {train_final - train_initial:.4f} ({(train_final-train_initial)/train_initial*100:+.2f}%)")
+        train_improvement_pct = (train_final - train_initial) / train_initial * 100 if train_initial else 0.0
+        summary.append(f"  Training Improvement:...................... {train_final - train_initial:.4f} ({train_improvement_pct:+.2f}%)")
         summary.append("")
         if 'train_mAP50' in df_rounds.columns:
-            summary.append(f"  Best Training mAP@0.5:..................... {df_rounds['train_mAP50'].max():.4f} (Round {df_rounds['train_mAP50'].idxmax()})")
+            train_map50_idx = df_rounds['train_mAP50'].idxmax()
+            train_map50_round = df_rounds.loc[train_map50_idx, 'round_id'] if pd.notna(train_map50_idx) else train_map50_idx
+            summary.append(f"  Best Training mAP@0.5:..................... {df_rounds['train_mAP50'].max():.4f} (Round {train_map50_round})")
         if 'train_mAP' in df_rounds.columns:
-            summary.append(f"  Best Training mAP:......................... {df_rounds['train_mAP'].max():.4f} (Round {df_rounds['train_mAP'].idxmax()})")
+            train_map_idx = df_rounds['train_mAP'].idxmax()
+            train_map_round = df_rounds.loc[train_map_idx, 'round_id'] if pd.notna(train_map_idx) else train_map_idx
+            summary.append(f"  Best Training mAP:......................... {df_rounds['train_mAP'].max():.4f} (Round {train_map_round})")
         if 'train_loss' in df_rounds.columns:
             summary.append(f"  Final Training Loss:....................... {df_rounds['train_loss'].iloc[-1]:.4f}")
         summary.append("")
@@ -1225,17 +1590,23 @@ def generate_summary_report(df_rounds, df_clients, output_dir):
         eval_initial = df_rounds.iloc[0]['eval_agg']
         eval_final = df_rounds.iloc[-1]['eval_agg']
         eval_best = df_rounds['eval_agg'].max()
-        eval_best_round = df_rounds['eval_agg'].idxmax()
-        
+        eval_best_idx = df_rounds['eval_agg'].idxmax()
+        eval_best_round = df_rounds.loc[eval_best_idx, 'round_id'] if pd.notna(eval_best_idx) else eval_best_idx
+
         summary.append(f"  Initial Validation Score:.................. {eval_initial:.4f}")
         summary.append(f"  Final Validation Score:.................... {eval_final:.4f}")
         summary.append(f"  Best Validation Score:..................... {eval_best:.4f} (Round {eval_best_round})")
-        summary.append(f"  Validation Improvement:.................... {eval_final - eval_initial:.4f} ({(eval_final-eval_initial)/eval_initial*100:+.2f}%)")
+        eval_improvement_pct = (eval_final - eval_initial) / eval_initial * 100 if eval_initial else 0.0
+        summary.append(f"  Validation Improvement:.................... {eval_final - eval_initial:.4f} ({eval_improvement_pct:+.2f}%)")
         summary.append("")
         if 'eval_mAP50' in df_rounds.columns:
-            summary.append(f"  Best Validation mAP@0.5:................... {df_rounds['eval_mAP50'].max():.4f} (Round {df_rounds['eval_mAP50'].idxmax()})")
+            eval_map50_idx = df_rounds['eval_mAP50'].idxmax()
+            eval_map50_round = df_rounds.loc[eval_map50_idx, 'round_id'] if pd.notna(eval_map50_idx) else eval_map50_idx
+            summary.append(f"  Best Validation mAP@0.5:................... {df_rounds['eval_mAP50'].max():.4f} (Round {eval_map50_round})")
         if 'eval_mAP' in df_rounds.columns:
-            summary.append(f"  Best Validation mAP:....................... {df_rounds['eval_mAP'].max():.4f} (Round {df_rounds['eval_mAP'].idxmax()})")
+            eval_map_idx = df_rounds['eval_mAP'].idxmax()
+            eval_map_round = df_rounds.loc[eval_map_idx, 'round_id'] if pd.notna(eval_map_idx) else eval_map_idx
+            summary.append(f"  Best Validation mAP:....................... {df_rounds['eval_mAP'].max():.4f} (Round {eval_map_round})")
         if 'eval_loss' in df_rounds.columns:
             summary.append(f"  Final Validation Loss:..................... {df_rounds['eval_loss'].iloc[-1]:.4f}")
         summary.append("")
@@ -1266,11 +1637,15 @@ def generate_summary_report(df_rounds, df_clients, output_dir):
     if 'duration' in df_rounds.columns:
         total_time = df_rounds['duration'].sum()
         avg_round = df_rounds['duration'].mean()
-        
+        shortest_idx = df_rounds['duration'].idxmin()
+        longest_idx = df_rounds['duration'].idxmax()
+        shortest_round = df_rounds.loc[shortest_idx, 'round_id'] if pd.notna(shortest_idx) else shortest_idx
+        longest_round = df_rounds.loc[longest_idx, 'round_id'] if pd.notna(longest_idx) else longest_idx
+
         summary.append(f"  Total Training Time:....................... {total_time/60:.2f} min ({total_time/3600:.2f} hours)")
         summary.append(f"  Average Round Duration:.................... {avg_round/60:.2f} min")
-        summary.append(f"  Shortest Round:............................ {df_rounds['duration'].min()/60:.2f} min (Round {df_rounds['duration'].idxmin()})")
-        summary.append(f"  Longest Round:............................. {df_rounds['duration'].max()/60:.2f} min (Round {df_rounds['duration'].idxmax()})")
+        summary.append(f"  Shortest Round:............................ {df_rounds['duration'].min()/60:.2f} min (Round {shortest_round})")
+        summary.append(f"  Longest Round:............................. {df_rounds['duration'].max()/60:.2f} min (Round {longest_round})")
         summary.append("")
     
     if not df_clients.empty:
@@ -1422,6 +1797,7 @@ def main():
     parser.add_argument("--logs", type=str, help="Path to JSON logs file (bypasses DB connection)")
     parser.add_argument("--dump-stdout", action="store_true", help="Dump fetched data to stdout and exit")
     parser.add_argument("--out", type=str, default="analysis_plots", help="Output directory for plots")
+    parser.add_argument("--session-id", help="Filter by session id")
     
     args = parser.parse_args()
     
@@ -1461,13 +1837,13 @@ def main():
         db = get_mongo_connection()
         if db is None:
             return
-        rounds_data, validations_data, status_data = fetch_data(db)
+        rounds_data, validations_data, status_data, metrics_data = fetch_data(db, session_id=args.session_id)
         
         if args.dump_stdout:
             # Reconstruct and dump
             # This logic was used to create the reconstructed_logs.json
             # We'll stick to the previous 'export_to_json' logic but print to stdout
-            df_r, df_c = process_data(rounds_data, validations_data, status_data)
+            df_r, df_c = process_data(rounds_data, validations_data, status_data, metrics_data)
             reconstructed = []
             if not df_r.empty:
                 for _, row in df_r.iterrows():
@@ -1497,7 +1873,7 @@ def main():
             print(json.dumps(reconstructed, indent=4))
             return
             
-        df_rounds, df_clients = process_data(rounds_data, validations_data, status_data)
+        df_rounds, df_clients = process_data(rounds_data, validations_data, status_data, metrics_data)
     
     print("Generating summary statistics...")
     generate_summary_report(df_rounds, df_clients, output_dir)
@@ -1522,6 +1898,9 @@ def main():
     
     print("  - Communication Overhead...")
     plot_communication_overhead(df_rounds, output_dir)
+
+    print("  - Per-Client Analysis...")
+    plot_per_client_analysis(df_clients, output_dir)
     
     print(f"\n✓ Analysis complete! All plots saved to '{output_dir}/' directory")
 

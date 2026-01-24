@@ -5,6 +5,7 @@ import sys
 import sys
 from pathlib import Path
 import csv
+import time
 
 import config
 from fedn.utils.helpers.helpers import save_metadata
@@ -122,22 +123,59 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
     model = load_parameters(in_model_path, yolo_size=yolo_size, nc=nc)
     state_dict = model.state_dict()
 
-    # Check for FedProx 'mu' parameter in the input model's metadata
+    def _safe_float(value, default=0.0):
+        try:
+            return float(value)
+        except Exception:
+            return float(default)
+
+    def _safe_int(value, default=None):
+        try:
+            return int(value)
+        except Exception:
+            return default
+
+    def _safe_filesize(path: str) -> int:
+        try:
+            return int(os.path.getsize(path)) if os.path.exists(path) else 0
+        except Exception:
+            return 0
+
+    # Check for FedProx 'mu' parameter and round info in the input model's metadata
     mu = 0.0
+    server_round_number = None
+    num_rounds = None
     try:
         metadata_path = in_model_path + "-metadata"
         if os.path.exists(metadata_path):
             with open(metadata_path, "r") as f:
                 input_metadata = json.load(f)
-                # Check for 'mu' or 'proximal_mu'
-                mu = input_metadata.get("mu") or input_metadata.get("proximal_mu") or 0.0
-                if mu:
-                    mu = float(mu)
-                    print(f"FedProx: mu parameter received ({mu}).")
+
+            # Check for 'mu' or 'proximal_mu'
+            mu = input_metadata.get("mu") or input_metadata.get("proximal_mu") or 0.0
+            if mu:
+                mu = float(mu)
+                print(f"FedProx: mu parameter received ({mu}).")
+
+            cfg = input_metadata.get("config")
+            if isinstance(cfg, str):
+                try:
+                    cfg = json.loads(cfg)
+                except Exception:
+                    cfg = None
+            if isinstance(cfg, dict):
+                server_round_number = cfg.get("round_id") or cfg.get("server_round_number")
+                num_rounds = cfg.get("num_rounds") or cfg.get("rounds")
+
+            if server_round_number is None:
+                server_round_number = input_metadata.get("round_id")
+            if num_rounds is None:
+                num_rounds = input_metadata.get("num_rounds")
     except Exception as e:
         print(f"FedProx: Failed to read input metadata: {e}")
 
     run_name = f"client_{client_index}"
+    train_start = time.perf_counter()
     new_state, weights_path, log_tail, training_metrics = run_yolo_train(
         state_dict,
         str(data_yaml),
@@ -150,12 +188,42 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
         run_name,
         mu=mu
     )
+    train_end = time.perf_counter()
+    round_duration = train_end - train_start
 
     updated_model = compile_model(yolo_size, nc)
     updated_model.load_state_dict(new_state, strict=False)
     save_parameters(updated_model, out_model_path)
 
     train_images, _ = count_images_from_yaml(str(data_yaml))
+    data_received_from_server = _safe_filesize(in_model_path)
+    data_sent_to_server = _safe_filesize(out_model_path)
+
+    # Ensure Flower-style keys are present in training metrics
+    train_loss = _safe_float(training_metrics.get("train_loss"))
+    train_mr = _safe_float(training_metrics.get("train_recall", training_metrics.get("train_mr", 0.0)))
+    train_mp = _safe_float(training_metrics.get("train_precision", training_metrics.get("train_mp", 0.0)))
+    train_map50 = _safe_float(training_metrics.get("train_mAP50", training_metrics.get("train_mAP@0.5", 0.0)))
+    train_map = _safe_float(training_metrics.get("train_mAP", 0.0))
+
+    training_metrics.update({
+        "client_train_time": _safe_float(round_duration),
+        "client_train_loss": train_loss,
+        "client_train_acc_mr": train_mr,
+        "client_train_acc_mp": train_mp,
+        "client_train_acc_mAP@0.5": train_map50,
+        "client_train_acc_mAP": train_map,
+        "data_received_from_server": _safe_float(data_received_from_server),
+        "data_sent_to_server": _safe_float(data_sent_to_server),
+        "num_rounds": _safe_float(num_rounds, 0.0) if num_rounds is not None else 0.0,
+        "server_round_number": _safe_float(server_round_number, 0.0) if server_round_number is not None else 0.0,
+        "round_duration": _safe_float(round_duration),
+        "round_start_time": _safe_float(train_start),
+        "round_end_time": _safe_float(train_end),
+        "num-examples": _safe_float(train_images),
+        "client_id": _safe_float(client_index),
+        "lr": _safe_float(lr),
+    })
     metadata = {
         "num_examples": train_images,
         "client_id": client_index,
@@ -167,7 +235,14 @@ def train(in_model_path, out_model_path, client_index: int, data_root: str, yolo
         "yolo_size": yolo_size,
         "log_tail": log_tail,
         "metrics": training_metrics, # Add metrics to metadata
-        "mu": mu # Propagate mu to output metadata if needed for tracking
+        "mu": mu, # Propagate mu to output metadata if needed for tracking
+        "round_start_time": train_start,
+        "round_end_time": train_end,
+        "round_duration": round_duration,
+        "data_received_from_server": data_received_from_server,
+        "data_sent_to_server": data_sent_to_server,
+        "server_round_number": _safe_int(server_round_number),
+        "num_rounds": _safe_int(num_rounds),
     }
     save_metadata(metadata, out_model_path)
 

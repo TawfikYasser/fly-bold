@@ -5,9 +5,9 @@ set -euo pipefail
 
 info(){ echo -e "\n[INFO] $1\n"; }
 success(){ echo -e "\n[SUCCESS] $1\n"; }
+warn(){ echo -e "\n[WARN] $1\n"; }
 fail(){ echo -e "\n[ERROR] $1\n"; exit 1; }
 
-# Pre-checks
 # Pre-checks
 
 # Try to load password from file
@@ -143,20 +143,35 @@ python3 -m pip install --no-cache-dir -e /app/fly-bold-fedn/fedn
 echo 'Starting run_session.py remote execution...'
 python3 -u run_session.py
 
+# Capture session id if available
+SESSION_ID=""
+if [ -f session-id.txt ]; then
+  SESSION_ID=$(cat session-id.txt | tr -d '[:space:]')
+  echo "Session ID: $SESSION_ID"
+fi
+
 # Install matplotlib for analyzer
 python3 -m pip install --no-cache-dir matplotlib pandas
 
 echo 'Running Experiment Analyzer...'
-echo 'Running Experiment Analyzer...'
 # Dump reconstructed logs (validations) to JSON
-python3 -u experiment_analyzer.py --dump-stdout > reconstructed_logs.json
-python3 -u experiment_analyzer.py
+if [ -n "$SESSION_ID" ]; then
+  python3 -u experiment_analyzer.py --dump-stdout --session-id "$SESSION_ID" > reconstructed_logs.json
+  python3 -u experiment_analyzer.py --out analysis_plots --session-id "$SESSION_ID"
+else
+  python3 -u experiment_analyzer.py --dump-stdout > reconstructed_logs.json
+  python3 -u experiment_analyzer.py --out analysis_plots
+fi
 
 # Try to find the latest log file and generate detailed report
-LOG_FILE=$(ls -t /app/EXP_*_logs.json 2>/dev/null | head -n 1)
+LOG_FILE=$(ls -t /app/fly-bold-fedn/analysis_plots/EXP_*_logs.json 2>/dev/null | head -n 1)
 if [ -n "$LOG_FILE" ]; then
   echo "Generating detailed report from latest log: $LOG_FILE..."
-  python3 -u experiment_analyzer.py --logs "$LOG_FILE"
+  if [ -n "$SESSION_ID" ]; then
+    python3 -u experiment_analyzer.py --logs "$LOG_FILE" --session-id "$SESSION_ID"
+  else
+    python3 -u experiment_analyzer.py --logs "$LOG_FILE"
+  fi
 fi
 "
 

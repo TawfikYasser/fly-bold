@@ -86,13 +86,7 @@ RUNS_DIR = _resolve_under_base(_runs_dir_raw)
 # Identity
 CLIENT_ID = _get_int("FEDN_CLIENT_ID", 0)
 YOLO_CLIENT_INDEX_ENV = os.getenv("YOLO_CLIENT_INDEX")
-YOLO_NUM_CLIENTS = _get_int("YOLO_NUM_CLIENTS", 5)
-
-# Remote dataset (Hugging Face)
-HF_DATASET_REPO = os.getenv("HF_DATASET_REPO", "anirudhsengar/coco")
-HF_DATASET_SUBDIR = os.getenv("HF_DATASET_SUBDIR")
-HF_TOKEN = os.getenv("HF_TOKEN")
-
+YOLO_NUM_CLIENTS = _get_int("YOLO_NUM_CLIENTS", 10)
 
 def _client_index_from_fedn() -> int:
     fedn_raw = os.getenv("FEDN_CLIENT_ID")
