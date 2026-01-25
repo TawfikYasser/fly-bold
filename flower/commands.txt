@@ -6,3 +6,22 @@ gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sud
 
 
 ./deploy-application.sh && ./manage-clients.sh stop --all && ./manage-clients.sh server-fresh && gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr run .' && ./manage-clients.sh start --all
+
+
+gcloud compute scp filter-coco.sh partition-tmp-vm:/tmp/ --zone=us-central1-a
+
+
+# For generating a new dataset partitioning
+
+# Copy files to tmp VM (if not already there)
+gcloud compute scp generate_partitions.py create_custom_dataset.sh .env vm-info.txt \
+    partition-tmp-vm:/tmp/ --zone=us-central1-a
+
+# SSH to tmp VM
+gcloud compute ssh partition-tmp-vm --zone=us-central1-a
+
+# Run the interactive script
+cd /tmp
+chmod +x create_custom_dataset.sh
+./create_custom_dataset.sh
+```

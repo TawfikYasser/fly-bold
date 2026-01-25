@@ -1,36 +1,6 @@
 #!/bin/bash
 set -e
 
-################################################################################
-# WHAT THIS SCRIPT DOES:
-# 
-# This script automates the entire COCO dataset partitioning workflow:
-#
-# PHASE 1: Setup (Lines 20-80)
-#   - Creates a temporary VM with high specs for heavy computation
-#   - Waits for VM to boot and SSH to become available
-#   - Copies required scripts (.py, .sh, .env, vm-info.txt) to temp VM
-#
-# PHASE 2: Partition Generation (Lines 82-150)
-#   - Installs Python dependencies on temp VM (numpy, matplotlib, seaborn)
-#   - Runs generate_partitions.py to create 4 dataset manifests
-#   - Each manifest defines how to split COCO into 10 client partitions
-#   - Uploads manifests and plots to GCS for backup
-#
-# PHASE 3: Data Distribution (Lines 152-250)
-#   - Runs partition-dataset.sh on temp VM
-#   - The temp VM SSHes to each of the 5 client VMs
-#   - Downloads partitioned images/labels from GCS to client VMs
-#   - Creates YAML config files on each client
-#   - Verifies data integrity
-#
-# PHASE 4: Cleanup (Lines 252-280)
-#   - Copies manifests and plots back to local machine
-#   - Optionally deletes the temporary VM
-#
-# RESULT: 4 complete datasets ready for federated learning experiments
-################################################################################
-
 PROJECT_ID="inf022"
 ZONE="us-central1-a"
 VM_NAME="partition-tmp-vm"
@@ -93,10 +63,68 @@ for i in $(seq 1 $MAX_RETRIES); do
     sleep 10
 done
 
+# Create /app directory on VM with proper permissions
+echo "[INFO] Creating /app directory on VM..."
+gcloud compute ssh "$VM_NAME" --zone="$ZONE" --quiet --command="sudo mkdir -p /app && sudo chown -R $USER:$USER /app"
+
 # Copy files to VM
 echo "[INFO] Copying files to VM..."
 gcloud compute scp "$PY_SCRIPT" "$SH_SCRIPT" "$ENV_FILE" "$VM_INFO_FILE" \
-    "$VM_NAME:/tmp/" --zone="$ZONE" --quiet
+    "$VM_NAME:/app/" --zone="$ZONE" --quiet
+################################################################################
+# PHASE 1.5: GET USER INPUT FOR DATASET CONFIGURATION
+################################################################################
+
+echo ""
+echo "=========================================="
+echo "Dataset Configuration"
+echo "=========================================="
+echo ""
+
+# Get dataset ID
+while true; do
+    read -p "Enter dataset ID (e.g., dataset_5, exp_heterog_v2): " DATASET_ID
+    if [ -n "$DATASET_ID" ]; then
+        echo "[INFO] Dataset ID: $DATASET_ID"
+        break
+    else
+        echo "[ERROR] Dataset ID cannot be empty"
+    fi
+done
+
+# Get IID clients
+while true; do
+    read -p "Enter IID client IDs (comma-separated, e.g., 0,3,5) or 'none' for all non-IID: " IID_CLIENTS
+    if [ -n "$IID_CLIENTS" ]; then
+        echo "[INFO] IID Clients: $IID_CLIENTS"
+        break
+    else
+        echo "[ERROR] Input cannot be empty (use 'none' for all non-IID)"
+    fi
+done
+
+# Display configuration summary
+echo ""
+echo "=========================================="
+echo "Configuration Summary"
+echo "=========================================="
+echo "  Dataset ID: $DATASET_ID"
+echo "  IID Clients: $IID_CLIENTS"
+echo "  Train range: Will be read from .env"
+echo "  Val range: Will be read from .env"
+echo "=========================================="
+echo ""
+
+read -p "Proceed with this configuration? (y/n) [y]: " confirm
+confirm=${confirm:-y}
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "[INFO] Aborted by user"
+    exit 0
+fi
+
+# Export variables to pass to VM
+export DATASET_ID
+export IID_CLIENTS
 
 ################################################################################
 # PHASE 2: INSTALL DEPENDENCIES AND GENERATE MANIFESTS
@@ -139,8 +167,8 @@ echo "[VM] Setup complete!"
 SETUP_SCRIPT
 
 # Copy and run setup script
-gcloud compute scp /tmp/vm_setup.sh "$VM_NAME:/tmp/" --zone="$ZONE" --quiet
-gcloud compute ssh "$VM_NAME" --zone="$ZONE" --quiet --command="bash /tmp/vm_setup.sh"
+gcloud compute scp /tmp/vm_setup.sh "$VM_NAME:/app/" --zone="$ZONE" --quiet
+gcloud compute ssh "$VM_NAME" --zone="$ZONE" --quiet --command="sudo bash /app/vm_setup.sh"
 
 ################################################################################
 # PHASE 3: RUN PARTITION WORKFLOW
@@ -150,13 +178,6 @@ echo ""
 echo "=========================================="
 echo "PHASE 3: Running partition workflow"
 echo "=========================================="
-echo ""
-echo "This will:"
-echo "  1. Generate 4 dataset partition manifests"
-echo "  2. Distribute data to all client VMs"
-echo "  3. Verify data integrity"
-echo ""
-echo "This may take 30-60 minutes..."
 echo ""
 
 # Create wrapper script that runs the partition workflow
@@ -168,7 +189,7 @@ set -o pipefail
 # Ensure output is not buffered
 export PYTHONUNBUFFERED=1
 
-cd /tmp
+cd /app
 
 echo "[WORKFLOW] Starting partition workflow..."
 
@@ -185,8 +206,14 @@ fi
 chmod +x partition-dataset.sh
 echo "[WORKFLOW] partition-dataset.sh is executable"
 
+# Export user inputs for partition-dataset.sh
+export DATASET_ID="$DATASET_ID"
+export IID_CLIENTS="$IID_CLIENTS"
+
 # Run the partition workflow
-echo "[WORKFLOW] Running partition-dataset.sh..."
+echo "[WORKFLOW] Running partition-dataset.sh with:"
+echo "[WORKFLOW]   DATASET_ID=$DATASET_ID"
+echo "[WORKFLOW]   IID_CLIENTS=$IID_CLIENTS"
 ./partition-dataset.sh
 
 echo ""
@@ -194,7 +221,7 @@ echo "[WORKFLOW] ✅ Partition workflow complete!"
 WORKFLOW_SCRIPT
 
 # Copy and execute workflow
-gcloud compute scp /tmp/run_workflow.sh "$VM_NAME:/tmp/" --zone="$ZONE" --quiet
+gcloud compute scp /tmp/run_workflow.sh "$VM_NAME:/app/" --zone="$ZONE" --quiet
 
 echo "[INFO] Executing partition workflow on VM..."
 echo "[INFO] (Streaming live output from VM)"
@@ -202,8 +229,11 @@ echo ""
 
 # Execute with proper TTY allocation for live streaming
 # Use --ssh-flag to force pseudo-terminal allocation
-gcloud compute ssh "$VM_NAME" --zone="$ZONE" --ssh-flag="-t" --command="bash -l /tmp/run_workflow.sh"
-
+gcloud compute ssh "$VM_NAME" --zone="$ZONE" --ssh-flag="-t" --command="
+export DATASET_ID='$DATASET_ID'
+export IID_CLIENTS='$IID_CLIENTS'
+bash -l /app/run_workflow.sh
+"
 if [ $? -ne 0 ]; then
     echo ""
     echo "ERROR: Partition workflow failed on VM"
@@ -224,35 +254,26 @@ mkdir -p partition_outputs
 
 # Copy manifests
 echo "[INFO] Downloading manifests..."
-for dataset_id in 1 2 3 4; do
-    gcloud compute scp \
-        "$VM_NAME:/tmp/partition_manifest_dataset_${dataset_id}.json" \
-        "partition_outputs/" \
-        --zone="$ZONE" --quiet 2>/dev/null || \
-        echo "  [WARNING] Dataset ${dataset_id} manifest not found"
-done
+gcloud compute scp \
+    "$VM_NAME:/app/partition_manifest_dataset_${DATASET_ID}.json" \
+    "partition_outputs/" \
+    --zone="$ZONE" --quiet 2>/dev/null || \
+    echo "  [WARNING] Dataset ${DATASET_ID} manifest not found"
 
 # Copy plots
 echo "[INFO] Downloading plots..."
-for dataset_id in 1 2 3 4; do
-    gcloud compute scp --recurse \
-        "$VM_NAME:/tmp/client_plots_dataset_${dataset_id}" \
-        "partition_outputs/" \
-        --zone="$ZONE" --quiet 2>/dev/null || \
-        echo "  [WARNING] Dataset ${dataset_id} plots not found"
-done
+gcloud compute scp --recurse \
+    "$VM_NAME:/app/client_plots_dataset_${DATASET_ID}" \
+    "partition_outputs/" \
+    --zone="$ZONE" --quiet 2>/dev/null || \
+    echo "  [WARNING] Dataset ${DATASET_ID} plots not found"
 
 echo ""
 echo "=========================================="
 echo "✅ SUCCESS! Workflow complete"
 echo "=========================================="
 echo ""
-echo "Results:"
-ls -lh partition_manifest_dataset_*.json 2>/dev/null || echo "  No manifests found"
-echo ""
-echo "Plots:"
-ls -d partition_outputs/client_plots_dataset_* 2>/dev/null || echo "  No plots found"
-echo ""
+
 
 # Cleanup
 # read -p "Delete temporary VM? (y/n) [y]: " delete_vm

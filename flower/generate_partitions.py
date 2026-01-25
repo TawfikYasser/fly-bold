@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate deterministic Dirichlet partitions for federated COCO dataset.
-Supports 4 dataset configurations with varying IID/non-IID distributions.
+Supports generic dataset configurations with varying IID/non-IID distributions.
 Each client gets random train size and random val size (independently).
 Uses Flower Datasets partitioning logic on pre-downloaded GCS data.
 """
@@ -42,33 +42,33 @@ COCO_NAMES = [
 ]
 
 
-def get_alpha_for_client(dataset_id: int, client_id: int, seed: int) -> float:
+def get_alpha_for_client(client_id: int, seed: int, iid_clients: List[int], dataset_id_hash: int = 0) -> float:
     """
-    Determine alpha based on dataset type and client ID.
+    Determine alpha based on whether client is in IID list.
     
-    Dataset 1: All clients IID (alpha=1e6)
-    Dataset 2: Clients 0-4 IID, Clients 5-9 non-IID (0.5-1.5)
-    Dataset 3: Clients 0-1 IID, Clients 2-9 non-IID (0.5-1.5)
-    Dataset 4: All clients non-IID (0.5-1.5)
+    Args:
+        client_id: Client ID
+        seed: Random seed
+        iid_clients: List of client IDs that should be IID (uniform distribution)
+        dataset_id_hash: Hash of dataset_id for seed variation (default 0)
+    
+    Returns:
+        alpha: 1e6 for IID clients, random [0.5, 1.5] for non-IID clients
     """
     # Use deterministic seed per client to ensure reproducibility
-    np.random.seed(seed + dataset_id * 1000 + client_id)
+    # Ensure seed is within NumPy's valid range (0 to 2^32 - 1)
+    safe_seed = (seed + dataset_id_hash * 1000 + client_id) % (2**32)
+    np.random.seed(safe_seed)
     
-    if dataset_id == 1:
-        return 1e6  # All IID
-    elif dataset_id == 2:
-        return 1e6 if client_id <= 4 else np.random.uniform(0.5, 1.5)
-    elif dataset_id == 3:
-        return 1e6 if client_id <= 1 else np.random.uniform(0.5, 1.5)
-    elif dataset_id == 4:
-        return np.random.uniform(0.5, 1.5)  # All non-IID
+    if client_id in iid_clients:
+        return 1e6  # IID
     else:
-        raise ValueError(f"Invalid dataset_id: {dataset_id}. Must be 1-4.")
+        return float(np.random.uniform(0.5, 1.5))  # Non-IID
 
 
 def get_gcs_image_list(bucket_name: str, split: str) -> List[str]:
     """Get list of image filenames from GCS bucket. Uses cache if available."""
-    cache_file = Path(f"/tmp/coco_image_list_{split}.txt")
+    cache_file = Path(f"/app/coco_image_list_{split}.txt")
     
     # Check if cache exists and is recent (less than 1 hour old)
     if cache_file.exists():
@@ -116,64 +116,16 @@ def get_gcs_image_list(bucket_name: str, split: str) -> List[str]:
 def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Dict[str, List[int]]:
     """
     Download label files from GCS and create mapping: image -> [class_ids].
+    Only returns images that have corresponding labels.
     Reuses existing labels if already downloaded.
-    If labels are slightly incomplete, proceed without re-downloading.
     """
     print(f"Preparing labels for {len(images)} images from {split}...")
 
-    temp_dir = Path(f"/tmp/coco_labels_{split}")
+    temp_dir = Path(f"/app/coco_labels_{split}")
     labels_dir = temp_dir / split
     gcs_labels_path = f"gs://{bucket_name}/coco/labels/{split}/"
 
-    # Accept incomplete labels if coverage is high enough
-    MIN_LABEL_COVERAGE = 0.98  # 98% is "good enough" for partitioning
-    expected = len(images)
-
-    if labels_dir.exists():
-        existing_labels = list(labels_dir.glob("*.txt"))
-        existing_count = len(existing_labels)
-        coverage = existing_count / expected if expected > 0 else 1.0
-
-        if existing_count >= expected:
-            print(f"✓ Labels directory exists with sufficient files ({existing_count} >= {expected}). Skipping download.")
-            # Parse and return immediately
-            image_to_classes = {}
-            for img_name in images:
-                label_name = img_name.replace(".jpg", ".txt")
-                label_path = labels_dir / label_name
-                classes = []
-                if label_path.exists():
-                    with open(label_path, "r") as f:
-                        for line in f:
-                            parts = line.strip().split()
-                            if parts:
-                                try:
-                                    classes.append(int(float(parts[0])))
-                                except ValueError:
-                                    pass
-                image_to_classes[img_name] = classes
-            
-            print(f"Parsed labels for {len(image_to_classes)} images (from cache)")
-            return image_to_classes
-            
-        elif coverage >= MIN_LABEL_COVERAGE:
-            missing = expected - existing_count
-            print(
-                f"⚠ Labels directory incomplete ({existing_count} / {expected}). "
-                f"Missing {missing} (~{(1.0-coverage)*100:.2f}%). "
-                f"Coverage >= {MIN_LABEL_COVERAGE*100:.0f}%, proceeding without re-download."
-            )
-            # Use existing labels without re-downloading
-        else:
-            print(
-                f"⚠ Labels directory too incomplete ({existing_count} / {expected}). "
-                f"Coverage {coverage*100:.2f}% < {MIN_LABEL_COVERAGE*100:.0f}%, re-downloading..."
-            )
-            import shutil
-            shutil.rmtree(temp_dir)
-            print(f"Deleted incomplete labels directory: {temp_dir}")
-
-    # Download only if needed (directory missing, or we deleted it because it was too incomplete)
+    # Download labels if directory doesn't exist
     if not labels_dir.exists():
         print(f"Downloading labels from {gcs_labels_path} ...")
         temp_dir.mkdir(exist_ok=True, parents=True)
@@ -185,10 +137,26 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
         except subprocess.CalledProcessError as e:
             print(f"Error downloading labels: {e}")
             sys.exit(1)
+    else:
+        print(f"✓ Labels directory exists. Skipping download.")
 
-    # Parse labels (missing label file => empty classes)
+    # Get list of available label files
+    available_label_files = list(labels_dir.glob("*.txt"))
+    available_labels = {label_file.stem for label_file in available_label_files}
+    
+    print(f"Found {len(available_labels)} label files in {split}")
+
+    # Filter images to only those with labels
+    images_with_labels = [img for img in images if img.replace(".jpg", "") in available_labels]
+    
+    images_without_labels = len(images) - len(images_with_labels)
+    if images_without_labels > 0:
+        print(f"⚠️  Filtered out {images_without_labels} images without labels")
+    print(f"✓ Using {len(images_with_labels)} images with labels for partitioning")
+
+    # Parse labels only for images with labels
     image_to_classes = {}
-    for img_name in images:
+    for img_name in images_with_labels:
         label_name = img_name.replace(".jpg", ".txt")
         label_path = labels_dir / label_name
 
@@ -209,15 +177,31 @@ def get_gcs_label_mapping(bucket_name: str, images: List[str], split: str) -> Di
     return image_to_classes
 
 
-def generate_client_configs(num_clients: int, seed: int, dataset_id: int,
+def generate_client_configs(num_clients: int, seed: int, dataset_id_hash: int,
                             min_train: int, max_train: int,
-                            min_val: int, max_val: int) -> List[Dict]:
+                            min_val: int, max_val: int,
+                            iid_clients: List[int]) -> List[Dict]:
     """
-    Generate configuration for each client based on dataset type.
+    Generate configuration for each client based on IID client list.
     Train and val sizes are independently randomized.
+    
+    Args:
+        num_clients: Total number of clients
+        seed: Random seed
+        dataset_id_hash: Hash of dataset_id for seed variation
+        min_train: Minimum training images per client
+        max_train: Maximum training images per client
+        min_val: Minimum validation images per client
+        max_val: Maximum validation images per client
+        iid_clients: List of client IDs that should be IID
+    
+    Returns:
+        List of client configurations
     """
-    np.random.seed(seed + dataset_id * 10000)
-    random.seed(seed + dataset_id * 10000)
+    # Ensure seed is within NumPy's valid range (0 to 2^32 - 1)
+    safe_seed = (seed + dataset_id_hash * 10000) % (2**32)
+    np.random.seed(safe_seed)
+    random.seed(safe_seed)
     
     configs = []
     
@@ -227,8 +211,8 @@ def generate_client_configs(num_clients: int, seed: int, dataset_id: int,
         # Random val size (independent)
         n_val = np.random.randint(min_val, max_val + 1)
         
-        # Get alpha based on dataset type
-        alpha = get_alpha_for_client(dataset_id, client_id, seed)
+        # Get alpha based on whether client is IID
+        alpha = get_alpha_for_client(client_id, seed, iid_clients, dataset_id_hash)
         
         configs.append({
             'client_id': client_id,
@@ -239,21 +223,27 @@ def generate_client_configs(num_clients: int, seed: int, dataset_id: int,
     
     return configs
 
-
-def partition_images_dirichlet(
+def partition_images_dirichlet_balanced(
     images: List[str],
     image_to_classes: Dict[str, List[int]],
     client_configs: List[Dict],
     seed: int,
-    source_split: str  # 'train2017' or 'val2017'
+    source_split: str,
+    target_key: str,  # NEW: 'n_train' or 'n_val'
+    min_classes_per_iid_client: int = 65
 ) -> Dict[int, List[Tuple[str, str]]]:
     """
-    Partition images using Dirichlet distribution.
-    - IID Clients (alpha > 1000): Get a fixed 1/N share of every class (Uniform).
-    - Non-IID Clients: Share the remaining images via Dirichlet distribution.
+    FIXED partition using balanced class coverage.
+    Two-phase approach:
+    1. Phase 1: Ensure every IID client gets at least one image from min_classes_per_iid_client
+    2. Phase 2: Distribute remaining images to reach target sizes
+    
+    Args:
+        target_key: 'n_train' or 'n_val' - which config field to use for targets
     
     Returns dict mapping client_id -> [(image_name, source_split), ...]
     """
+    print(f"\n[BALANCED PARTITION] Starting balanced partitioning for {source_split} (target: {target_key})...")
     np.random.seed(seed)
     random.seed(seed)
     
@@ -262,7 +252,6 @@ def partition_images_dirichlet(
     for img, classes in image_to_classes.items():
         if len(classes) == 0:
             continue
-        # Use primary class
         primary_class = classes[0]
         class_to_images[primary_class].append(img)
     
@@ -271,6 +260,7 @@ def partition_images_dirichlet(
     
     print(f"[{source_split}] Found {len(all_classes)} classes")
     print(f"[{source_split}] Total images with labels: {sum(len(imgs) for imgs in class_to_images.values())}")
+    print(f"[{source_split}] Images per class - Min: {min(len(imgs) for imgs in class_to_images.values()) if class_to_images else 0}, Max: {max(len(imgs) for imgs in class_to_images.values()) if class_to_images else 0}")
     
     # Identify IID and Non-IID clients
     iid_clients = []
@@ -280,6 +270,11 @@ def partition_images_dirichlet(
     for cfg in client_configs:
         cid = cfg['client_id']
         alpha = cfg['alpha']
+        
+        if alpha is None:
+            print(f"ERROR: Client {cid} has None alpha!")
+            sys.exit(1)
+            
         if alpha > 1000:
             iid_clients.append(cid)
         else:
@@ -288,58 +283,105 @@ def partition_images_dirichlet(
             
     print(f"[{source_split}] IID Clients: {iid_clients}")
     print(f"[{source_split}] Non-IID Clients: {non_iid_clients} (alphas: {non_iid_alphas})")
+    print(f"[{source_split}] PHASE 1: Ensuring minimum class coverage ({min_classes_per_iid_client} classes)...")
     
     # Initialize assignments
     client_pools = {i: [] for i in range(num_clients)}
+    client_current_sizes = {i: 0 for i in range(num_clients)}
     
-    # Partition each class
-    for cls in all_classes:
+    # PHASE 1: Minimum coverage for first N classes
+    # GUARANTEE: Each IID client gets at least 1 image from each of the first min_classes_per_iid_client classes
+    classes_to_cover = all_classes[:min_classes_per_iid_client]
+    
+    # For each class, distribute 1 image to each IID client if possible
+    for cls in classes_to_cover:
         imgs = list(set(class_to_images[cls]))
         random.shuffle(imgs)
-        n_imgs = len(imgs)
         
-        if n_imgs == 0:
+        if len(imgs) == 0:
             continue
-            
-        idx = 0
         
-        # 1. Assign fixed share to IID clients
-        share_per_client = n_imgs // num_clients
+        # Try to give 1 image to each IID client
+        for i, cid in enumerate(iid_clients):
+            if i < len(imgs):
+                img = imgs[i]
+                client_pools[cid].append((img, source_split))
+                client_current_sizes[cid] += 1
+    
+    print(f"[{source_split}] Phase 1 complete. Average size: {sum(client_current_sizes.values()) / len(client_current_sizes) if client_current_sizes else 0:.1f} images")
+    print(f"[{source_split}] Phase 1 client sizes: {client_current_sizes}")
+    print(f"[{source_split}] PHASE 2: Distributing remaining images to targets (using {target_key})...")
+    
+    # PHASE 2: Fill to target with remaining images
+    assigned_images = set()
+    for img_list in client_pools.values():
+        for img, _ in img_list:
+            assigned_images.add(img)
+    
+    remaining_images = [(img, cls) for cls, imgs in class_to_images.items() 
+                        for img in imgs if img not in assigned_images]
+    random.shuffle(remaining_images)
+    
+    remaining_idx = 0
+    max_iterations = 1000  # Increased from 100 to ensure completion
+    
+    for round_num in range(max_iterations):
+        made_progress = False
         
         for cid in iid_clients:
-            end = idx + share_per_client
-            if idx < n_imgs:
-                subset = imgs[idx:end]
-                for img in subset:
-                    client_pools[cid].append((img, source_split))
-                idx = end
+            # FIX: Use the correct target key (n_train or n_val)
+            target = client_configs[cid][target_key]
+            current = client_current_sizes[cid]
+            
+            if current >= target:
+                continue
+            
+            needed = target - current
+            to_assign = min(needed, len(remaining_images) - remaining_idx)
+            
+            for _ in range(to_assign):
+                if remaining_idx >= len(remaining_images):
+                    break
+                
+                img, _ = remaining_images[remaining_idx]
+                client_pools[cid].append((img, source_split))
+                client_current_sizes[cid] += 1
+                remaining_idx += 1
+                made_progress = True
         
-        # 2. Assign remainder to Non-IID clients
-        remaining_imgs = imgs[idx:]
-        n_remaining = len(remaining_imgs)
+        if not made_progress or remaining_idx >= len(remaining_images):
+            break
+    
+    # Debug: Check if all clients reached their targets
+    print(f"[{source_split}] Phase 2 status after {round_num + 1} iterations:")
+    for cid in iid_clients:
+        target = client_configs[cid][target_key]
+        current = client_current_sizes[cid]
+        status = "✓" if current >= target else "✗"
+        print(f"  {status} Client {cid}: {current}/{target}")
+
+    # Non-IID clients get remaining images via Dirichlet
+    if non_iid_clients and remaining_idx < len(remaining_images):
+        remaining_imgs = [img for img, _ in remaining_images[remaining_idx:]]
         
-        if n_remaining > 0 and len(non_iid_clients) > 0:
-            # Dirichlet proportions for non-iid clients
+        if len(remaining_imgs) > 0:
             proportions = np.random.dirichlet(np.array(non_iid_alphas))
+            counts = (proportions * len(remaining_imgs)).astype(int)
             
-            # Calculate counts
-            counts = (proportions * n_remaining).astype(int)
-            
-            # Distribute leftovers
-            leftover = n_remaining - counts.sum()
+            leftover = len(remaining_imgs) - counts.sum()
             if leftover > 0:
                 for i in np.argsort(proportions)[-leftover:]:
                     counts[i] += 1
             
-            # Assign
             rem_idx = 0
             for i, cid in enumerate(non_iid_clients):
-                count = counts[i]
-                for _ in range(count):
-                    if rem_idx >= n_remaining:
+                for _ in range(counts[i]):
+                    if rem_idx >= len(remaining_imgs):
                         break
                     client_pools[cid].append((remaining_imgs[rem_idx], source_split))
                     rem_idx += 1
+    
+    print(f"[{source_split}] Phase 2 complete. Final avg size: {sum(client_current_sizes.values()) / len(client_current_sizes) if client_current_sizes else 0:.1f} images")
     
     return client_pools
 
@@ -347,22 +389,28 @@ def partition_images_dirichlet(
 def generate_manifest(bucket_name: str, num_clients: int, 
                      min_train: int, max_train: int,
                      min_val: int, max_val: int,
-                     seed: int, dataset_id: int,
-                     same_seed_for_val: bool) -> dict:
+                     seed: int, dataset_id: str,
+                     same_seed_for_val: bool,
+                     iid_clients: List[int]) -> dict:
     """Main function to generate partition manifest."""
     
-    # Dataset description
-    dataset_descriptions = {
-        1: "All clients IID (α=1e6)",
-        2: "Clients 0-4 IID, Clients 5-9 non-IID (α=0.5-1.5)",
-        3: "Clients 0-1 IID, Clients 2-9 non-IID (α=0.5-1.5)",
-        4: "All clients non-IID (α=0.5-1.5)"
-    }
+    # Generate dataset description from IID client list
+    if len(iid_clients) == 0:
+        dataset_description = "All clients non-IID (α=0.5-1.5)"
+    elif len(iid_clients) == num_clients:
+        dataset_description = "All clients IID (α=1e6)"
+    else:
+        iid_str = ",".join(map(str, sorted(iid_clients)))
+        dataset_description = f"Clients {iid_str} IID (α=1e6), others non-IID (α=0.5-1.5)"
+    
+    # Create numeric hash of dataset_id for seed variation
+    # Ensure hash is positive and within reasonable range
+    dataset_id_hash = abs(hash(dataset_id)) % 1000000
     
     print("\n" + "="*70)
     print(f"COCO Dataset Partitioning - Dataset {dataset_id}")
     print("="*70)
-    print(f"Configuration: {dataset_descriptions[dataset_id]}")
+    print(f"Configuration: {dataset_description}")
     print(f"Bucket: {bucket_name}")
     print(f"Clients: {num_clients}")
     print(f"Train size range: [{min_train}, {max_train}]")
@@ -373,8 +421,14 @@ def generate_manifest(bucket_name: str, num_clients: int,
     
     # Generate client configurations
     client_configs = generate_client_configs(
-        num_clients, seed, dataset_id, min_train, max_train, min_val, max_val
+        num_clients, seed, dataset_id_hash, min_train, max_train, min_val, max_val, iid_clients
     )
+    
+    # Verify all configs have valid alphas
+    for cfg in client_configs:
+        if cfg['alpha'] is None:
+            print(f"ERROR: Client {cfg['client_id']} has None alpha!")
+            sys.exit(1)
     
     # Get training images and labels
     print("\n--- Processing Training Split ---")
@@ -390,54 +444,64 @@ def generate_manifest(bucket_name: str, num_clients: int,
     val_labels = get_gcs_label_mapping(bucket_name, val_images, "val2017")
     print(f"Total val2017 labels: {len(val_labels)}")
 
-    # Partition train2017 data
-    print("\n--- Partitioning Training Data ---")
-    train_pools = partition_images_dirichlet(
-        train_images, train_labels, client_configs, seed, "train2017"
+    # Partition train2017 data FOR TRAINING ONLY
+    print("\n--- Partitioning Training Data (from train2017 split) ---")
+    train_pools = partition_images_dirichlet_balanced(
+        train_images, train_labels, client_configs, seed, "train2017",
+        target_key='n_train',  # Use n_train for training data
+        min_classes_per_iid_client=65
     )
-    print(f"Partitioned train2017 data into {num_clients} clients.")
+    print(f"Partitioned train2017 data into {num_clients} clients for TRAINING.")
     
-    # Partition val2017 data (with same or different seed)
-    print("\n--- Partitioning Validation Data ---")
+    # Partition val2017 data FOR VALIDATION ONLY
+    # Use very few classes for val since there are few val images (only 5000)
+    # Phase 1 uses very little of the data, leaving plenty for Phase 2 to distribute evenly
+    print("\n--- Partitioning Validation Data (from val2017 split) ---")
     val_seed = seed if same_seed_for_val else seed + 1000
-    val_pools = partition_images_dirichlet(
-        val_images, val_labels, client_configs, val_seed, "val2017"
+    val_pools = partition_images_dirichlet_balanced(
+        val_images, val_labels, client_configs, val_seed, "val2017",
+        target_key='n_val',  # FIX: Use n_val for validation data
+        min_classes_per_iid_client=5  # Very low for val to preserve images for Phase 2
     )
-    print(f"Partitioned val2017 data into {num_clients} clients.")
+    print(f"Partitioned val2017 data into {num_clients} clients for VALIDATION.")
 
-    # Combine pools and split into train/val for each client
-    print("\n--- Splitting Client Data into Train/Val ---")
+    # Keep train and val separate - NO MIXING
+    # Train images come ONLY from train2017, val images come ONLY from val2017
+    # Apply target sizes to each partition independently
+    print("\n--- Preparing Client Data (No Split Mixing) ---")
     train_assignments = {}
     val_assignments = {}
     all_labels = {**train_labels, **val_labels}
     
     for client_id in range(num_clients):
-        # Combine train2017 and val2017 pools for this client
-        combined_pool = train_pools[client_id] + val_pools[client_id]
-        random.shuffle(combined_pool)
+        # Training images come ONLY from train2017 partition
+        train_pool = train_pools[client_id]
+        # Validation images come ONLY from val2017 partition
+        val_pool = val_pools[client_id]
         
-        total_received = len(combined_pool)
+        # Get target sizes from config
+        target_train = client_configs[client_id]['n_train']
+        target_val = client_configs[client_id]['n_val']
         
-        # Use target sizes from config
-        n_train = min(client_configs[client_id]['n_train'], total_received)
-        n_val = min(client_configs[client_id]['n_val'], total_received - n_train)
+        # Trim pools to target sizes (avoid mixing splits!)
+        n_train = min(target_train, len(train_pool))
+        n_val = min(target_val, len(val_pool))
         
-        # Take first n_train for training
-        train_part = combined_pool[:n_train]
-        # Take next n_val for validation
-        val_part = combined_pool[n_train:n_train + n_val]
+        # Take first n_train from train partition, first n_val from val partition
+        train_part = train_pool[:n_train]
+        val_part = val_pool[:n_val]
         
-        # Update config to reflect reality
+        # Update config to reflect reality (may be less than target if not enough data)
         client_configs[client_id]['n_train'] = n_train
         client_configs[client_id]['n_val'] = n_val
         
         train_assignments[client_id] = train_part
         val_assignments[client_id] = val_part
         
-        print(f"  Client {client_id}: {len(train_part)} train, {len(val_part)} val "
-              f"(from pool of {len(combined_pool)})")
-    
-    print("\n--- Computing Class Distributions ---")
+        status_train = "✓" if n_train == target_train else "✗"
+        status_val = "✓" if n_val == target_val else "✗"
+        print(f"  {status_train} Client {client_id}: {n_train} train (target: {target_train}), {status_val} {n_val} val (target: {target_val})")    
+        print("\n--- Computing Class Distributions ---")
     
     # Compute class distributions (for statistics and plots)
     def get_class_dist(assignments, labels):
@@ -478,7 +542,9 @@ def generate_manifest(bucket_name: str, num_clients: int,
     manifest = {
         "metadata": {
             "dataset_id": dataset_id,
-            "dataset_description": dataset_descriptions[dataset_id],
+            "dataset_description": dataset_description,
+            "iid_clients": sorted(iid_clients),
+            "non_iid_clients": sorted([i for i in range(num_clients) if i not in iid_clients]),
             "seed": seed,
             "num_clients": num_clients,
             "min_train_per_client": min_train,
@@ -496,27 +562,60 @@ def generate_manifest(bucket_name: str, num_clients: int,
         cfg = client_configs[client_id]
         
         # Extract image names by source split
-        train_from_train = [img for img, src in train_assignments[client_id] if src == "train2017"]
-        train_from_val = [img for img, src in train_assignments[client_id] if src == "val2017"]
-        val_from_train = [img for img, src in val_assignments[client_id] if src == "train2017"]
-        val_from_val = [img for img, src in val_assignments[client_id] if src == "val2017"]
+        # Training images come ONLY from train2017
+        train_images_list = [img for img, src in train_assignments[client_id] if src == "train2017"]
+        # Validation images come ONLY from val2017
+        val_images_list = [img for img, src in val_assignments[client_id] if src == "val2017"]
+        
+        # Calculate training class statistics
+        train_dist = train_class_dist.get(client_id, {})
+        train_class_stats = {
+            "total_unique_classes": len(train_dist),
+            "classes_with_1_image": sum(1 for c in train_dist.values() if c == 1),
+            "classes_with_2_10_images": sum(1 for c in train_dist.values() if 2 <= c <= 10),
+            "classes_with_11_50_images": sum(1 for c in train_dist.values() if 11 <= c <= 50),
+            "classes_with_51_100_images": sum(1 for c in train_dist.values() if 51 <= c <= 100),
+            "classes_with_100_plus_images": sum(1 for c in train_dist.values() if c > 100),
+            "min_class_count": min(train_dist.values()) if train_dist else 0,
+            "max_class_count": max(train_dist.values()) if train_dist else 0,
+            "median_class_count": sorted(train_dist.values())[len(train_dist)//2] if train_dist else 0,
+            "mean_class_count": sum(train_dist.values()) / len(train_dist) if train_dist else 0,
+            "class_coverage_ratio": len(train_dist) / 80.0
+        }
+        
+        # Calculate validation class statistics
+        val_dist = val_class_dist.get(client_id, {})
+        val_class_stats = {
+            "total_unique_classes": len(val_dist),
+            "classes_with_1_image": sum(1 for c in val_dist.values() if c == 1),
+            "classes_with_2_10_images": sum(1 for c in val_dist.values() if 2 <= c <= 10),
+            "classes_with_11_50_images": sum(1 for c in val_dist.values() if 11 <= c <= 50),
+            "classes_with_51_100_images": sum(1 for c in val_dist.values() if 51 <= c <= 100),
+            "classes_with_100_plus_images": sum(1 for c in val_dist.values() if c > 100),
+            "min_class_count": min(val_dist.values()) if val_dist else 0,
+            "max_class_count": max(val_dist.values()) if val_dist else 0,
+            "median_class_count": sorted(val_dist.values())[len(val_dist)//2] if val_dist else 0,
+            "mean_class_count": sum(val_dist.values()) / len(val_dist) if val_dist else 0,
+            "class_coverage_ratio": len(val_dist) / 80.0
+        }
         
         manifest["partitions"][f"client_{client_id}"] = {
             "client_id": client_id,
             "alpha": cfg['alpha'],
             "n_train_target": cfg['n_train'],
             "n_val_target": cfg['n_val'],
-            # Images for training (with source split info)
-            "train_images_from_train2017": train_from_train,
-            "train_images_from_val2017": train_from_val,
-            # Images for validation (with source split info)
-            "val_images_from_train2017": val_from_train,
-            "val_images_from_val2017": val_from_val,
-            # Totals
-            "train_count": len(train_assignments[client_id]),
-            "val_count": len(val_assignments[client_id]),
-            "train_class_distribution": train_class_dist.get(client_id, {}),
-            "val_class_distribution": val_class_dist.get(client_id, {})
+            # Training images (all from train2017 split)
+            "train_images": train_images_list,
+            "train_split": "train2017",
+            "train_count": len(train_images_list),
+            "train_class_distribution": train_dist,
+            "train_class_stats": train_class_stats,
+            # Validation images (all from val2017 split)
+            "val_images": val_images_list,
+            "val_split": "val2017",
+            "val_count": len(val_images_list),
+            "val_class_distribution": val_dist,
+            "val_class_stats": val_class_stats
         }
     
     # Print statistics
@@ -550,7 +649,7 @@ def plot_client_distribution(client_id: int,
                              n_train: int,
                              n_val: int,
                              output_path: str,
-                             dataset_id: int):
+                             dataset_id: str):
     """Generate individual plot for one client showing train/val distribution."""
     if not PLOTTING_AVAILABLE:
         return
@@ -596,8 +695,9 @@ def plot_client_distribution(client_id: int,
 def main():
     parser = argparse.ArgumentParser(description="Generate COCO partitions for FL")
     parser.add_argument("--bucket", required=True, help="GCS bucket name")
-    parser.add_argument("--dataset-id", type=int, required=True, choices=[1, 2, 3, 4],
-                       help="Dataset ID (1-4) for different IID/non-IID configurations")
+    parser.add_argument("--dataset-id", required=True, help="Dataset ID (can be any string, e.g., 'dataset_5', 'experiment_1')")
+    parser.add_argument("--iid-clients", required=True, 
+                       help="Comma-separated list of IID client IDs (e.g., '0,2,5' or 'none' for all non-IID)")
     parser.add_argument("--num-clients", type=int, default=10, help="Number of clients")
     parser.add_argument("--min-train-images", type=int, required=True, help="Min training images per client")
     parser.add_argument("--max-train-images", type=int, required=True, help="Max training images per client")
@@ -610,12 +710,27 @@ def main():
     
     args = parser.parse_args()
     
+    # Parse IID clients list
+    if args.iid_clients.lower() == 'none':
+        iid_clients = []
+    else:
+        try:
+            iid_clients = [int(x.strip()) for x in args.iid_clients.split(',')]
+            # Validate client IDs
+            for cid in iid_clients:
+                if cid < 0 or cid >= args.num_clients:
+                    raise ValueError(f"Client ID {cid} out of range [0, {args.num_clients-1}]")
+        except ValueError as e:
+            print(f"Error parsing --iid-clients: {e}")
+            sys.exit(1)
+    
     # Generate manifest
     manifest = generate_manifest(
         args.bucket, args.num_clients, 
         args.min_train_images, args.max_train_images,
         args.min_val_images, args.max_val_images,
-        args.seed, args.dataset_id, args.same_seed_val
+        args.seed, args.dataset_id, args.same_seed_val,
+        iid_clients
     )
     
     # Save manifest with dataset-specific name
@@ -625,7 +740,6 @@ def main():
     
     print(f"\n✅ Partition manifest saved to: {output_file}")
     print(f"✅ Client plots saved to: client_plots_dataset_{args.dataset_id}/")
-    print("\nNext step: Continue with partition-dataset.sh for remaining datasets")
 
 
 if __name__ == "__main__":
