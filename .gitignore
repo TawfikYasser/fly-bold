@@ -3,3 +3,4 @@
 *.backup
 /flower/logs/
 /flower/command.txt
+/flower/__pycache__/
