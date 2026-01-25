@@ -76,6 +76,7 @@ flybold/
 ├── partition-dataset.sh          # Partition logic (runs on temp VM)
 ├── build-push-image.sh           # Build/push Docker image
 ├── deploy-application.sh         # Deploy FL application
+├── finish.sh                     # Monitor training and download results (New!)
 ├── manage-clients.sh             # Manage individual clients
 ├── update-code.sh                # Hot update code
 ├── download-files.sh             # Download results from server
@@ -167,12 +168,18 @@ Partitions the COCO dataset using Dirichlet distribution on a temporary VM.
 ./run-partition-on-temp-vm.sh
 ```
 
+**Interactive Configuration**:
+- **Dataset ID**: Unique identifier for this partition set (e.g., `exp1`, `hetero_0.1`).
+- **IID Clients**: Comma-separated list (e.g., `0,3`) or `none` for all non-IID.
+
 **What it does**:
 1. Creates a temporary VM (`partition-tmp-vm`).
-2. Generates a partition manifest (`partition_manifest.json`) using `generate_partitions.py`.
+2. Generates a partition manifest (`partition_manifest_dataset_{id}.json`) using `generate_partitions.py`.
 3. Distributes the partitioned data (file lists) to client VMs.
 4. Clients verify/download their data relative to the GCS bucket.
 5. Saves outputs to `partition_outputs/`.
+
+**Note**: You can have multiple datasets on the same VMs. Use the `Dataset ID` to choose which one to train on during deployment.
 
 **Time**: ~10 minutes
 
@@ -226,8 +233,12 @@ Fraction evaluate [0.8]: 0.8
 Learning rate [0.005]: 0.005
 YOLO size (n/s/m/l/x) [s]: s
 Image size [512]: 512
+Dataset choice [1]: dataset_5
+Use pretrained weights? (y/n) [y]: y
 Dirichlet alpha [0.5]: 0.5
 ```
+
+**Dynamic Dataset Choice**: The "Dataset choice" prompt allows you to select which pre-partitioned dataset (by its `DATASET_ID`) the clients should use for this run.
 
 **What it does**:
 1. Prompts for parameters (or uses existing `.env`)
@@ -338,6 +349,21 @@ Enter file number(s) to download (comma-separated, or 'all'): 1,2
 
 ---
 
+### Script: Finish training
+
+Automatically monitor for training completion and collect results.
+
+```bash
+./finish.sh
+```
+
+**What it does**:
+1. Monitors the server container for the creation of the final logs file (`*_logs.json`).
+2. Downloads the log file (and optionally models) to your local `./downloads/` folder.
+3. (Optional) Stops all VMs once training is detected as finished.
+
+---
+
 ### Script: Cleanup
 
 Delete all GCP resources.
@@ -368,7 +394,24 @@ Delete all GCP resources.
 - **`check-client-data.sh`**: Verifies that the COCO dataset is correctly partitioned and downloaded on all client VMs.
 - **`clean-client-datasets.sh`**: Deletes dataset files from client VMs to free up space or force a re-download.
 - **`refresh-vm-ips.sh`**: Updates `vm-info.txt` with current IPs (useful if VMs were stopped/started).
-- **`view-all-clients-logs.sh`**: Streams logs from all clients simultaneously.
+- **`view-all-clients-logs.sh`**: Streams and multiplexes logs from all 10 clients into a single terminal window, prefixed by VM name.
+- **`commands.txt`**: A reference file containing manual commands for advanced operations (e.g., `flwr run`, manual container stops).
+
+---
+
+## 🛠 Advanced Tooling (Manual Commands)
+
+For granular control, you can use these commands (also found in `commands.txt`):
+
+**Run training manually**:
+```bash
+gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr run .'
+```
+
+**Stop a specific Flower job**:
+```bash
+gcloud compute ssh flybold-server --zone=us-central1-a --command='cd /app && sudo docker compose exec fl-server flwr stop <JOB_ID>'
+```
 
 ---
 
