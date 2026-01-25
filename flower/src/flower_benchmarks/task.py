@@ -543,7 +543,7 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             imgsz=img,
             task='val',
             verbose=True,
-            workers=4,
+            workers=3,
             half=False
         )
         
@@ -610,7 +610,7 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
             "--data", data_yaml,
             "--img", str(img),
             "--verbose",
-            "--workers", "4"
+            "--workers", "3"
         ]
         print(f"[yolo_eval] Running subprocess: {' '.join(cmd)}")
 

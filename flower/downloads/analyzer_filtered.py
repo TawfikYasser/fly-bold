@@ -12,7 +12,7 @@ INPUT_FILE = "EXP_YOLOv5_s_detection_37_logs.json"
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
 exp_id = match.group(1) if match else "unknown"
-OUTPUT_DIR = f"analysis_exp_{exp_id}"
+OUTPUT_DIR = f"analysis_exp_{exp_id}_filtered"
 
 # Experiment configuration (update based on your setup)
 CONFIG = {
@@ -96,6 +96,38 @@ def extract_client_metrics(data):
             }
             client_data.append(client_info)
     return pd.DataFrame(client_data)
+
+
+def filter_zero_metrics_clients(df_clients):
+    """
+    Filter out clients with zero metrics in training or validation.
+    Excludes clients that have any zero values in their train or eval metrics.
+    """
+    # Define metric columns to check
+    train_metrics = ['train_mr', 'train_mp', 'train_mAP50', 'train_mAP', 'train_agg']
+    eval_metrics = ['eval_mr', 'eval_mp', 'eval_mAP50', 'eval_mAP', 'eval_agg']
+    
+    # Get clients with any zero values in train or eval metrics
+    zero_train = (df_clients[train_metrics] == 0).any(axis=1)
+    zero_eval = (df_clients[eval_metrics] == 0).any(axis=1)
+    
+    # Identify clients to remove (those with zero metrics in either train or eval)
+    clients_to_remove = df_clients[zero_train | zero_eval]['client_id'].unique()
+    
+    # Filter out these clients
+    df_clients_filtered = df_clients[~df_clients['client_id'].isin(clients_to_remove)].copy()
+    
+    # Log filtering info
+    print(f"\n[*] Client Filtering Summary:")
+    print(f"    • Original clients: {df_clients['client_id'].nunique()}")
+    print(f"    • Clients removed (zero metrics): {len(clients_to_remove)}")
+    if len(clients_to_remove) > 0:
+        print(f"    • Removed client IDs: {sorted(clients_to_remove)}")
+    print(f"    • Remaining clients: {df_clients_filtered['client_id'].nunique()}")
+    print(f"    • Original records: {len(df_clients)}")
+    print(f"    • Filtered records: {len(df_clients_filtered)}")
+    
+    return df_clients_filtered
 
 
 # ==================== PLOTTING FUNCTIONS ====================
@@ -979,6 +1011,10 @@ def main():
     print(f"[OK] Extracted round-level metrics")
     print(f"[OK] Extracted client-level metrics ({len(df_clients)} records)")
     
+    # Filter zero metrics clients
+    print("\n[*] Filtering clients with zero metrics...")
+    df_clients = filter_zero_metrics_clients(df_clients)
+    
     # Generate visualizations
     print("\n[*] Generating visualizations...")
     
@@ -1007,7 +1043,7 @@ def main():
     # Final summary
     num_plots = len(list(output_dir.glob('*.png')))
     print(f"\n{'='*90}")
-    print(f"âœ… ANALYSIS COMPLETE!")
+    print(f"✅ ANALYSIS COMPLETE!")
     print(f"{'='*90}")
     print(f"  • Generated {num_plots} visualization plots")
     print(f"  • Created summary report: {report_path}")

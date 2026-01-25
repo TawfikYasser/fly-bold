@@ -74,12 +74,17 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
         return MetricRecord({})
 
     print(f"[SERVER] Aggregating training metrics from {len(record_dicts)} clients")
+    print(f"[SERVER] {'='*80}")
+    print(f"[SERVER] TRAINING PHASE - CLIENT RESULTS")
+    print(f"[SERVER] {'='*80}")
 
     # OPTIMIZED: Extract all client data in single pass
     clients_data = []
+    train_success_count = 0
+    
     for i, record_dict in enumerate(record_dicts):
         if "metrics" not in record_dict:
-            print(f"[SERVER] Warning: record_dict {i} has no metrics")
+            print(f"[SERVER] ⚠️ [CLIENT {i}] Warning: record_dict has no metrics")
             continue
         
         metrics = record_dict["metrics"]
@@ -90,10 +95,11 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
 
         # Defensive defaults (server never trusts clients)
         num_examples = max(1, int(_safe_float(metrics.get("num-examples", 1))))
+        client_id = int(_safe_float(metrics.get("client_id", i)))
         
         # Extract all metrics at once with safe defaults
         client_data = {
-            'id': int(_safe_float(metrics.get("client_id", 0))),
+            'id': client_id,
             'examples': num_examples,
             'train_time': _safe_float(metrics.get("client_train_time", 0.0)),
             'loss': _safe_float(metrics.get("client_train_loss", 0.0)),
@@ -107,6 +113,10 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             'round_duration': _safe_float(metrics.get("round_duration", 0.0)),
         }
         clients_data.append(client_data)
+        train_success_count += 1
+        
+        # Print per-client result with metrics
+        print(f"[SERVER] ✅ [CLIENT {client_id}] TRAIN COMPLETE - Loss: {client_data['loss']:.4f}, mAP@0.5: {client_data['mAP50']:.4f}, mAP: {client_data['mAP']:.4f}, Time: {client_data['train_time']:.2f}s")
     
     if not clients_data:
         print("[SERVER] No valid client data extracted")
@@ -174,17 +184,17 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     
     ALL_ROUND_LOGS.append(round_log)
     
-    print(f"\n{'='*70}")
-    print(f"ROUND {CURRENT_ROUND+1} TRAINING SUMMARY")
-    print(f"{'='*70}")
-    print(f"Participating Clients: {len(clients_data)}")
-    print(f"Training Loss:     {round_train_loss:.4f}")
-    print(f"Training mAP@0.5:  {round_train_acc_mAP50:.4f}")
-    print(f"Training mAP:      {round_train_acc_mAP:.4f}")
-    print(f"Aggregated Score:  {round_train_acc_aggregated:.4f}")
-    print(f"Round Duration:    {max_round_duration:.2f}s")
-    print(f"Data Transferred:  {total_data_mb:.2f} MB")
-    print(f"{'='*70}\n")
+    print(f"[SERVER] {'='*80}")
+    print(f"[SERVER] ROUND {CURRENT_ROUND} TRAINING SUMMARY")
+    print(f"[SERVER] {'='*80}")
+    print(f"[SERVER] Participating Clients: {len(clients_data)} | Success: {train_success_count}")
+    print(f"[SERVER] Training Loss:     {round_train_loss:.4f}")
+    print(f"[SERVER] Training mAP@0.5:  {round_train_acc_mAP50:.4f}")
+    print(f"[SERVER] Training mAP:      {round_train_acc_mAP:.4f}")
+    print(f"[SERVER] Aggregated Score:  {round_train_acc_aggregated:.4f}")
+    print(f"[SERVER] Round Duration:    {max_round_duration:.2f}s")
+    print(f"[SERVER] Data Transferred:  {total_data_mb:.2f} MB")
+    print(f"[SERVER] {'='*80}\n")
     
     # FIXED: Return aggregated metrics for Flower (not empty dict)
     return MetricRecord({
@@ -209,9 +219,14 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
         return MetricRecord({})
     
     print(f"[SERVER] Aggregating evaluation metrics from {len(record_dicts)} clients")
+    print(f"[SERVER] {'='*80}")
+    print(f"[SERVER] EVALUATION PHASE - CLIENT RESULTS")
+    print(f"[SERVER] {'='*80}")
     
     # OPTIMIZED: Extract all evaluation data in single pass
     eval_data = []
+    eval_success_count = 0
+    
     for i, record_dict in enumerate(record_dicts):
         if "metrics" not in record_dict:
             print(f"[SERVER] Warning: eval record_dict {i} has no metrics")
@@ -223,8 +238,11 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
         if i == 0:
             print(f"[SERVER] First client eval keys: {sorted(metrics.keys())}")
         
+        client_id = int(_safe_float(metrics.get("client_id", 0)))
+        eval_success_count += 1  # Metrics received = client completed evaluation
+        
         client_eval = {
-            'id': int(_safe_float(metrics.get("client_id", 0))),
+            'id': client_id,
             'examples': _safe_float(metrics.get("num-examples", 1.0)),
             'loss': _safe_float(metrics.get("client_eval_loss", 0.0)),
             'mr': _safe_float(metrics.get("client_eval_acc_mr", 0.0)),
@@ -234,6 +252,9 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             'eval_time': _safe_float(metrics.get("client_eval_time", 0.0)),
         }
         eval_data.append(client_eval)
+        
+        # Print per-client evaluation results
+        print(f"[SERVER] ✅ [CLIENT {client_id}] EVAL COMPLETE - Loss: {client_eval['loss']:.4f}, mAP@0.5: {client_eval['mAP50']:.4f}, mAP: {client_eval['mAP']:.4f}, Time: {client_eval['eval_time']:.2f}s")
     
     if not eval_data:
         print("[SERVER] No valid evaluation data extracted")
@@ -281,16 +302,16 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             client_logs_map[c['id']]["client_eval_time"] = c['eval_time']
             client_logs_map[c['id']]["client_eval_num_examples"] = int(c['examples'])
     
-    print(f"\n{'='*70}")
-    print(f"ROUND {CURRENT_ROUND+1} EVALUATION SUMMARY")
-    print(f"{'='*70}")
-    print(f"Participating Clients: {len(eval_data)}")
-    print(f"Validation Loss:   {round_eval_loss:.4f}")
-    print(f"Validation mAP@0.5: {round_eval_acc_mAP50:.4f}")
-    print(f"Validation mAP:    {round_eval_acc_mAP:.4f}")
-    print(f"Aggregated Score:  {round_eval_acc_aggregated:.4f}")
-    print(f"Eval Duration:     {max_eval_time:.2f}s")
-    print(f"{'='*70}\n")
+    print(f"[SERVER] {'='*80}")
+    print(f"[SERVER] ROUND {CURRENT_ROUND} EVALUATION SUMMARY")
+    print(f"[SERVER] {'='*80}")
+    print(f"[SERVER] Participating Clients: {len(eval_data)} | Success: {eval_success_count}")
+    print(f"[SERVER] Validation Loss:   {round_eval_loss:.4f}")
+    print(f"[SERVER] Validation mAP@0.5: {round_eval_acc_mAP50:.4f}")
+    print(f"[SERVER] Validation mAP:    {round_eval_acc_mAP:.4f}")
+    print(f"[SERVER] Aggregated Score:  {round_eval_acc_aggregated:.4f}")
+    print(f"[SERVER] Eval Duration:     {max_eval_time:.2f}s")
+    print(f"[SERVER] {'='*80}\n")
     
     # âœ… FIXED: Return aggregated metrics for Flower
     return MetricRecord({

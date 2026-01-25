@@ -220,19 +220,33 @@ def train(msg: Message, context: Context):
     batch = int(get_config("batch_size", context, default=16))
 
     train_start = time.perf_counter()
+    train_status = "FAILED"
+    train_error_msg = ""
+    round_log = {}
 
-    new_state, round_log = yolo_train_from_state_and_return_state_dict(
-        received_state,
-        model_size=model_size,
-        client_dataset_yaml=data_yaml,
-        epochs=epochs,
-        img=img,
-        batch=batch,
-        run_dir=context.run_config.get("yolo_runs_dir"),
-        client_tag=f"client{client_id}",
-        round_idx=server_round,
-        run_id=run_id,
-    )
+    try:
+        print(f"[CLIENT {client_id}] Calling yolo_train_from_state_and_return_state_dict...")
+        new_state, round_log = yolo_train_from_state_and_return_state_dict(
+            received_state,
+            model_size=model_size,
+            client_dataset_yaml=data_yaml,
+            epochs=epochs,
+            img=img,
+            batch=batch,
+            run_dir=context.run_config.get("yolo_runs_dir"),
+            client_tag=f"client{client_id}",
+            round_idx=server_round,
+            run_id=run_id,
+        )
+        print(f"[CLIENT {client_id}] yolo_train returned round_log keys: {sorted(round_log.keys())}")
+        print(f"[CLIENT {client_id}] Train metrics - Loss: {round_log.get('loss', 0.0):.4f}, mAP@0.5: {round_log.get('mAP@0.5', 0.0):.4f}, mAP: {round_log.get('mAP', 0.0):.4f}")
+        train_status = "SUCCESS"
+    except Exception as e:
+        print(f"[CLIENT {client_id}] TRAINING FAILED with error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        train_error_msg = f"{type(e).__name__}: {str(e)}"
+        new_state = received_state
 
     train_time = time.perf_counter() - train_start
 
@@ -254,6 +268,7 @@ def train(msg: Message, context: Context):
 
     # âœ… FIXED: Build metrics with explicit float conversion - GUARANTEED CONSISTENT
     # Using direct assignment instead of dict comprehension for maximum reliability
+    # NOTE: Only numeric types allowed in MetricRecord per Flower framework requirements
     metrics = {
         "num-examples": float(num_examples),
         "client_id": float(client_id),
@@ -273,8 +288,17 @@ def train(msg: Message, context: Context):
         "round_end_time": float(round_log.get("round_end_time", 0.0)),
     }
 
-    print(f"[CLIENT {client_id}] Training complete. Metrics keys: {sorted(metrics.keys())}")
+    status_icon = "✅" if train_status == "SUCCESS" else "❌"
+    print(f"[CLIENT {client_id}] {status_icon} Training {train_status}")
     print(f"[CLIENT {client_id}] Sent: {sent_size} bytes, Received: {received_size} bytes")
+
+    # ✅ Memory cleanup after training to prevent accumulation across rounds
+    import gc
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    gc.collect()
+    print(f"[CLIENT {client_id}] Memory cleanup completed after training")
 
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
@@ -289,54 +313,73 @@ def evaluate(msg: Message, context: Context):
     
     print(f"\n[CLIENT {client_id}] Starting evaluation")
     
-    # Use the same dataset preparation as train function
-    data_yaml, partition_root = prepare_client_yolo_dataset_prepartitioned(client_id)
-    
-    server_round = msg.content["config"].get("server-round", 0)
-    
-    # ✅ FIX: Look for actual checkpoint files (best.pt or last.pt)
-    weights_dir = os.path.join(
-        context.run_config.get("yolo_runs_dir", "runs/train"),
-        f"client{client_id}_r{server_round}", "weights"
-    )
-    
-    # Try best.pt first, then last.pt, then any .pt file
+    eval_status = "FAILED"
+    eval_error_msg = ""
+    val_metrics = {}
+    eval_time = 0.0
     checkpoint_path = None
-    candidate_files = [
-        os.path.join(weights_dir, "best.pt"),
-        os.path.join(weights_dir, "last.pt"),
-    ]
     
-    for candidate in candidate_files:
-        if os.path.exists(candidate):
-            checkpoint_path = candidate
-            print(f"[CLIENT {client_id}] Found checkpoint: {checkpoint_path}")
-            break
-    
-    if checkpoint_path is None:
-        # Fallback: find any .pt file in weights directory
-        if os.path.exists(weights_dir):
-            pt_files = list(Path(weights_dir).glob("*.pt"))
-            if pt_files:
-                checkpoint_path = str(pt_files[0])
-                print(f"[CLIENT {client_id}] Using fallback checkpoint: {checkpoint_path}")
-    
-    if checkpoint_path is None or not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(
-            f"No checkpoint found for client {client_id} round {server_round}\n"
-            f"Searched in: {weights_dir}\n"
-            f"Expected files: best.pt or last.pt"
+    try:
+        # Use the same dataset preparation as train function
+        data_yaml, partition_root = prepare_client_yolo_dataset_prepartitioned(client_id)
+        
+        server_round = msg.content["config"].get("server-round", 0)
+        
+        # ✅ FIX: Look for actual checkpoint files (best.pt or last.pt)
+        weights_dir = os.path.join(
+            context.run_config.get("yolo_runs_dir", "runs/train"),
+            f"client{client_id}_r{server_round}", "weights"
         )
-    
-    eval_start_time = time.perf_counter()
-    val_metrics = yolo_evaluate_weights_and_parse_map(
-        checkpoint_path, data_yaml, 
-        img=get_config("img_size", context, default=640),
-        run_dir=context.run_config.get("yolo_runs_dir", "runs/train"),
-        client_tag=f"client{client_id}",
-        round_idx=server_round
-    )
-    eval_time = time.perf_counter() - eval_start_time
+        
+        # Try best.pt first, then last.pt, then any .pt file
+        checkpoint_path = None
+        candidate_files = [
+            os.path.join(weights_dir, "best.pt"),
+            os.path.join(weights_dir, "last.pt"),
+        ]
+        
+        for candidate in candidate_files:
+            if os.path.exists(candidate):
+                checkpoint_path = candidate
+                print(f"[CLIENT {client_id}] Found checkpoint: {checkpoint_path}")
+                break
+        
+        if checkpoint_path is None:
+            # Fallback: find any .pt file in weights directory
+            if os.path.exists(weights_dir):
+                pt_files = list(Path(weights_dir).glob("*.pt"))
+                if pt_files:
+                    checkpoint_path = str(pt_files[0])
+                    print(f"[CLIENT {client_id}] Using fallback checkpoint: {checkpoint_path}")
+        
+        if checkpoint_path is None or not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(
+                f"No checkpoint found for client {client_id} round {server_round}\n"
+                f"Searched in: {weights_dir}\n"
+                f"Expected files: best.pt or last.pt"
+            )
+        
+        print(f"[CLIENT {client_id}] Checkpoint exists and is valid: {checkpoint_path}")
+        print(f"[CLIENT {client_id}] Calling yolo_evaluate_weights_and_parse_map...")
+        
+        eval_start_time = time.perf_counter()
+        val_metrics = yolo_evaluate_weights_and_parse_map(
+            checkpoint_path, data_yaml, 
+            img=get_config("img_size", context, default=640),
+            run_dir=context.run_config.get("yolo_runs_dir", "runs/train"),
+            client_tag=f"client{client_id}",
+            round_idx=server_round
+        )
+        eval_time = time.perf_counter() - eval_start_time
+        
+        print(f"[CLIENT {client_id}] yolo_evaluate returned metrics: {val_metrics}")
+        print(f"[CLIENT {client_id}] Eval metrics - Loss: {val_metrics.get('loss', 0.0):.4f}, mAP@0.5: {val_metrics.get('mAP@0.5', 0.0):.4f}, mAP: {val_metrics.get('mAP', 0.0):.4f}")
+        eval_status = "SUCCESS"
+    except Exception as e:
+        print(f"[CLIENT {client_id}] EVALUATION FAILED with error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        eval_error_msg = f"{type(e).__name__}: {str(e)}"
     
     print(f"[CLIENT {client_id}] Validation metrics: {val_metrics}")
     
@@ -348,6 +391,7 @@ def evaluate(msg: Message, context: Context):
         num_val_examples = _DATASET_CACHE[val_cache_key]
     
     # ✅ FIXED: Consistent eval metrics structure - explicit dict literal
+    # NOTE: Only numeric types allowed in MetricRecord per Flower framework requirements
     metrics = {
         "num-examples": float(max(1, int(num_val_examples))),
         "client_id": float(int(client_id)),
@@ -359,7 +403,16 @@ def evaluate(msg: Message, context: Context):
         "client_eval_time": float(eval_time),
     }
     
-    print(f"[CLIENT {client_id}] Evaluation complete. Metrics keys: {sorted(metrics.keys())}")
+    status_icon = "✅" if eval_status == "SUCCESS" else "❌"
+    print(f"[CLIENT {client_id}] {status_icon} Evaluation {eval_status}")
+    
+    # ✅ Memory cleanup after evaluation to prevent accumulation across rounds
+    import gc
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    gc.collect()
+    print(f"[CLIENT {client_id}] Memory cleanup completed after evaluation")
     
     metric_record = MetricRecord(metrics)
     content = RecordDict({"metrics": metric_record})

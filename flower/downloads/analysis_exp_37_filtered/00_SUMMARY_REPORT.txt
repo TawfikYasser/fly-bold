@@ -52,8 +52,8 @@ TIME STATISTICS
   Shortest Round:............................ 18.86 min (Round 1)
   Longest Round:............................. 19.48 min (Round 3)
 
-  Avg Client Training Time:.................. 17.33 min
-  Avg Client Eval Time:...................... 66.52 sec
+  Avg Client Training Time:.................. 17.10 min
+  Avg Client Eval Time:...................... 61.48 sec
   Total Eval Time:........................... 419.88 sec
 
 COMMUNICATION STATISTICS
@@ -64,20 +64,20 @@ COMMUNICATION STATISTICS
 
 CLIENT ANALYSIS
 ------------------------------------------------------------------------------------------
-  Best Training Client:...................... Client 1 (0.2080)
+  Best Training Client:...................... Client 2 (0.2065)
   Worst Training Client:..................... Client 7 (0.1235)
-  Training Performance Gap:.................. 0.0845
+  Training Performance Gap:.................. 0.0830
 
   Best Validation Client:.................... Client 2 (0.2083)
-  Worst Validation Client:................... Client 0 (0.0000)
-  Validation Performance Gap:................ 0.2083
+  Worst Validation Client:................... Client 7 (0.1276)
+  Validation Performance Gap:................ 0.0808
 
 KEY INSIGHTS
 ------------------------------------------------------------------------------------------
   [-] Training performance decreased by 5.1%
   [+] Validation performance improved by 10.3%
   [!] Acceptable generalization (gap < 0.05)
-  [+] Clients are converging (variance reduced from 0.0305 to 0.0291)
+  [+] Clients are converging (variance reduced from 0.0353 to 0.0321)
   [*] Data efficiency: 48954.9 MB per 0.01 improvement
 
 ==========================================================================================
