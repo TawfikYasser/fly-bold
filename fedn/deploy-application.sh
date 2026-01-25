@@ -33,9 +33,20 @@ gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo mkdir -p /
 # Ensure docker running and permissions applied
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo usermod -aG docker $USER && sudo systemctl enable --now docker" >/dev/null
 
-# Copy the full fedn project folder to the server
-info "Copying fedn folder to server..."
-gcloud compute scp --recurse . "$SERVER_VM":/app/fly-bold-fedn --zone="$SERVER_ZONE" --quiet
+# Ensure user owns /app so we can SCP to it and install unzip and python deps
+# We aggressively clean the destination first, INCLUDING docker-compose files and STORAGE (to kill zombies)
+# CRITICAL: Stop containers FIRST so they don't hold onto deleted file handles (fixes MinIO SlowDown/Unwritable error)
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="sudo docker ps -aq | xargs -r sudo docker rm -f && sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml /app/storage && sudo mkdir -p /app/fly-bold-fedn /app/storage && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y unzip python3-pip && pip3 install pymongo" >/dev/null
+
+# Copy Zip
+info "Copying fedn.zip to server..."
+gcloud compute scp ../fedn.zip "$SERVER_VM":/app/fedn.zip --zone="$SERVER_ZONE" --quiet
+
+# Unzip and fix structure (zip contains fedn/ folder, so we unzip to /app then rename fedn -> fly-bold-fedn)
+info "Unzipping on server..."
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip" >/dev/null
+# Install fedn from source
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="pip3 install --no-cache-dir /app/fly-bold-fedn/fedn" >/dev/null
 
 # Copy configs from local fedn/config
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
@@ -71,12 +82,27 @@ EOF
 # We will trust the 'as is' directive. If files are missing, it will fail, but that matches 'as is'.
 
 info "Starting server stack on $SERVER_VM"
+# Starting server stack on $SERVER_VM
 gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
 set -e
 cd /app
 sudo docker compose pull || true
-sudo docker compose up -d
-sleep 10
+sudo docker compose up -d --remove-orphans
+
+echo \"Waiting for FEDn Controller to be ready...\"
+max_retries=30
+count=0
+while ! curl -s http://localhost:8092/get_controller_status >/dev/null; do
+  echo \"Waiting for controller... \$count/\$max_retries\"
+  sleep 5
+  count=\$((count+1))
+  if [ \$count -ge \$max_retries ]; then
+    echo \"Timeout waiting for controller.\"
+    sudo docker compose logs api-server
+    exit 1
+  fi
+done
+echo \"Controller is ready!\"
 sudo docker compose ps
 " || fail "Server deployment failed"
 
@@ -92,10 +118,18 @@ for i in $(seq 1 5); do
 
   info "Deploying clients on $VM_NAME (ids $CLIENT_ID_1,$CLIENT_ID_2)"
 
-  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo mkdir -p /app/{client,logs}" >/dev/null
+  # Ensure user owns /app so we can SCP to it and install dependencies (unzip, python3.12 via PPA)
+  # Ensure user owns /app so we can SCP to it and install dependencies (unzip, python3.12 via PPA)
+  # We aggressively clean the destination first, INCLUDING docker-compose files and OLD CONTAINERS
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="sudo docker ps -aq | xargs -r sudo docker rm -f && sudo rm -rf /app/fly-bold-fedn /app/fedn /app/fedn.zip /app/docker-compose.yml /app/docker-compose.yaml && sudo mkdir -p /app/fly-bold-fedn /app/client /app/logs && sudo chown -R \$(id -u):\$(id -g) /app && sudo apt-get update && sudo apt-get install -y software-properties-common unzip && sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt-get update && sudo apt-get install -y python3.12-full python3.12-venv" >/dev/null
 
-  # Copy full project
-  gcloud compute scp --recurse . "$VM_NAME":/app/fly-bold-fedn --zone="$VM_ZONE" --quiet
+  # Copy Zip
+  info "Copying fedn.zip to $VM_NAME..."
+  gcloud compute scp ../fedn.zip "$VM_NAME":/app/fedn.zip --zone="$VM_ZONE" --quiet
+
+  # Unzip and fix structure
+  info "Unzipping on $VM_NAME..."
+  gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="unzip -q /app/fedn.zip -d /app && rm -rf /app/fly-bold-fedn && mv /app/fedn /app/fly-bold-fedn && rm /app/fedn.zip && sudo chmod -R 777 /app/fly-bold-fedn/client" >/dev/null
 
   # Setup Client Env
   # Generate dynamic docker-compose for this VM to match Client IDs (match fedn-client-<ID>)
@@ -104,24 +138,40 @@ version: '3.8'
 services:
   fedn-client-${CLIENT_ID_1}:
     image: ${DOCKER_IMAGE}
+    user: "0:0"
     container_name: fedn-client-${CLIENT_ID_1}
-    working_dir: /app/client
-    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
+    working_dir: /app
+    entrypoint: ""
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_1} --local-package"]
+    extra_hosts:
+      - "combiner:${SERVER_INTERNAL_IP}"
+    shm_size: '4gb'
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
+      YOLO_SPLITS_TARGET: /app/datasets_1/coco_partitions
     volumes:
-      - ./client/fedn.yaml:/app/client/fedn.yaml
+      - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
+      - /app/datasets:/app/datasets
+      - /app/datasets_1:/app/datasets_1
   fedn-client-${CLIENT_ID_2}:
     image: ${DOCKER_IMAGE}
+    user: "0:0"
     container_name: fedn-client-${CLIENT_ID_2}
-    working_dir: /app/client
-    command: ["client","start","--combiner","${SERVER_INTERNAL_IP}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
+    working_dir: /app
+    entrypoint: ""
+    command: ["/bin/bash", "-c", "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev && export HOME=/app/tmp && mkdir -p /app/tmp && /venv/bin/pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 'numpy<2' yolov5==7.0.14 'matplotlib>=3.2.2' opencv-python-headless==4.9.0.80 'Pillow>=7.1.2' 'PyYAML>=5.3.1' 'requests>=2.23.0' 'huggingface-hub>=0.24.0,<0.25.0' 'scipy>=1.4.1' 'tqdm>=4.64.0' 'pandas>=1.1.4' 'seaborn>=0.11.0' psutil 'thop>=0.1.1' 'protobuf>=5.0.0,<6.31.0' 'pycocotools>=2.0.6' && /venv/bin/fedn client start --combiner ${SERVER_INTERNAL_IP} --combiner-port 12080 -in client/fedn.yaml --name client-${CLIENT_ID_2} --local-package"]
+    extra_hosts:
+      - "combiner:${SERVER_INTERNAL_IP}"
+    shm_size: '4gb'
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
+      YOLO_SPLITS_TARGET: /app/datasets_1/coco_partitions
     volumes:
-      - ./client/fedn.yaml:/app/client/fedn.yaml
+      - ./fly-bold-fedn/client:/app/client
       - ../logs:/app/logs
+      - /app/datasets:/app/datasets
+      - /app/datasets_1:/app/datasets_1
 networks:
   default:
     driver: bridge
@@ -132,7 +182,7 @@ EOF
 
   # Setup Client Env and Configs
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="
-    cp /app/fly-bold-fedn/fedn/client/fedn.yaml /app/client/fedn.yaml
+    cp /app/fly-bold-fedn/client/fedn.yaml /app/client/fedn.yaml
     cat > /app/.env << INNEREOF
 DOCKER_IMAGE=$DOCKER_IMAGE
 COMBINER_HOST=$SERVER_INTERNAL_IP
@@ -147,6 +197,7 @@ set -e
 sudo usermod -aG docker \$USER || true
 sudo systemctl enable --now docker || true
 python3.12 -V || true
+python3.12 -m ensurepip --upgrade
 python3.12 -m pip install --no-cache-dir --upgrade pip
 python3.12 -m pip install --no-cache-dir \"numpy<2\" opencv-python-headless==4.9.0.80 fedn yolov5
 " >/dev/null
@@ -154,7 +205,7 @@ python3.12 -m pip install --no-cache-dir \"numpy<2\" opencv-python-headless==4.9
   gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --command="
 cd /app
 sudo docker compose pull || true
-sudo docker compose up -d
+sudo docker compose up -d --remove-orphans
 sleep 5
 sudo docker compose ps
 " &

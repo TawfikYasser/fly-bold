@@ -1,4 +1,5 @@
 /flower/exp_analyzer/
+.docker_password
 *.backup
 /flower/logs/
 /flower/command.txt

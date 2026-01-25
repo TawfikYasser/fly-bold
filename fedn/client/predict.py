@@ -6,15 +6,14 @@ from pathlib import Path
 import config
 from fedn.utils.helpers.helpers import save_metrics
 
+from data import resolve_client_yaml
 from model import load_parameters
 from validate import run_yolo_val
 from yolo_utils import count_images_from_yaml, save_state_dict_as_yolo_checkpoint
 
 
 def predict(in_model_path, out_json_path, client_id: int, data_root: str, yolo_size: str, img: int, nc: int):
-    data_yaml = Path(data_root) / f"client_{client_id}" / "coco_client.yaml"
-    if not data_yaml.exists():
-        raise FileNotFoundError(f"Missing client data yaml: {data_yaml}")
+    data_yaml = resolve_client_yaml(data_root, client_id)
 
     model = load_parameters(in_model_path, yolo_size=yolo_size, nc=nc)
     tmp_weights = Path(out_json_path).with_suffix(".pt")

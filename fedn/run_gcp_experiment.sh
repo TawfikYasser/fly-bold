@@ -5,9 +5,22 @@ set -euo pipefail
 
 info(){ echo -e "\n[INFO] $1\n"; }
 success(){ echo -e "\n[SUCCESS] $1\n"; }
+warn(){ echo -e "\n[WARN] $1\n"; }
 fail(){ echo -e "\n[ERROR] $1\n"; exit 1; }
 
+# Experiment ID (timestamp-based). Override by setting EXP_ID in env.
+EXP_ID=${EXP_ID:-EXP_$(date +%Y%m%d_%H%M%S)}
+info "Experiment ID: $EXP_ID"
+
 # Pre-checks
+
+# Try to load password from file
+if [ -f .docker_password ]; then
+  info "Using Docker Hub password from .docker_password"
+  DOCKER_PASSWORD=$(cat .docker_password)
+  export DOCKER_PASSWORD
+fi
+
 if [ ! -f .docker_username ]; then
   info "Docker credentials not found locally."
   read -p "Enter your Docker Hub username: " DOCKER_USERNAME
@@ -16,18 +29,24 @@ if [ ! -f .docker_username ]; then
   info "Please log in to Docker Hub (for local access if needed later)"
   # We might not strictly need local login if the builder VM handles it, 
   # but we need the password for the builder VM.
-  read -sp "Enter your Docker Hub password: " DOCKER_PASSWORD
-  echo ""
-  export DOCKER_PASSWORD
+  if [ -z "${DOCKER_PASSWORD:-}" ]; then
+    read -sp "Enter your Docker Hub password: " DOCKER_PASSWORD
+    echo ""
+    export DOCKER_PASSWORD
+  else
+    info "Using existing Docker Hub password."
+  fi
 else
   info "Using saved Docker Hub username from .docker_username"
   DOCKER_USERNAME=$(cat .docker_username)
   # We still need the password for the builder script if it's not cached somehow (it's not).
   # The builder script asks for it. We can't export it easily to the inner script's read.
   # Strategy: We will modify the flow to pass it or just ask for it here and feed it in.
-  read -sp "Enter your Docker Hub password (required for builder VM): " DOCKER_PASSWORD
-  echo ""
-  export DOCKER_PASSWORD
+  if [ -z "${DOCKER_PASSWORD:-}" ]; then
+    read -sp "Enter your Docker Hub password (required for builder VM): " DOCKER_PASSWORD
+    echo ""
+    export DOCKER_PASSWORD
+  fi
 fi
 
 # 1. Setup Infrastructure
@@ -36,22 +55,54 @@ info "STEP 1: Setting up Infrastructure"
 
 # 2. Build & Push Image
 info "STEP 2: Building and Pushing Docker Image"
-# build-push-image.sh asks for password via read -sp. 
-# We feed it via input redirection.
-# It reads username from .docker_username if present.
-# It reads password.
-if [ -f .docker_username ]; then
-  # It will skip username prompt, only ask password
-  echo "$DOCKER_PASSWORD" | ./build-push-image.sh
-else
-  # Should not happen given pre-check, but just in case
-  { echo "$DOCKER_USERNAME"; echo "$DOCKER_PASSWORD"; } | ./build-push-image.sh
+
+SKIP_BUILD=false
+if [ -f docker-image-info.txt ]; then
+  read -p "Found existing docker-image-info.txt. Reuse existing image? (y/n) [y]: " REUSE_IMAGE
+  REUSE_IMAGE=${REUSE_IMAGE:-y}
+  if [[ "$REUSE_IMAGE" == "y" ]]; then
+    info "Skipping build, reusing existing image."
+    SKIP_BUILD=true
+  fi
+fi
+
+if [ "$SKIP_BUILD" = false ]; then
+  # build-push-image.sh asks for password via read -sp. 
+  # We feed it via input redirection.
+  # It reads username from .docker_username if present.
+  # It reads password.
+  if [ -f .docker_username ]; then
+    # It will skip username prompt, only ask password
+    echo "$DOCKER_PASSWORD" | ./build-push-image.sh
+  else
+    # Should not happen given pre-check, but just in case
+    { echo "$DOCKER_USERNAME"; echo "$DOCKER_PASSWORD"; } | ./build-push-image.sh
+  fi
 fi
 
 # 3. Deploy Application
 info "STEP 3: Deploying Application"
-# deploy-application.sh asks "Enable TLS (self-signed)? (y/n) [n]:"
-echo "n" | ./deploy-application.sh
+
+SKIP_DEPLOY=false
+if [ -f vm-info.txt ]; then
+  # Only offer skip if we think infrastructure exists
+  read -p "Deploy application? (Enter 'n' to skip and reuse running services) [y]: " DO_DEPLOY
+  DO_DEPLOY=${DO_DEPLOY:-y}
+  if [[ "$DO_DEPLOY" == "n" ]]; then
+    SKIP_DEPLOY=true
+    info "Skipping deployment step."
+  fi
+fi
+
+if [ "$SKIP_DEPLOY" = false ]; then
+  # deploy-application.sh asks "Enable TLS (self-signed)? (y/n) [n]:"
+  info "Zipping local FEDn code..."
+  # Zip the current directory (fedn) from the parent directory to create ../fedn.zip
+  # ensuring it unzips into a 'fedn' folder as expected by deploy script
+  (cd .. && zip -qr fedn.zip fedn -x "fedn/.git/*" "fedn/venv/*" "fedn/downloads/*" "fedn/__pycache__/*")
+  
+  echo "n" | ./deploy-application.sh
+fi
 
 # 4. Run Training Session
 info "STEP 4: Running Training Session"
@@ -70,32 +121,100 @@ source vm-info.txt
 # So `run_session.py` is at `/app/fly-bold-fedn/run_session.py`.
 
 info "Connecting to Server VM ($SERVER_VM) to start training..."
-gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
+
+read -p "Start training session? (y/n) [y]: " START_TRAINING
+START_TRAINING=${START_TRAINING:-y}
+if [[ "$START_TRAINING" != "y" ]]; then
+  info "Skipping training session."
+  exit 0
+fi
+
+REMOTE_CMD=$(cat <<'EOF'
 set -e
 cd /app/fly-bold-fedn
+EXP_ID="__EXP_ID__"
+REMOTE_OUT_DIR="/app/fly-bold-fedn/analysis_runs/$EXP_ID"
+mkdir -p "$REMOTE_OUT_DIR"
 
-# Install pymongo if not already (it might be needed for the verification script)
-# The startup script installed 'fedn' and 'yolov5', but run_session.py imports 'pymongo'.
-# standard fedn image/venv might have it, but let's ensure.
-sudo /usr/bin/python3.12 -m pip install --no-cache-dir pymongo
+# Install pymongo if not already
+# Standard user installation (no sudo needed as we own /app, or use --user/env)
+# Using python3 -m pip to ensure we use the system python env correctly or the one available
+
+# Ensure pip is installed
+sudo apt-get update && sudo apt-get install -y python3-pip
+
+python3 -m pip install --no-cache-dir pymongo
+# Install FEDn from local source (uploaded to /app/fly-bold-fedn/fedn)
+python3 -m pip install --no-cache-dir /app/fly-bold-fedn/fedn
 
 echo 'Starting run_session.py remote execution...'
-sudo /usr/bin/python3.12 run_session.py
+python3 -u run_session.py
 
-# Install matplotlib for analyzer (pymongo installed above)
-sudo /usr/bin/python3.12 -m pip install --no-cache-dir matplotlib pandas
+# Capture session id if available
+SESSION_ID=""
+if [ -f session-id.txt ]; then
+  SESSION_ID="$(cat session-id.txt | tr -d '[:space:]')"
+  echo "Session ID: $SESSION_ID"
+fi
+
+# Install matplotlib for analyzer
+python3 -m pip install --no-cache-dir matplotlib pandas
 
 echo 'Running Experiment Analyzer...'
-sudo /usr/bin/python3.12 experiment_analyzer.py
-"
+# Dump reconstructed logs (validations) to JSON
+if [ -n "$SESSION_ID" ]; then
+  python3 -u experiment_analyzer.py --dump-stdout --session-id "$SESSION_ID" > "$REMOTE_OUT_DIR/reconstructed_logs.json"
+  python3 -u experiment_analyzer.py --out "$REMOTE_OUT_DIR" --session-id "$SESSION_ID"
+else
+  python3 -u experiment_analyzer.py --dump-stdout > "$REMOTE_OUT_DIR/reconstructed_logs.json"
+  python3 -u experiment_analyzer.py --out "$REMOTE_OUT_DIR"
+fi
+
+# Try to find the latest log file and generate detailed report
+LOG_FILE="$(ls -t "$REMOTE_OUT_DIR"/EXP_*_logs.json 2>/dev/null | head -n 1)"
+if [ -n "$LOG_FILE" ]; then
+  echo "Generating detailed report from latest log: $LOG_FILE..."
+  if [ -n "$SESSION_ID" ]; then
+    python3 -u experiment_analyzer.py --logs "$LOG_FILE" --session-id "$SESSION_ID"
+  else
+    python3 -u experiment_analyzer.py --logs "$LOG_FILE"
+  fi
+fi
+EOF
+)
+REMOTE_CMD=${REMOTE_CMD/__EXP_ID__/$EXP_ID}
+gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command "$REMOTE_CMD"
 
 # 5. Download Results
 info "STEP 5: Downloading Results"
 # download-files.sh asks: "Enter file numbers (comma) or 'all': "
-echo "all" | ./download-files.sh
+echo "analysis" | ./download-files.sh
 
-# 6. Cleanup
-info "STEP 6: Cleanup"
+# 6. Local Processing & Report Generation
+info "STEP 6: Generating Verified Report Locally"
+LATEST_DUMP=$(ls -t downloads/EXP_DB_Dump_*_logs.json 2>/dev/null | head -n 1)
+LOCAL_OUT_DIR="downloads/analysis_runs/$EXP_ID"
+RECONSTRUCTED_LOG="$LOCAL_OUT_DIR/reconstructed_logs.json"
+mkdir -p "$LOCAL_OUT_DIR"
+MERGED_LOGS_PATH="$LOCAL_OUT_DIR/merged_logs_${EXP_ID}.json"
+
+if [ -f "$LATEST_DUMP" ] && [ -f "$RECONSTRUCTED_LOG" ]; then
+    echo "Found latest dump: $LATEST_DUMP"
+    echo "Found reconstructed logs: $RECONSTRUCTED_LOG"
+    
+    echo "Merging logs to recover training times..."
+    python3 merge_logs.py "$RECONSTRUCTED_LOG" "$LATEST_DUMP" "$MERGED_LOGS_PATH"
+    
+    echo "Generating final verified report..."
+    python3 experiment_analyzer.py --logs "$MERGED_LOGS_PATH" --out "$LOCAL_OUT_DIR/analysis_plots"
+    
+    echo "Report generated: $LOCAL_OUT_DIR/analysis_plots/00_detailed_report.txt"
+else
+    warn "Could not find necessary log files for local report generation."
+fi
+
+# 7. Cleanup
+info "STEP 7: Cleanup"
 # cleanup.sh asks: "Type DELETE to continue: "
 echo "DELETE" | ./cleanup.sh
 

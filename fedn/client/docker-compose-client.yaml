@@ -5,8 +5,8 @@ version: '3.8'
 services:
   fedn-client-0:
     image: ${DOCKER_IMAGE}
-    working_dir: /app/client
-    command: ["client","start","--combiner","${COMBINER_HOST}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
+    working_dir: /app
+    command: ["client","start","--combiner","${COMBINER_HOST}","--combiner-port","12080","-in","client/fedn.yaml","--name","client-${CLIENT_ID_1}","--local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_1}
     volumes:
@@ -14,8 +14,8 @@ services:
       - ../logs:/app/logs
   fedn-client-1:
     image: ${DOCKER_IMAGE}
-    working_dir: /app/client
-    command: ["client","start","--combiner","${COMBINER_HOST}","--combiner-port","12080","--in","fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
+    working_dir: /app
+    command: ["client","start","--combiner","${COMBINER_HOST}","--combiner-port","12080","-in","client/fedn.yaml","--name","client-${CLIENT_ID_2}","--local-package"]
     environment:
       FEDN_CLIENT_ID: ${CLIENT_ID_2}
     volumes:
