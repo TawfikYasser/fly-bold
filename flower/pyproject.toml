@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.106"
+version = "1.0.110"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -82,7 +82,7 @@ num-server-rounds = 5
 fraction-train = 1
 fraction_evaluate = 1
 local-epochs = 5
-lr = 0.001
+lr = 0.003
 use_pretrained = 1
 task = "detection"  # "classification" or "detection"
 yolo_runs_dir = "./yolov5/runs/train"  # Runs dir for YOLO training
@@ -90,7 +90,7 @@ yolo_size = "s"  # n, s, m, l, or x
 img_size = 416
 batch_size = 32
 dataset = 1  # Dataset choice (1 = 100% IID, 2 = 50% IID + 50% non-IID, 3 = 20% IID + 80% non-IID, 4 = 100% non-IID)
-run_id = 38
+run_id = 42
 
 # Default federation to use when running the app
 [tool.flwr.federations]

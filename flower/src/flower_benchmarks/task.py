@@ -353,19 +353,26 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
     # Allow env run setting / config 'YOLO_INPROCESS' to enable in-process training if desired
     if os.environ.get('YOLO_INPROCESS', '').lower() in ('1', 'true', 'yes'):
         run_in_process = True
-
     if run_in_process:
         # Try in-process import & run
         try:
+            # Save original working directory
+            original_cwd = os.getcwd()
+            
+            # CRITICAL FIX: Change to yolov5 directory so relative paths work
+            yolov5_dir = os.path.abspath(os.path.join(os.getcwd(), "yolov5"))
+            print(f"[yolo_train] Changing directory to YOLOv5: {yolov5_dir}")
+            os.chdir(yolov5_dir)
+            
+            # Add both original cwd and yolov5 to sys.path for imports
+            if original_cwd not in sys.path:
+                sys.path.insert(0, original_cwd)
+            if yolov5_dir not in sys.path:
+                sys.path.insert(0, yolov5_dir)
+            
             # disable wandb by default for in-process runs
             os.environ.setdefault("WANDB_MODE", "offline")
             os.environ.setdefault("WANDB_SILENT", "true")
-            
-            # CRITICAL FIX: Only ensure workspace root is in sys.path
-            # Do NOT add yolov5 subdirectory
-            cwd = os.getcwd()
-            if cwd not in sys.path:
-                sys.path.insert(0, cwd)
 
             # Patch torch.load to disable weights_only for YOLO model loading
             orig_load = torch.load
@@ -374,6 +381,7 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
                 return orig_load(*args, **kwargs)
             torch.load = patched_load
 
+            print(f"[yolo_train] Importing yolov5.train from directory: {os.getcwd()}")
             ytrain = importlib.import_module("yolov5.train")
             print(f"[yolo_train] Starting in-process YOLOv5 training...")
             try:
@@ -396,10 +404,19 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
                 import traceback
                 traceback.print_exc()
                 raise
+            finally:
+                # Always restore original working directory
+                print(f"[yolo_train] Restoring working directory to: {original_cwd}")
+                os.chdir(original_cwd)
 
         except Exception as import_exc:
             print(f"[yolo_train] Could not run in-process: {type(import_exc).__name__}: {import_exc}")
             print("[yolo_train] Falling back to subprocess call of `python -m yolov5.train`")
+            # Ensure we're back in original directory before falling back
+            try:
+                os.chdir(original_cwd)
+            except:
+                pass
             run_in_process = False
 
     if not run_in_process:
@@ -429,7 +446,7 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
         env["WANDB_MODE"] = "disabled"  # Changed from offline to disabled
         env["WANDB_SILENT"] = "true"
         env["WANDB_DISABLED"] = "true"  # Extra safety
-        env["OMP_NUM_THREADS"] = "8"  # Limit OpenMP threads to avoid resource issues
+        env["OMP_NUM_THREADS"] = "5"  # Limit OpenMP threads to avoid resource issues
 
         # Stream output directly to stdout/stderr so logs are visible in real-time
         proc = subprocess.run(cmd, check=False, env=env)

@@ -2,9 +2,9 @@
 
 import os
 # Force optimal thread usage BEFORE importing torch
-os.environ["OMP_NUM_THREADS"] = "8"
-os.environ["MKL_NUM_THREADS"] = "8"
-os.environ["OPENBLAS_NUM_THREADS"] = "8"
+os.environ["OMP_NUM_THREADS"] = "5"
+os.environ["MKL_NUM_THREADS"] = "5"
+os.environ["OPENBLAS_NUM_THREADS"] = "5"
 import time
 import torch
 import numpy as np
