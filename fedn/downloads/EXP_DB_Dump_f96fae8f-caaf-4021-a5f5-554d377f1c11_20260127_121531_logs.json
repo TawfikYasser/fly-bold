@@ -1,0 +1,377 @@
+[
+  {
+    "round_id": "1",
+    "status": "Finished",
+    "round_config": {
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+      "task": "training",
+      "rounds": 1,
+      "round_id": "1",
+      "client_settings": {},
+      "is_sl_inference": false,
+      "selected_clients": null,
+      "aggregator": "fedavg",
+      "aggregator_kwargs": null,
+      "round_timeout": 7200,
+      "buffer_size": -1,
+      "delete_models_storage": true,
+      "clients_required": 1,
+      "requested_clients": 8,
+      "validate": true,
+      "helper_type": "numpyhelper",
+      "model_id": "18ce688c-87ae-4169-8875-7d5039c20247",
+      "server_functions": null
+    },
+    "round_data": {
+      "time_commit": 1.3500869274139404,
+      "reduce": {
+        "time_aggregate_model": 0.2577967643737793,
+        "time_fetch_model": 0.04329323768615723,
+        "time_load_model": 0.24807143211364746
+      }
+    },
+    "combiners": [
+      {
+        "round_id": "1",
+        "model_id": "523e3a2a-8949-4407-8f5f-e93107fef76d",
+        "name": "combiner",
+        "status": "Success",
+        "time_exec_training": 2682.3429703712463,
+        "config": {
+          "_job_id": "f3401fc1-2b52-4f30-baf7-5c565855d301",
+          "round_id": "1",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+          "task": "training",
+          "rounds": "1",
+          "client_settings": {},
+          "is_sl_inference": false,
+          "selected_clients": null,
+          "aggregator": "fedavg",
+          "aggregator_kwargs": "None",
+          "round_timeout": "7200",
+          "buffer_size": "-1",
+          "delete_models_storage": "True",
+          "clients_required": "1",
+          "requested_clients": "8",
+          "validate": "True",
+          "helper_type": "numpyhelper",
+          "model_id": "18ce688c-87ae-4169-8875-7d5039c20247",
+          "server_functions": "None"
+        },
+        "data": {
+          "aggregation_time": {
+            "nr_aggregated_models": 10,
+            "time_model_aggregation": 0.21663832664489746,
+            "time_model_load": 2.278107166290283
+          },
+          "nr_expected_updates": 10,
+          "nr_required_updates": 1,
+          "time_combination": 2.5334675312042236,
+          "timeout": 7200.0
+        }
+      }
+    ],
+    "committed_at": "2026-01-24T13:59:06.648000",
+    "updated_at": "2026-01-24T14:43:51.715000"
+  },
+  {
+    "round_id": "2",
+    "status": "Finished",
+    "round_config": {
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+      "task": "training",
+      "rounds": 1,
+      "round_id": "2",
+      "client_settings": {},
+      "is_sl_inference": false,
+      "selected_clients": null,
+      "aggregator": "fedavg",
+      "aggregator_kwargs": null,
+      "round_timeout": 7200,
+      "buffer_size": -1,
+      "delete_models_storage": true,
+      "clients_required": 1,
+      "requested_clients": 8,
+      "validate": true,
+      "helper_type": "numpyhelper",
+      "model_id": "bcf51669-f0cb-46ff-a82d-9ebd801f44d8",
+      "server_functions": null
+    },
+    "round_data": {
+      "time_commit": 1.3637511730194092,
+      "reduce": {
+        "time_aggregate_model": 0.23581671714782715,
+        "time_fetch_model": 0.043874502182006836,
+        "time_load_model": 0.21752190589904785
+      }
+    },
+    "combiners": [
+      {
+        "round_id": "2",
+        "model_id": "82695747-924c-4702-8e13-248a4934a40b",
+        "name": "combiner",
+        "status": "Success",
+        "time_exec_training": 2677.590605020523,
+        "config": {
+          "_job_id": "c53024bd-9a28-4f53-8e7d-78000054e950",
+          "round_id": "2",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+          "task": "training",
+          "rounds": "1",
+          "client_settings": {},
+          "is_sl_inference": false,
+          "selected_clients": null,
+          "aggregator": "fedavg",
+          "aggregator_kwargs": "None",
+          "round_timeout": "7200",
+          "buffer_size": "-1",
+          "delete_models_storage": "True",
+          "clients_required": "1",
+          "requested_clients": "8",
+          "validate": "True",
+          "helper_type": "numpyhelper",
+          "model_id": "bcf51669-f0cb-46ff-a82d-9ebd801f44d8",
+          "server_functions": "None"
+        },
+        "data": {
+          "aggregation_time": {
+            "nr_aggregated_models": 10,
+            "time_model_aggregation": 0.09602117538452148,
+            "time_model_load": 2.328791379928589
+          },
+          "nr_expected_updates": 10,
+          "nr_required_updates": 1,
+          "time_combination": 2.464897632598877,
+          "timeout": 7200.0
+        }
+      }
+    ],
+    "committed_at": "2026-01-24T14:43:51.721000",
+    "updated_at": "2026-01-24T15:28:32.639000"
+  },
+  {
+    "round_id": "3",
+    "status": "Finished",
+    "round_config": {
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+      "task": "training",
+      "rounds": 1,
+      "round_id": "3",
+      "client_settings": {},
+      "is_sl_inference": false,
+      "selected_clients": null,
+      "aggregator": "fedavg",
+      "aggregator_kwargs": null,
+      "round_timeout": 7200,
+      "buffer_size": -1,
+      "delete_models_storage": true,
+      "clients_required": 1,
+      "requested_clients": 8,
+      "validate": true,
+      "helper_type": "numpyhelper",
+      "model_id": "2c7acf49-3bdd-40be-afeb-c1721f92f9a8",
+      "server_functions": null
+    },
+    "round_data": {
+      "time_commit": 1.3467295169830322,
+      "reduce": {
+        "time_aggregate_model": 0.2329552173614502,
+        "time_fetch_model": 0.04709219932556152,
+        "time_load_model": 0.23398494720458984
+      }
+    },
+    "combiners": [
+      {
+        "round_id": "3",
+        "model_id": "73bccb8f-d31e-4918-a9c3-762b0312fcb2",
+        "name": "combiner",
+        "status": "Success",
+        "time_exec_training": 2638.4567041397095,
+        "config": {
+          "_job_id": "ca68e52e-0165-4320-8f72-0344426acec2",
+          "round_id": "3",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+          "task": "training",
+          "rounds": "1",
+          "client_settings": {},
+          "is_sl_inference": false,
+          "selected_clients": null,
+          "aggregator": "fedavg",
+          "aggregator_kwargs": "None",
+          "round_timeout": "7200",
+          "buffer_size": "-1",
+          "delete_models_storage": "True",
+          "clients_required": "1",
+          "requested_clients": "8",
+          "validate": "True",
+          "helper_type": "numpyhelper",
+          "model_id": "2c7acf49-3bdd-40be-afeb-c1721f92f9a8",
+          "server_functions": "None"
+        },
+        "data": {
+          "aggregation_time": {
+            "nr_aggregated_models": 10,
+            "time_model_aggregation": 0.10033464431762695,
+            "time_model_load": 2.1917638778686523
+          },
+          "nr_expected_updates": 10,
+          "nr_required_updates": 1,
+          "time_combination": 2.3320131301879883,
+          "timeout": 7200.0
+        }
+      }
+    ],
+    "committed_at": "2026-01-24T15:28:32.644000",
+    "updated_at": "2026-01-24T16:12:34.639000"
+  },
+  {
+    "round_id": "4",
+    "status": "Finished",
+    "round_config": {
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+      "task": "training",
+      "rounds": 1,
+      "round_id": "4",
+      "client_settings": {},
+      "is_sl_inference": false,
+      "selected_clients": null,
+      "aggregator": "fedavg",
+      "aggregator_kwargs": null,
+      "round_timeout": 7200,
+      "buffer_size": -1,
+      "delete_models_storage": true,
+      "clients_required": 1,
+      "requested_clients": 8,
+      "validate": true,
+      "helper_type": "numpyhelper",
+      "model_id": "f76fae74-9e78-4369-b422-3b98ce6fc92e",
+      "server_functions": null
+    },
+    "round_data": {
+      "time_commit": 1.3567776679992676,
+      "reduce": {
+        "time_aggregate_model": 0.23526334762573242,
+        "time_fetch_model": 0.04260730743408203,
+        "time_load_model": 0.25721025466918945
+      }
+    },
+    "combiners": [
+      {
+        "round_id": "4",
+        "model_id": "9ef89ffb-dd4e-45e4-a641-e876b0f6ea1f",
+        "name": "combiner",
+        "status": "Success",
+        "time_exec_training": 2609.6882541179657,
+        "config": {
+          "_job_id": "e8ac2da3-fdfc-4737-9277-80b2103e708d",
+          "round_id": "4",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+          "task": "training",
+          "rounds": "1",
+          "client_settings": {},
+          "is_sl_inference": false,
+          "selected_clients": null,
+          "aggregator": "fedavg",
+          "aggregator_kwargs": "None",
+          "round_timeout": "7200",
+          "buffer_size": "-1",
+          "delete_models_storage": "True",
+          "clients_required": "1",
+          "requested_clients": "8",
+          "validate": "True",
+          "helper_type": "numpyhelper",
+          "model_id": "f76fae74-9e78-4369-b422-3b98ce6fc92e",
+          "server_functions": "None"
+        },
+        "data": {
+          "aggregation_time": {
+            "nr_aggregated_models": 10,
+            "time_model_aggregation": 0.1011037826538086,
+            "time_model_load": 2.246619939804077
+          },
+          "nr_expected_updates": 10,
+          "nr_required_updates": 1,
+          "time_combination": 2.3886611461639404,
+          "timeout": 7200.0
+        }
+      }
+    ],
+    "committed_at": "2026-01-24T16:12:34.645000",
+    "updated_at": "2026-01-24T16:56:06.423000"
+  },
+  {
+    "round_id": "5",
+    "status": "Finished",
+    "round_config": {
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+      "task": "training",
+      "rounds": 1,
+      "round_id": "5",
+      "client_settings": {},
+      "is_sl_inference": false,
+      "selected_clients": null,
+      "aggregator": "fedavg",
+      "aggregator_kwargs": null,
+      "round_timeout": 7200,
+      "buffer_size": -1,
+      "delete_models_storage": true,
+      "clients_required": 1,
+      "requested_clients": 8,
+      "validate": true,
+      "helper_type": "numpyhelper",
+      "model_id": "7fc4c0db-41c6-4890-9653-e77e67761aa9",
+      "server_functions": null
+    },
+    "round_data": {
+      "time_commit": 1.3447773456573486,
+      "reduce": {
+        "time_aggregate_model": 0.230438232421875,
+        "time_fetch_model": 0.04824495315551758,
+        "time_load_model": 0.2295851707458496
+      }
+    },
+    "combiners": [
+      {
+        "round_id": "5",
+        "model_id": "9086908e-e593-4998-b560-20f6f2d1c4fa",
+        "name": "combiner",
+        "status": "Success",
+        "time_exec_training": 2717.7891771793365,
+        "config": {
+          "_job_id": "7b899976-ba6d-43d9-8b9f-17805e8c8974",
+          "round_id": "5",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
+          "task": "training",
+          "rounds": "1",
+          "client_settings": {},
+          "is_sl_inference": false,
+          "selected_clients": null,
+          "aggregator": "fedavg",
+          "aggregator_kwargs": "None",
+          "round_timeout": "7200",
+          "buffer_size": "-1",
+          "delete_models_storage": "True",
+          "clients_required": "1",
+          "requested_clients": "8",
+          "validate": "True",
+          "helper_type": "numpyhelper",
+          "model_id": "7fc4c0db-41c6-4890-9653-e77e67761aa9",
+          "server_functions": "None"
+        },
+        "data": {
+          "aggregation_time": {
+            "nr_aggregated_models": 10,
+            "time_model_aggregation": 0.0999002456665039,
+            "time_model_load": 2.202083110809326
+          },
+          "nr_expected_updates": 10,
+          "nr_required_updates": 1,
+          "time_combination": 2.343229055404663,
+          "timeout": 7200.0
+        }
+      }
+    ],
+    "committed_at": "2026-01-24T16:56:06.428000",
+    "updated_at": "2026-01-24T17:41:28.906000"
+  }
+]
