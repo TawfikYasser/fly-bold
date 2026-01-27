@@ -1,10 +1,9 @@
 [
   {
-    "_id": "695c9e832605019c3f24c846",
     "round_id": "1",
     "status": "Finished",
     "round_config": {
-      "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
       "task": "training",
       "rounds": 1,
       "round_id": "1",
@@ -20,28 +19,28 @@
       "requested_clients": 8,
       "validate": true,
       "helper_type": "numpyhelper",
-      "model_id": "cc1494b6-0ac2-42d8-a8cd-3b30deedb125",
+      "model_id": "18ce688c-87ae-4169-8875-7d5039c20247",
       "server_functions": null
     },
     "round_data": {
-      "time_commit": 2.6499457359313965,
+      "time_commit": 1.3500869274139404,
       "reduce": {
-        "time_aggregate_model": 0.2628824710845947,
-        "time_fetch_model": 0.03749585151672363,
-        "time_load_model": 0.26888489723205566
+        "time_aggregate_model": 0.2577967643737793,
+        "time_fetch_model": 0.04329323768615723,
+        "time_load_model": 0.24807143211364746
       }
     },
     "combiners": [
       {
         "round_id": "1",
-        "model_id": "f9690ec2-7229-4fa5-a44e-109e0509afaa",
+        "model_id": "523e3a2a-8949-4407-8f5f-e93107fef76d",
         "name": "combiner",
         "status": "Success",
-        "time_exec_training": 1202.8111741542816,
+        "time_exec_training": 2682.3429703712463,
         "config": {
-          "_job_id": "e378f9fe-5389-470d-a017-709a42feed05",
+          "_job_id": "f3401fc1-2b52-4f30-baf7-5c565855d301",
           "round_id": "1",
-          "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
           "task": "training",
           "rounds": "1",
           "client_settings": {},
@@ -56,31 +55,30 @@
           "requested_clients": "8",
           "validate": "True",
           "helper_type": "numpyhelper",
-          "model_id": "cc1494b6-0ac2-42d8-a8cd-3b30deedb125",
+          "model_id": "18ce688c-87ae-4169-8875-7d5039c20247",
           "server_functions": "None"
         },
         "data": {
           "aggregation_time": {
             "nr_aggregated_models": 10,
-            "time_model_aggregation": 0.1778883934020996,
-            "time_model_load": 2.331975221633911
+            "time_model_aggregation": 0.21663832664489746,
+            "time_model_load": 2.278107166290283
           },
           "nr_expected_updates": 10,
           "nr_required_updates": 1,
-          "time_combination": 2.549187183380127,
+          "time_combination": 2.5334675312042236,
           "timeout": 7200.0
         }
       }
     ],
-    "committed_at": "2026-01-06T05:32:51.300000",
-    "updated_at": "2026-01-06T05:52:57.772000"
+    "committed_at": "2026-01-24T13:59:06.648000",
+    "updated_at": "2026-01-24T14:43:51.715000"
   },
   {
-    "_id": "695ca3392605019c3f24c848",
     "round_id": "2",
     "status": "Finished",
     "round_config": {
-      "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
       "task": "training",
       "rounds": 1,
       "round_id": "2",
@@ -96,28 +94,28 @@
       "requested_clients": 8,
       "validate": true,
       "helper_type": "numpyhelper",
-      "model_id": "31b61356-b573-42e8-9785-4b8c4ba07085",
+      "model_id": "bcf51669-f0cb-46ff-a82d-9ebd801f44d8",
       "server_functions": null
     },
     "round_data": {
-      "time_commit": 2.637976884841919,
+      "time_commit": 1.3637511730194092,
       "reduce": {
-        "time_aggregate_model": 0.2542269229888916,
-        "time_fetch_model": 0.032460927963256836,
-        "time_load_model": 0.25169873237609863
+        "time_aggregate_model": 0.23581671714782715,
+        "time_fetch_model": 0.043874502182006836,
+        "time_load_model": 0.21752190589904785
       }
     },
     "combiners": [
       {
         "round_id": "2",
-        "model_id": "f1f1cba4-059c-47a7-afef-6b8fee4491e7",
+        "model_id": "82695747-924c-4702-8e13-248a4934a40b",
         "name": "combiner",
         "status": "Success",
-        "time_exec_training": 1198.422010421753,
+        "time_exec_training": 2677.590605020523,
         "config": {
-          "_job_id": "9b26edeb-7d63-428e-a711-a140277727b9",
+          "_job_id": "c53024bd-9a28-4f53-8e7d-78000054e950",
           "round_id": "2",
-          "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
           "task": "training",
           "rounds": "1",
           "client_settings": {},
@@ -132,31 +130,30 @@
           "requested_clients": "8",
           "validate": "True",
           "helper_type": "numpyhelper",
-          "model_id": "31b61356-b573-42e8-9785-4b8c4ba07085",
+          "model_id": "bcf51669-f0cb-46ff-a82d-9ebd801f44d8",
           "server_functions": "None"
         },
         "data": {
           "aggregation_time": {
             "nr_aggregated_models": 10,
-            "time_model_aggregation": 0.09623384475708008,
-            "time_model_load": 2.3650107383728027
+            "time_model_aggregation": 0.09602117538452148,
+            "time_model_load": 2.328791379928589
           },
           "nr_expected_updates": 10,
           "nr_required_updates": 1,
-          "time_combination": 2.5022313594818115,
+          "time_combination": 2.464897632598877,
           "timeout": 7200.0
         }
       }
     ],
-    "committed_at": "2026-01-06T05:52:57.778000",
-    "updated_at": "2026-01-06T06:13:01.966000"
+    "committed_at": "2026-01-24T14:43:51.721000",
+    "updated_at": "2026-01-24T15:28:32.639000"
   },
   {
-    "_id": "695ca7ed2605019c3f24c84a",
     "round_id": "3",
     "status": "Finished",
     "round_config": {
-      "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
       "task": "training",
       "rounds": 1,
       "round_id": "3",
@@ -172,28 +169,28 @@
       "requested_clients": 8,
       "validate": true,
       "helper_type": "numpyhelper",
-      "model_id": "04ee4e15-0661-4dd5-8efd-7a5af864f074",
+      "model_id": "2c7acf49-3bdd-40be-afeb-c1721f92f9a8",
       "server_functions": null
     },
     "round_data": {
-      "time_commit": 2.6436445713043213,
+      "time_commit": 1.3467295169830322,
       "reduce": {
-        "time_aggregate_model": 0.25019383430480957,
-        "time_fetch_model": 0.03834724426269531,
-        "time_load_model": 0.3212306499481201
+        "time_aggregate_model": 0.2329552173614502,
+        "time_fetch_model": 0.04709219932556152,
+        "time_load_model": 0.23398494720458984
       }
     },
     "combiners": [
       {
         "round_id": "3",
-        "model_id": "4094d3ca-1ace-4e77-8816-fd98a9db373f",
+        "model_id": "73bccb8f-d31e-4918-a9c3-762b0312fcb2",
         "name": "combiner",
         "status": "Success",
-        "time_exec_training": 1146.594084739685,
+        "time_exec_training": 2638.4567041397095,
         "config": {
-          "_job_id": "c5f06668-43da-4ccd-a203-00500fd3aa6b",
+          "_job_id": "ca68e52e-0165-4320-8f72-0344426acec2",
           "round_id": "3",
-          "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
           "task": "training",
           "rounds": "1",
           "client_settings": {},
@@ -208,31 +205,30 @@
           "requested_clients": "8",
           "validate": "True",
           "helper_type": "numpyhelper",
-          "model_id": "04ee4e15-0661-4dd5-8efd-7a5af864f074",
+          "model_id": "2c7acf49-3bdd-40be-afeb-c1721f92f9a8",
           "server_functions": "None"
         },
         "data": {
           "aggregation_time": {
             "nr_aggregated_models": 10,
-            "time_model_aggregation": 0.10620737075805664,
-            "time_model_load": 2.334777593612671
+            "time_model_aggregation": 0.10033464431762695,
+            "time_model_load": 2.1917638778686523
           },
           "nr_expected_updates": 10,
           "nr_required_updates": 1,
-          "time_combination": 2.4804935455322266,
+          "time_combination": 2.3320131301879883,
           "timeout": 7200.0
         }
       }
     ],
-    "committed_at": "2026-01-06T06:13:01.970000",
-    "updated_at": "2026-01-06T06:32:14.635000"
+    "committed_at": "2026-01-24T15:28:32.644000",
+    "updated_at": "2026-01-24T16:12:34.639000"
   },
   {
-    "_id": "695cac6e2605019c3f24c84c",
     "round_id": "4",
     "status": "Finished",
     "round_config": {
-      "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
       "task": "training",
       "rounds": 1,
       "round_id": "4",
@@ -248,28 +244,28 @@
       "requested_clients": 8,
       "validate": true,
       "helper_type": "numpyhelper",
-      "model_id": "37a0b433-9a41-4eed-9a52-ed379d19d10a",
+      "model_id": "f76fae74-9e78-4369-b422-3b98ce6fc92e",
       "server_functions": null
     },
     "round_data": {
-      "time_commit": 2.656317949295044,
+      "time_commit": 1.3567776679992676,
       "reduce": {
-        "time_aggregate_model": 0.25467824935913086,
-        "time_fetch_model": 0.043077707290649414,
-        "time_load_model": 0.25040435791015625
+        "time_aggregate_model": 0.23526334762573242,
+        "time_fetch_model": 0.04260730743408203,
+        "time_load_model": 0.25721025466918945
       }
     },
     "combiners": [
       {
         "round_id": "4",
-        "model_id": "eb50bc03-10f6-4bf2-b866-e37c442aebda",
+        "model_id": "9ef89ffb-dd4e-45e4-a641-e876b0f6ea1f",
         "name": "combiner",
         "status": "Success",
-        "time_exec_training": 1068.2429895401,
+        "time_exec_training": 2609.6882541179657,
         "config": {
-          "_job_id": "cafb7842-9f48-4c1b-a57c-5cd3401b921f",
+          "_job_id": "e8ac2da3-fdfc-4737-9277-80b2103e708d",
           "round_id": "4",
-          "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
           "task": "training",
           "rounds": "1",
           "client_settings": {},
@@ -284,31 +280,30 @@
           "requested_clients": "8",
           "validate": "True",
           "helper_type": "numpyhelper",
-          "model_id": "37a0b433-9a41-4eed-9a52-ed379d19d10a",
+          "model_id": "f76fae74-9e78-4369-b422-3b98ce6fc92e",
           "server_functions": "None"
         },
         "data": {
           "aggregation_time": {
             "nr_aggregated_models": 10,
-            "time_model_aggregation": 0.09368062019348145,
-            "time_model_load": 2.3673555850982666
+            "time_model_aggregation": 0.1011037826538086,
+            "time_model_load": 2.246619939804077
           },
           "nr_expected_updates": 10,
           "nr_required_updates": 1,
-          "time_combination": 2.501284599304199,
+          "time_combination": 2.3886611461639404,
           "timeout": 7200.0
         }
       }
     ],
-    "committed_at": "2026-01-06T06:32:14.640000",
-    "updated_at": "2026-01-06T06:50:07.547000"
+    "committed_at": "2026-01-24T16:12:34.645000",
+    "updated_at": "2026-01-24T16:56:06.423000"
   },
   {
-    "_id": "695cb09f2605019c3f24c84e",
     "round_id": "5",
     "status": "Finished",
     "round_config": {
-      "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+      "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
       "task": "training",
       "rounds": 1,
       "round_id": "5",
@@ -324,28 +319,28 @@
       "requested_clients": 8,
       "validate": true,
       "helper_type": "numpyhelper",
-      "model_id": "9b7f4626-7913-45e8-9104-4dede93d4a6f",
+      "model_id": "7fc4c0db-41c6-4890-9653-e77e67761aa9",
       "server_functions": null
     },
     "round_data": {
-      "time_commit": 2.6429171562194824,
+      "time_commit": 1.3447773456573486,
       "reduce": {
-        "time_aggregate_model": 0.2857637405395508,
-        "time_fetch_model": 0.04004263877868652,
-        "time_load_model": 0.2537407875061035
+        "time_aggregate_model": 0.230438232421875,
+        "time_fetch_model": 0.04824495315551758,
+        "time_load_model": 0.2295851707458496
       }
     },
     "combiners": [
       {
         "round_id": "5",
-        "model_id": "9f6f6985-756b-49a8-bc5e-b3525688139f",
+        "model_id": "9086908e-e593-4998-b560-20f6f2d1c4fa",
         "name": "combiner",
         "status": "Success",
-        "time_exec_training": 1113.0799221992493,
+        "time_exec_training": 2717.7891771793365,
         "config": {
-          "_job_id": "7da737c3-f572-4ca5-b95d-abfbf6765db3",
+          "_job_id": "7b899976-ba6d-43d9-8b9f-17805e8c8974",
           "round_id": "5",
-          "session_id": "a696a542-b5f0-43ee-92f7-241bb706e8ea",
+          "session_id": "f96fae8f-caaf-4021-a5f5-554d377f1c11",
           "task": "training",
           "rounds": "1",
           "client_settings": {},
@@ -360,23 +355,23 @@
           "requested_clients": "8",
           "validate": "True",
           "helper_type": "numpyhelper",
-          "model_id": "9b7f4626-7913-45e8-9104-4dede93d4a6f",
+          "model_id": "7fc4c0db-41c6-4890-9653-e77e67761aa9",
           "server_functions": "None"
         },
         "data": {
           "aggregation_time": {
             "nr_aggregated_models": 10,
-            "time_model_aggregation": 0.09371352195739746,
-            "time_model_load": 2.355194091796875
+            "time_model_aggregation": 0.0999002456665039,
+            "time_model_load": 2.202083110809326
           },
           "nr_expected_updates": 10,
           "nr_required_updates": 1,
-          "time_combination": 2.4895570278167725,
+          "time_combination": 2.343229055404663,
           "timeout": 7200.0
         }
       }
     ],
-    "committed_at": "2026-01-06T06:50:07.552000",
-    "updated_at": "2026-01-06T07:08:44.896000"
+    "committed_at": "2026-01-24T16:56:06.428000",
+    "updated_at": "2026-01-24T17:41:28.906000"
   }
 ]
