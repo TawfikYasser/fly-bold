@@ -185,7 +185,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     ALL_ROUND_LOGS.append(round_log)
     
     print(f"[SERVER] {'='*80}")
-    print(f"[SERVER] ROUND {CURRENT_ROUND+1} TRAINING SUMMARY")
+    print(f"[SERVER] ROUND {CURRENT_ROUND} TRAINING SUMMARY")
     print(f"[SERVER] {'='*80}")
     print(f"[SERVER] Participating Clients: {len(clients_data)} | Success: {train_success_count}")
     print(f"[SERVER] Training Loss:     {round_train_loss:.4f}")
@@ -214,9 +214,9 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
         print("[SERVER] No evaluation results to aggregate")
         return MetricRecord({})
     
-    if not ALL_ROUND_LOGS:
-        print("[SERVER] Warning: No round logs available yet")
-        return MetricRecord({})
+    # if not ALL_ROUND_LOGS:
+    #     print("[SERVER] Warning: No round logs available yet")
+    #     return MetricRecord({})
     
     print(f"[SERVER] Aggregating evaluation metrics from {len(record_dicts)} clients")
     print(f"[SERVER] {'='*80}")
@@ -303,7 +303,7 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             client_logs_map[c['id']]["client_eval_num_examples"] = int(c['examples'])
     
     print(f"[SERVER] {'='*80}")
-    print(f"[SERVER] ROUND {CURRENT_ROUND+1} EVALUATION SUMMARY")
+    print(f"[SERVER] ROUND {CURRENT_ROUND} EVALUATION SUMMARY")
     print(f"[SERVER] {'='*80}")
     print(f"[SERVER] Participating Clients: {len(eval_data)} | Success: {eval_success_count}")
     print(f"[SERVER] Validation Loss:   {round_eval_loss:.4f}")
@@ -401,11 +401,12 @@ def main(grid: Grid, context: Context) -> None:
         print(f"âœ… Classification model initialized")
 
     # Create strategy with optimized aggregation
-    strategy = FedAvg(
+    strategy = FedProx(
         fraction_train=fraction_train,
         fraction_evaluate=fraction_evaluate,
         train_metrics_aggr_fn=custom_train_metrics_aggregation,
         evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
+        proximal_mu=2,
     )
 
     # Training configuration

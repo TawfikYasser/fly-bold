@@ -252,10 +252,10 @@ monitor_loop() {
             display_stats "$CLIENT_VM" "$client_stats" "💻 CLIENT VM $i" "client"
         done
         
-        echo -e "${CYAN}Refreshing in 5 seconds... (Press Ctrl+C to exit)${NC}"
+        echo -e "${CYAN}Refreshing in 2 seconds... (Press Ctrl+C to exit)${NC}"
         echo "----------------------------------------" >> "$LOG_FILE"
         echo "" >> "$LOG_FILE"
-        sleep 5
+        sleep 2
     done
 }
 
