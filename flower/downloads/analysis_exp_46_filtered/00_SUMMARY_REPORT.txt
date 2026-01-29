@@ -1,0 +1,82 @@
+==========================================================================================
+FEDERATED LEARNING EXPERIMENT REPORT
+==========================================================================================
+
+EXPERIMENT CONFIGURATION
+------------------------------------------------------------------------------------------
+  Experiment ID................................ 46
+  Train Images/Client.......................... 1000
+  Val Images/Client............................ 500
+  Total Clients................................ 10
+  Server Rounds................................ 5
+  Local Epochs................................. 3
+  Batch Size................................... 32
+  Learning Rate................................ 0.005
+  YOLO Model................................... s
+  Image Size................................... 512
+  Dirichlet Alpha.............................. 0.7
+
+TRAINING PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Training Score:.................... 0.5108
+  Final Training Score:...................... 0.5089
+  Best Training Score:....................... 0.5161 (Round 9)
+  Training Improvement:...................... -0.0019 (-0.37%)
+
+  Best Training mAP@0.5:..................... 0.5398 (Round 10)
+  Best Training mAP:......................... 0.3563 (Round 9)
+  Final Training Loss:....................... 0.1259
+
+VALIDATION PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Validation Score:.................. 0.4884
+  Final Validation Score:.................... 0.4787
+  Best Validation Score:..................... 0.4887 (Round 9)
+  Validation Improvement:.................... -0.0097 (-1.99%)
+
+  Best Validation mAP@0.5:................... 0.5044 (Round 0)
+  Best Validation mAP:....................... 0.3350 (Round 13)
+  Final Validation Loss:..................... 0.1047
+
+GENERALIZATION ANALYSIS
+------------------------------------------------------------------------------------------
+  Final Generalization Gap:.................. 0.0302
+  Average Generalization Gap:................ 0.0345
+  Maximum Generalization Gap:................ 0.0789
+  Status:.................................... SLIGHT OVERFITTING
+
+TIME STATISTICS
+------------------------------------------------------------------------------------------
+  Total Training Time:....................... 780.53 min (13.01 hours)
+  Average Round Duration:.................... 52.04 min
+  Shortest Round:............................ 48.05 min (Round 13)
+  Longest Round:............................. 53.73 min (Round 10)
+
+  Avg Client Training Time:.................. 44.43 min
+  Avg Client Eval Time:...................... 51.67 sec
+  Total Eval Time:........................... 977.39 sec
+
+COMMUNICATION STATISTICS
+------------------------------------------------------------------------------------------
+  Total Data Transferred:.................... 1994.87 MB (1.948 GB)
+  Average per Round:......................... 132.99 MB
+  Data Transfer Rate:........................ 2.56 MB/min
+
+CLIENT ANALYSIS
+------------------------------------------------------------------------------------------
+  Best Training Client:...................... Client 6 (0.5271)
+  Worst Training Client:..................... Client 2 (0.4918)
+  Training Performance Gap:.................. 0.0353
+
+  Best Validation Client:.................... Client 6 (0.5000)
+  Worst Validation Client:................... Client 2 (0.4512)
+  Validation Performance Gap:................ 0.0489
+
+KEY INSIGHTS
+------------------------------------------------------------------------------------------
+  [-] Training performance decreased by 0.4%
+  [-] Validation performance decreased by 2.0%
+  [!] Acceptable generalization (gap < 0.05)
+  [!] Clients diverging (variance increased from 0.0117 to 0.0143)
+
+==========================================================================================
