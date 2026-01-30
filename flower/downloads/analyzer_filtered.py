@@ -4,6 +4,67 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import re
+import os
+
+
+# ==================== ENV FILE PARSER ====================
+def load_env_file(env_path='.env'):
+    """Manually parse .env file without external libraries"""
+    env_vars = {}
+    
+    if not os.path.exists(env_path):
+        print(f"[!] Warning: {env_path} not found, using default values")
+        return env_vars
+    
+    with open(env_path, 'r') as f:
+        for line in f:
+            # Strip whitespace
+            line = line.strip()
+            
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                continue
+            
+            # Split on first '=' only
+            if '=' in line:
+                # Remove inline comments
+                if '#' in line:
+                    line = line.split('#')[0].strip()
+                
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                
+                env_vars[key] = value
+    
+    return env_vars
+
+
+# Load environment variables
+ENV = load_env_file('.env')
+
+
+def get_env(key, default, type_cast=str):
+    """Get environment variable with type casting and default value"""
+    value = ENV.get(key)
+    if value is None:
+        return default
+    
+    try:
+        if type_cast == int:
+            return int(value)
+        elif type_cast == float:
+            return float(value)
+        else:
+            return str(value)
+    except (ValueError, TypeError):
+        return default
 
 
 # ==================== CONFIGURATION ====================
@@ -14,19 +75,21 @@ match = re.search(r"_detection_(\d+)_", INPUT_FILE)
 exp_id = match.group(1) if match else "unknown"
 OUTPUT_DIR = f"analysis_exp_{exp_id}_filtered"
 
-# Experiment configuration (update based on your setup)
+# Experiment configuration loaded from .env
 CONFIG = {
     "Experiment ID": exp_id,
-    "Train Images/Client": 1000,
-    "Val Images/Client": 500,
-    "Total Clients": 10,
-    "Server Rounds": 5,
-    "Local Epochs": 3,
-    "Batch Size": 32,
-    "Learning Rate": 0.005,
-    "YOLO Model": "s",
-    "Image Size": 512,
-    "Dirichlet Alpha": 0.7,
+    "Total Clients": get_env("NUM_CLIENTS", 10, int),
+    "Server Rounds": get_env("NUM_SERVER_ROUNDS", 5, int),
+    "Local Epochs": get_env("LOCAL_EPOCHS", 3, int),
+    "Batch Size": get_env("BATCH_SIZE", 32, int),
+    "Learning Rate": get_env("LR", 0.005, float),
+    "YOLO Model": get_env("YOLO_SIZE", "s", str),
+    "Image Size": get_env("IMG_SIZE", 512, int),
+    "Dataset": get_env("DATASET", 5, int),
+    "Strategy": "FedAvg",
+    "NUM_CPUS": get_env("NUM_CPUS", 5, int),
+    "Fraction Train": get_env("FRACTION_TRAIN", 1, float),
+    "Fraction Evaluate": get_env("FRACTION_EVALUATE", 1, float),
 }
 
 

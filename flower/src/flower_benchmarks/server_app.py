@@ -401,12 +401,11 @@ def main(grid: Grid, context: Context) -> None:
         print(f"âœ… Classification model initialized")
 
     # Create strategy with optimized aggregation
-    strategy = FedProx(
+    strategy = FedAvg(
         fraction_train=fraction_train,
         fraction_evaluate=fraction_evaluate,
         train_metrics_aggr_fn=custom_train_metrics_aggregation,
         evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
-        proximal_mu=2,
     )
 
     # Training configuration
