@@ -8,7 +8,7 @@ import json
 from typing import List, Tuple, Dict, Optional
 from flwr.app import ArrayRecord, Context, MetricRecord, RecordDict, ConfigRecord
 from flwr.serverapp import Grid, ServerApp
-from flwr.serverapp.strategy import FedAvg, FedProx
+from flwr.serverapp.strategy import FedAvg, FedAdam, FedYogi
 from flower_benchmarks.task import Net
 
 # Ensure parent directory is in sys.path
@@ -400,13 +400,33 @@ def main(grid: Grid, context: Context) -> None:
         arrays = ArrayRecord(global_model.state_dict())
         print(f"âœ… Classification model initialized")
 
-    # Create strategy with optimized aggregation
-    strategy = FedAvg(
-        fraction_train=fraction_train,
-        fraction_evaluate=fraction_evaluate,
-        train_metrics_aggr_fn=custom_train_metrics_aggregation,
-        evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
-    )
+
+    strategy_id = get_config("strategy", context, default=1, type_converter=int)
+
+    if strategy_id == 1:
+        print(f"Using strategy: FedAvg")
+        strategy = FedAvg(
+            fraction_train=fraction_train,
+            fraction_evaluate=fraction_evaluate,
+            train_metrics_aggr_fn=custom_train_metrics_aggregation,
+            evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
+        )
+    elif strategy_id == 2:
+        print(f"Using strategy: FedYogi")
+        strategy = FedYogi(
+            fraction_train=fraction_train,
+            fraction_evaluate=fraction_evaluate,
+            train_metrics_aggr_fn=custom_train_metrics_aggregation,
+            evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
+        )
+    elif strategy_id == 3:
+        print(f"Using strategy: FedAdam")
+        strategy = FedAdam(
+            fraction_train=fraction_train,
+            fraction_evaluate=fraction_evaluate,
+            train_metrics_aggr_fn=custom_train_metrics_aggregation,
+            evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
+        )
 
     # Training configuration
     train_cfg = {"lr": lr, "num_rounds": num_rounds}
@@ -417,7 +437,7 @@ def main(grid: Grid, context: Context) -> None:
     print(f"STARTING FEDERATED LEARNING")
     print(f"{'='*70}\n")
 
-    # Start training
+
     result = strategy.start(
         grid=grid,
         initial_arrays=arrays,
@@ -428,6 +448,8 @@ def main(grid: Grid, context: Context) -> None:
     print(f"\n{'='*70}")
     print(f"TRAINING COMPLETE")
     print(f"{'='*70}\n")
+
+    run_id = "11213141" # flower, fedavg, dataset_100, 25% failing clients
 
     # Save final model
     state_dict = result.arrays.to_torch_state_dict()

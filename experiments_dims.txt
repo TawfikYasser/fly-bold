@@ -1,0 +1,20 @@
+Dim_1=Framework
+Dim_2=Strategy
+Dim_3=Dataset
+Dim_4=FailingClients
+
+Dim_1_1=Flower
+Dim_1_2=FEDn
+Dim_1_3=fedML
+
+Dim_2_1=FedAvg
+Dim_2_2=FedYogi
+Dim_2_3=FedAdam
+
+Dim_3_1=Dataset_100 (100IID)
+Dim_3_2=Dataset_050 (050IID)
+Dim_3_3=Dataset_000 (000IID)
+
+Dim_4_1=25
+Dim_4_2=50
+Dim_4_3=75
