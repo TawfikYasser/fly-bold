@@ -18,6 +18,7 @@ source .env
 CHECK_INTERVAL=10   # 10 seconds
 EXPERIMENT_NAME="EXP_YOLOv5_${YOLO_SIZE}_detection"
 LOG_FILE="${EXPERIMENT_NAME}_${RUN_ID}_logs.json"
+MODEL_FILE="${EXPERIMENT_NAME}_${RUN_ID}_final_model.pt"
 CONTAINER_NAME="fl-server"
 CONTAINER_PATH="/app/${LOG_FILE}"
 
@@ -45,11 +46,13 @@ while true; do
             sudo docker cp ${CONTAINER_NAME}:${CONTAINER_PATH} /tmp/${LOG_FILE}
         "
         
-        # Then, copy from VM to local machine downloads directory
-        mkdir -p downloads
-        gcloud compute scp "${SERVER_VM}:/tmp/${LOG_FILE}" "./downloads/${LOG_FILE}" --zone="$SERVER_ZONE"
+        # Then, copy from VM to local machine under a run_id-scoped directory
+        mkdir -p "experiments_outputs/${RUN_ID}"
+        gcloud compute scp "${SERVER_VM}:/tmp/${LOG_FILE}" "./experiments_outputs/${RUN_ID}/${LOG_FILE}" --zone="$SERVER_ZONE"
+        gcloud compute scp "${SERVER_VM}:/tmp/${MODEL_FILE}" "./experiments_outputs/${RUN_ID}/${MODEL_FILE}" --zone="$SERVER_ZONE"
         
-        echo "[SUCCESS] Log file downloaded to: ./downloads/${LOG_FILE}"
+        echo "[SUCCESS] Log file downloaded to: ./experiments_outputs/${RUN_ID}/${LOG_FILE}"
+        echo "[SUCCESS] Model file downloaded to: ./experiments_outputs/${RUN_ID}/${MODEL_FILE}"
 
         echo "[INFO] Stopping client VMs..."
         for i in $(seq 1 5); do

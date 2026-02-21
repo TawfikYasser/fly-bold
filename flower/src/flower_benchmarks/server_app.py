@@ -437,19 +437,17 @@ def main(grid: Grid, context: Context) -> None:
     print(f"STARTING FEDERATED LEARNING")
     print(f"{'='*70}\n")
 
-
     result = strategy.start(
         grid=grid,
         initial_arrays=arrays,
         train_config=ConfigRecord(train_cfg),
         num_rounds=num_rounds,
+        timeout=3600
     )
 
     print(f"\n{'='*70}")
     print(f"TRAINING COMPLETE")
     print(f"{'='*70}\n")
-
-    run_id = "11213141" # flower, fedavg, dataset_100, 25% failing clients
 
     # Save final model
     state_dict = result.arrays.to_torch_state_dict()

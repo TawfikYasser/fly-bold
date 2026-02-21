@@ -313,26 +313,47 @@ EOF
         exit 1
     fi
 
-    # Declare associative arrays to store found data
-    declare -A vm_internal_ips
-    declare -A vm_external_ips
-    declare -A vm_zones
+    # Store found data using indexed arrays (compatible with macOS bash 3.x)
+    declare -a client_names
+    declare -a client_zones
+    declare -a client_internal
+    declare -a client_external
+
+    # Server placeholders
+    SERVER_NAME=""
+    SERVER_ZONE=""
+    SERVER_INTERNAL_IP=""
+    SERVER_EXTERNAL_IP=""
 
     # Parse the CSV output
     while IFS=, read -r name zone internal_ip external_ip; do
-        vm_internal_ips["$name"]=$internal_ip
-        vm_external_ips["$name"]=$external_ip
-        vm_zones["$name"]=$zone
-        echo "    Found $name: $internal_ip (Ext: ${external_ip:-None})" >&2
+        if [ "$name" = "flybold-server" ]; then
+            SERVER_NAME="$name"
+            SERVER_ZONE="$zone"
+            SERVER_INTERNAL_IP="$internal_ip"
+            SERVER_EXTERNAL_IP="$external_ip"
+            echo "    Found $name: $internal_ip (Ext: ${external_ip:-None})" >&2
+            continue
+        fi
+
+        # Match client names like: flybold-client-1 .. flybold-client-5
+        if echo "$name" | grep -qE '^flybold-client-[0-9]+$'; then
+            idx=$(echo "$name" | sed -E 's/.*-([0-9]+)$/\1/')
+            client_names[$idx]="$name"
+            client_zones[$idx]="$zone"
+            client_internal[$idx]="$internal_ip"
+            client_external[$idx]="$external_ip"
+            echo "    Found $name: $internal_ip (Ext: ${external_ip:-None})" >&2
+        fi
     done <<< "$vm_data"
 
     # Write Server Info
-    if [ -n "${vm_internal_ips[flybold-server]}" ]; then
+    if [ -n "$SERVER_INTERNAL_IP" ]; then
         cat >> vm-info.txt << EOF
 SERVER_VM=flybold-server
-SERVER_ZONE=${vm_zones[flybold-server]}
-SERVER_INTERNAL_IP=${vm_internal_ips[flybold-server]}
-SERVER_EXTERNAL_IP=${vm_external_ips[flybold-server]}
+SERVER_ZONE=$SERVER_ZONE
+SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
+SERVER_EXTERNAL_IP=$SERVER_EXTERNAL_IP
 
 EOF
     else
@@ -340,19 +361,18 @@ EOF
         exit 1
     fi
 
-    # Write Client Info
+    # Write Client Info (clients indexed 1..5)
     for i in $(seq 1 5); do
-        local client_name="flybold-client-$i"
-        if [ -n "${vm_internal_ips[$client_name]}" ]; then
+        if [ -n "${client_internal[$i]:-}" ]; then
             cat >> vm-info.txt << EOF
-CLIENT_${i}_VM=$client_name
-CLIENT_${i}_ZONE=${vm_zones[$client_name]}
-CLIENT_${i}_INTERNAL_IP=${vm_internal_ips[$client_name]}
-CLIENT_${i}_EXTERNAL_IP=${vm_external_ips[$client_name]}
+CLIENT_${i}_VM=${client_names[$i]}
+CLIENT_${i}_ZONE=${client_zones[$i]}
+CLIENT_${i}_INTERNAL_IP=${client_internal[$i]}
+CLIENT_${i}_EXTERNAL_IP=${client_external[$i]}
 
 EOF
         else
-            echo_warning "Client VM ($client_name) not found or not running"
+            echo_warning "Client VM (flybold-client-$i) not found or not running"
         fi
     done
     
@@ -491,22 +511,23 @@ if [ "$SKIP_PROMPTS" = false ]; then
     fi
 fi
 
-# Get/increment run_id
-echo_info "Reserving a new run ID in GCS (race-safe)..."
-RUN_ID="$(reserve_run_id "$BUCKET_NAME")"
-echo_success "Reserved run_id: $RUN_ID"
-
-# Save config
-# Save updated config to .env using sed (preserve other comments/structure)
-if grep -q '^RUN_ID=' .env; then
-    sed -i "s/^RUN_ID=.*/RUN_ID=$RUN_ID/" .env
-else
-    echo "RUN_ID=$RUN_ID" >> .env
+# Load RUN_ID directly from .env (no auto-increment)
+echo_info "Loading RUN_ID from .env..."
+if ! grep -q '^RUN_ID=' .env; then
+    echo_error "RUN_ID not found in .env. Please set it manually before deploying."
+    exit 1
 fi
-echo "[DEBUG] Updated RUN_ID in .env"
-sed -i "s|^DOCKER_IMAGE=.*|DOCKER_IMAGE=$DOCKER_IMAGE|" .env
+RUN_ID="$(grep '^RUN_ID=' .env | cut -d'=' -f2 | tr -d '[:space:]')"
+echo_success "Using RUN_ID: $RUN_ID"
+
+# Push the RUN_ID to GCS so it's recorded for this experiment
+echo_info "Pushing RUN_ID to GCS..."
+printf "%s" "$RUN_ID" > /tmp/run_id.txt
+gcs_with_retry gcloud storage cp /tmp/run_id.txt "gs://${BUCKET_NAME}/run_id.txt"
+echo "[DEBUG] Pushed RUN_ID=$RUN_ID to gs://${BUCKET_NAME}/run_id.txt"
+sed -i '' "s|^DOCKER_IMAGE=.*|DOCKER_IMAGE=$DOCKER_IMAGE|" .env
 echo "[DEBUG] Updated DOCKER_IMAGE in .env"
-sed -i "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
+sed -i '' "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
 echo "[DEBUG] Updated SERVER_INTERNAL_IP in .env"
 
 # Save config to GCS
@@ -527,6 +548,7 @@ cat > /tmp/run_config.json <<EOJSON
   "min_eval": $MIN_VAL_IMAGES,
   "max_eval": $MAX_VAL_IMAGES,
   "dataset": $DATASET,
+  "strategy": $STRATEGY,
   "alpha_min": $DIRICHLET_ALPHA_MIN,
   "alpha_max": $DIRICHLET_ALPHA_MAX,
   "enable_gpu": $ENABLE_GPU,
@@ -541,19 +563,20 @@ gcs_with_retry gcloud storage cp /tmp/run_config.json "gs://${BUCKET_NAME}/confi
 echo "[DEBUG] Uploaded run_config.json"
 
 # Update pyproject.toml
-sed -i "s/num-server-rounds = [0-9]*/num-server-rounds = $NUM_SERVER_ROUNDS/" pyproject.toml
-sed -i "s/fraction-train = [0-9.]\+/fraction-train = $FRACTION_TRAIN/" pyproject.toml
-sed -i "s/fraction_evaluate = [0-9.]\+/fraction_evaluate = $FRACTION_EVALUATE/" pyproject.toml
-sed -i "s/local-epochs = [0-9]\+/local-epochs = $LOCAL_EPOCHS/" pyproject.toml
-sed -i "s/lr = [0-9.]\+/lr = $LR/" pyproject.toml
-sed -i "s/yolo_size = \"[a-z]\"/yolo_size = \"$YOLO_SIZE\"/" pyproject.toml
-sed -i "s/img_size = [0-9]\+/img_size = $IMG_SIZE/" pyproject.toml
-sed -i "s/batch_size = [0-9]\+/batch_size = $BATCH_SIZE/" pyproject.toml
-sed -i "s/run_id = [0-9]\+/run_id = $RUN_ID/" pyproject.toml
-sed -i "s/dataset = [0-9]\+/dataset = $DATASET/" pyproject.toml
-sed -i "s/use_pretrained = [0-9]\+/use_pretrained = $USE_PRETRAINED/" pyproject.toml
-sed -i "s|coco_root = \".*\"|coco_root = \"/app/datasets/coco\"|" pyproject.toml
-sed -i "s|gcs_bucket = \".*\"|gcs_bucket = \"$BUCKET_NAME\"|" pyproject.toml
+sed -i '' "s/num-server-rounds = [0-9]*/num-server-rounds = $NUM_SERVER_ROUNDS/" pyproject.toml
+sed -i '' "s/fraction-train = [0-9.]\+/fraction-train = $FRACTION_TRAIN/" pyproject.toml
+sed -i '' "s/fraction_evaluate = [0-9.]\+/fraction_evaluate = $FRACTION_EVALUATE/" pyproject.toml
+sed -i '' "s/local-epochs = [0-9]\+/local-epochs = $LOCAL_EPOCHS/" pyproject.toml
+sed -i '' "s/lr = [0-9.]\+/lr = $LR/" pyproject.toml
+sed -i '' "s/yolo_size = \"[a-z]\"/yolo_size = \"$YOLO_SIZE\"/" pyproject.toml
+sed -i '' "s/img_size = [0-9]\+/img_size = $IMG_SIZE/" pyproject.toml
+sed -i '' "s/batch_size = [0-9]\+/batch_size = $BATCH_SIZE/" pyproject.toml
+sed -i '' "s/run_id = [0-9]\+/run_id = $RUN_ID/" pyproject.toml
+sed -i '' "s/dataset = [0-9]\+/dataset = $DATASET/" pyproject.toml
+sed -i '' "s/strategy = [0-9]\+/strategy = $STRATEGY/" pyproject.toml
+sed -i '' "s/use_pretrained = [0-9]\+/use_pretrained = $USE_PRETRAINED/" pyproject.toml
+sed -i '' "s|coco_root = \".*\"|coco_root = \"/app/datasets/coco\"|" pyproject.toml
+sed -i '' "s|gcs_bucket = \".*\"|gcs_bucket = \"$BUCKET_NAME\"|" pyproject.toml
 
 # Increment version in pyproject.toml
 echo_info "Incrementing version in pyproject.toml..."
@@ -561,18 +584,18 @@ CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/
 IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
 PATCH=$((VERSION_PARTS[2] + 1))
 NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
-sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+sed -i '' "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
 echo_success "Version incremented from $CURRENT_VERSION to $NEW_VERSION"
 
 # Update YOLOv5 hyperparameters
-sed -i "s/lr0: [0-9.]\+/lr0: $LR/" yolov5/data/hyps/hyp.scratch-low.yaml
+sed -i '' "s/lr0: [0-9.]\+/lr0: $LR/" yolov5/data/hyps/hyp.scratch-low.yaml
 
 if [ "$INSECURE" = "false" ]; then
-    sed -i 's/^[[:space:]]*insecure = .*/insecure = false/' pyproject.toml
-    sed -i 's/^[[:space:]]*# root-certificates =/root-certificates =/' pyproject.toml
+    sed -i '' 's/^[[:space:]]*insecure = .*/insecure = false/' pyproject.toml
+    sed -i '' 's/^[[:space:]]*# root-certificates =/root-certificates =/' pyproject.toml
 else
-    sed -i 's/^[[:space:]]*insecure = .*/insecure = true/' pyproject.toml
-    sed -i 's/^[[:space:]]*root-certificates =/# root-certificates =/' pyproject.toml
+    sed -i '' 's/^[[:space:]]*insecure = .*/insecure = true/' pyproject.toml
+    sed -i '' 's/^[[:space:]]*root-certificates =/# root-certificates =/' pyproject.toml
 fi
 
 echo_success "Configuration saved"
