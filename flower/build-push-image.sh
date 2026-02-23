@@ -77,6 +77,7 @@ MISSING_FILES=$(gcloud compute ssh $TEMP_VM_NAME --zone=$TEMP_VM_ZONE --command=
     [ ! -f /tmp/Dockerfile ] && missing=\"\$missing Dockerfile\"
     [ ! -f /tmp/requirements.txt ] && missing=\"\$missing requirements.txt\"
     [ ! -f /tmp/pyproject.toml ] && missing=\"\$missing pyproject.toml\"
+    [ ! -f /tmp/flwr-config.toml ] && missing=\"\$missing flwr-config.toml\"
     echo \$missing
 " 2>/dev/null)
 

@@ -413,7 +413,6 @@ def evaluate(msg: Message, context: Context):
         torch.cuda.synchronize()
     gc.collect()
     print(f"[CLIENT {client_id}] Memory cleanup completed after evaluation")
-    
     metric_record = MetricRecord(metrics)
     content = RecordDict({"metrics": metric_record})
     

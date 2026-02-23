@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.116"
+version = "1.0.119"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -23,7 +23,7 @@ pytorch = [
 # flwr[rest] is needed for SuperLink with REST backend
 # flwr[simulation] is kept for local simulation testing
 dependencies = [
-    "flwr[rest,simulation]>=1.22.0",
+    "flwr[rest,simulation]>=1.26.1",
     "flwr-datasets[vision]>=0.5.0",
     "protobuf>=5.28.2",
     "numpy>=1.24.4,<2.0.0",
@@ -92,24 +92,3 @@ batch_size = 16
 dataset = 100
 strategy = 1
 run_id = 112131
-
-# Default federation to use when running the app
-[tool.flwr.federations]
-default = "deployment"
-
-# Deployment federation for real Flower deployment (SuperLink/SuperNode)
-# Server: flower-superlink, Clients: flower-supernode
-# Address and insecure mode can be set via .env (FLWR_SUPERLINK_ADDRESS, INSECURE or FLWR_INSECURE)
-[tool.flwr.federations.deployment]
-options.backend = "rest"
-options.backends.client-resources.num-cpus = 8
-address = "0.0.0.0:9093"
-insecure = true
-# root-certificates = "/app/certs/ca.crt"  # For TLS setup - use absolute path
-
-
-# Local simulation federation (CPU only) - kept for testing
-[tool.flwr.federations.local-simulation]
-options.num-supernodes = 3
-options.backend.client-resources.num-cpus = 4
-options.backend.client-resources.num-gpus = 0

@@ -63,6 +63,8 @@ RUN mkdir -p /app/logs /app/checkpoints /app/certs /app/datasets /app/data
 COPY pyproject.toml /app/
 COPY src/flower_benchmarks/ /app/src/flower_benchmarks/
 COPY yolov5/ /app/yolov5/
+RUN mkdir -p /root/.flwr
+COPY flwr-config.toml /root/.flwr/config.toml
 
 # REMOVED: COPY download_coco_n_images.py /app/
 # (Dataset download handled by GCS bucket + deployment script)

@@ -2,7 +2,16 @@
 
 # Deploy Flybold Application with Dynamic IP Handling
 set -e
-
+# Portable in-place sed (works on macOS BSD sed + Linux GNU sed)
+sedi() {
+  if sed --version >/dev/null 2>&1; then
+    # GNU sed (Linux)
+    sed -i -E "$@"
+  else
+    # BSD sed (macOS)
+    sed -i '' -E "$@"
+  fi
+}
 PROJECT_ID="inf022"
 BUCKET_NAME="flybold-coco-${PROJECT_ID}"
 
@@ -563,20 +572,18 @@ gcs_with_retry gcloud storage cp /tmp/run_config.json "gs://${BUCKET_NAME}/confi
 echo "[DEBUG] Uploaded run_config.json"
 
 # Update pyproject.toml
-sed -i '' "s/num-server-rounds = [0-9]*/num-server-rounds = $NUM_SERVER_ROUNDS/" pyproject.toml
-sed -i '' "s/fraction-train = [0-9.]\+/fraction-train = $FRACTION_TRAIN/" pyproject.toml
-sed -i '' "s/fraction_evaluate = [0-9.]\+/fraction_evaluate = $FRACTION_EVALUATE/" pyproject.toml
-sed -i '' "s/local-epochs = [0-9]\+/local-epochs = $LOCAL_EPOCHS/" pyproject.toml
-sed -i '' "s/lr = [0-9.]\+/lr = $LR/" pyproject.toml
-sed -i '' "s/yolo_size = \"[a-z]\"/yolo_size = \"$YOLO_SIZE\"/" pyproject.toml
-sed -i '' "s/img_size = [0-9]\+/img_size = $IMG_SIZE/" pyproject.toml
-sed -i '' "s/batch_size = [0-9]\+/batch_size = $BATCH_SIZE/" pyproject.toml
-sed -i '' "s/run_id = [0-9]\+/run_id = $RUN_ID/" pyproject.toml
-sed -i '' "s/dataset = [0-9]\+/dataset = $DATASET/" pyproject.toml
-sed -i '' "s/strategy = [0-9]\+/strategy = $STRATEGY/" pyproject.toml
-sed -i '' "s/use_pretrained = [0-9]\+/use_pretrained = $USE_PRETRAINED/" pyproject.toml
-sed -i '' "s|coco_root = \".*\"|coco_root = \"/app/datasets/coco\"|" pyproject.toml
-sed -i '' "s|gcs_bucket = \".*\"|gcs_bucket = \"$BUCKET_NAME\"|" pyproject.toml
+sedi "s/^num-server-rounds[[:space:]]*=[[:space:]]*[0-9]+/num-server-rounds = ${NUM_SERVER_ROUNDS}/" pyproject.toml
+sedi "s/^fraction-train[[:space:]]*=[[:space:]]*[0-9.]+/fraction-train = ${FRACTION_TRAIN}/" pyproject.toml
+sedi "s/^fraction_evaluate[[:space:]]*=[[:space:]]*[0-9.]+/fraction_evaluate = ${FRACTION_EVALUATE}/" pyproject.toml
+sedi "s/^local-epochs[[:space:]]*=[[:space:]]*[0-9]+/local-epochs = ${LOCAL_EPOCHS}/" pyproject.toml
+sedi "s/^lr[[:space:]]*=[[:space:]]*[0-9.]+/lr = ${LR}/" pyproject.toml
+sedi "s/^yolo_size[[:space:]]*=[[:space:]]*\"[^\"]+\"/yolo_size = \"${YOLO_SIZE}\"/" pyproject.toml
+sedi "s/^img_size[[:space:]]*=[[:space:]]*[0-9]+/img_size = ${IMG_SIZE}/" pyproject.toml
+sedi "s/^batch_size[[:space:]]*=[[:space:]]*[0-9]+/batch_size = ${BATCH_SIZE}/" pyproject.toml
+sedi "s/^dataset[[:space:]]*=[[:space:]]*[0-9]+/dataset = ${DATASET}/" pyproject.toml
+sedi "s/^strategy[[:space:]]*=[[:space:]]*[0-9]+/strategy = ${STRATEGY}/" pyproject.toml
+sedi "s/^use_pretrained[[:space:]]*=[[:space:]]*[0-9]+/use_pretrained = ${USE_PRETRAINED}/" pyproject.toml
+sedi "s|^gcs_bucket[[:space:]]*=[[:space:]]*\".*\"|gcs_bucket = \"${BUCKET_NAME}\"|" pyproject.toml
 
 # Increment version in pyproject.toml
 echo_info "Incrementing version in pyproject.toml..."
@@ -676,6 +683,34 @@ gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
     sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
     sudo docker compose ps
 " 2>&1 | grep -E "(NAME|fl-server)" || true
+
+echo_info "Writing Flower config.toml inside fl-server (set default to deployment)..."
+
+# Build config content (deployment is default)
+if [ "$ENABLE_TLS" = "true" ]; then
+  FLWR_INSECURE_FLAG="false"
+else
+  FLWR_INSECURE_FLAG="true"
+fi
+
+gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
+  set -e
+  cd /app
+  sudo docker compose exec -T fl-server sh -c '
+    mkdir -p /root/.flwr
+    cat > /root/.flwr/config.toml <<EOF
+[superlink]
+default = \"deployment\"
+
+[superlink.deployment]
+# flwr run executes inside the same container as the SuperLink,
+# so localhost is correct.
+address = \"127.0.0.1:9093\"
+insecure = ${FLWR_INSECURE_FLAG}
+EOF
+  '
+  sudo docker compose exec -T fl-server flwr config list || true
+"
 
 echo_success "Server deployed at $SERVER_INTERNAL_IP"
 

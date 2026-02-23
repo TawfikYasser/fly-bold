@@ -1,0 +1,6 @@
+[superlink]
+default = "deployment"
+
+[superlink.deployment]
+address = "127.0.0.1:9093"
+insecure = true
