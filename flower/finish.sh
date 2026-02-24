@@ -44,6 +44,7 @@ while true; do
         # First, copy from container to VM
         gcloud compute ssh "$SERVER_VM" --zone="$SERVER_ZONE" --command="
             sudo docker cp ${CONTAINER_NAME}:${CONTAINER_PATH} /tmp/${LOG_FILE}
+            sudo docker cp ${CONTAINER_NAME}:/app/${MODEL_FILE} /tmp/${MODEL_FILE}
         "
         
         # Then, copy from VM to local machine under a run_id-scoped directory

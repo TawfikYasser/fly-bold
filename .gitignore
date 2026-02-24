@@ -2,6 +2,7 @@
 .docker_password
 *.backup
 /flower/logs/
+/flower/downloads/
 /flower/command.txt
 /flower/__pycache__/
 /flower/run_history.txt
