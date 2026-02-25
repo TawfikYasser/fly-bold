@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "generated_at": "2026-02-24T17:25:18Z",
+    "seed": 37812,
+    "failure_pct": 25,
+    "num_failing_clients": 3,
+    "total_clients": 10,
+    "num_rounds": 15,
+    "episodes_per_client": 1
+  },
+  "failing_clients": [
+    1,
+    4,
+    5
+  ],
+  "episodes": {
+    "1": {
+      "fail_round": 12,
+      "restart_round": 14,
+      "absent_rounds": [
+        13,
+        14
+      ],
+      "down_duration": 2
+    },
+    "4": {
+      "fail_round": 5,
+      "restart_round": 7,
+      "absent_rounds": [
+        6,
+        7
+      ],
+      "down_duration": 2
+    },
+    "5": {
+      "fail_round": 1,
+      "restart_round": 5,
+      "absent_rounds": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "down_duration": 4
+    }
+  },
+  "action_schedule": {
+    "12": {
+      "stop": [
+        1
+      ],
+      "start": []
+    },
+    "14": {
+      "stop": [],
+      "start": [
+        1
+      ]
+    },
+    "5": {
+      "stop": [
+        4
+      ],
+      "start": [
+        5
+      ]
+    },
+    "7": {
+      "stop": [],
+      "start": [
+        4
+      ]
+    },
+    "1": {
+      "stop": [
+        5
+      ],
+      "start": []
+    }
+  },
+  "semantics": {
+    "fail_round": "Client is STOPPED after [SERVER] ROUND N EVALUATION SUMMARY is logged. The client has already submitted its update for this round.",
+    "restart_round": "Client is STARTED after [SERVER] ROUND N EVALUATION SUMMARY is logged. Client rejoins from round (restart_round + 1) onwards.",
+    "absent_rounds": "Round numbers where this client contributes NO update to aggregation.",
+    "round_indexing": "All round numbers in this plan are 1-indexed. The server logs are 0-indexed; the orchestrator adds 1 when parsing."
+  }
+}

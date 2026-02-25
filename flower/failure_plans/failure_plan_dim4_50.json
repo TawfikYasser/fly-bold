@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "generated_at": "2026-02-24T17:26:58Z",
+    "seed": 28812,
+    "failure_pct": 50,
+    "num_failing_clients": 5,
+    "total_clients": 10,
+    "num_rounds": 15,
+    "episodes_per_client": 1
+  },
+  "failing_clients": [
+    4,
+    5,
+    6,
+    8,
+    9
+  ],
+  "episodes": {
+    "4": {
+      "fail_round": 3,
+      "restart_round": 5,
+      "absent_rounds": [
+        4,
+        5
+      ],
+      "down_duration": 2
+    },
+    "5": {
+      "fail_round": 2,
+      "restart_round": 4,
+      "absent_rounds": [
+        3,
+        4
+      ],
+      "down_duration": 2
+    },
+    "6": {
+      "fail_round": 7,
+      "restart_round": 9,
+      "absent_rounds": [
+        8,
+        9
+      ],
+      "down_duration": 2
+    },
+    "8": {
+      "fail_round": 8,
+      "restart_round": 12,
+      "absent_rounds": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "down_duration": 4
+    },
+    "9": {
+      "fail_round": 12,
+      "restart_round": 15,
+      "absent_rounds": [
+        13,
+        14,
+        15
+      ],
+      "down_duration": 3
+    }
+  },
+  "action_schedule": {
+    "3": {
+      "stop": [
+        4
+      ],
+      "start": []
+    },
+    "5": {
+      "stop": [],
+      "start": [
+        4
+      ]
+    },
+    "2": {
+      "stop": [
+        5
+      ],
+      "start": []
+    },
+    "4": {
+      "stop": [],
+      "start": [
+        5
+      ]
+    },
+    "7": {
+      "stop": [
+        6
+      ],
+      "start": []
+    },
+    "9": {
+      "stop": [],
+      "start": [
+        6
+      ]
+    },
+    "8": {
+      "stop": [
+        8
+      ],
+      "start": []
+    },
+    "12": {
+      "stop": [
+        9
+      ],
+      "start": [
+        8
+      ]
+    },
+    "15": {
+      "stop": [],
+      "start": [
+        9
+      ]
+    }
+  },
+  "semantics": {
+    "fail_round": "Client is STOPPED after [SERVER] ROUND N EVALUATION SUMMARY is logged. The client has already submitted its update for this round.",
+    "restart_round": "Client is STARTED after [SERVER] ROUND N EVALUATION SUMMARY is logged. Client rejoins from round (restart_round + 1) onwards.",
+    "absent_rounds": "Round numbers where this client contributes NO update to aggregation.",
+    "round_indexing": "All round numbers in this plan are 1-indexed. The server logs are 0-indexed; the orchestrator adds 1 when parsing."
+  }
+}
