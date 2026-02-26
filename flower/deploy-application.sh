@@ -573,6 +573,7 @@ echo "[DEBUG] Uploaded run_config.json"
 
 # Update pyproject.toml
 sedi "s/^num-server-rounds[[:space:]]*=[[:space:]]*[0-9]+/num-server-rounds = ${NUM_SERVER_ROUNDS}/" pyproject.toml
+sedi "s/^run_id[[:space:]]*=[[:space:]]*[0-9]+/run_id = ${RUN_ID}/" pyproject.toml
 sedi "s/^fraction-train[[:space:]]*=[[:space:]]*[0-9.]+/fraction-train = ${FRACTION_TRAIN}/" pyproject.toml
 sedi "s/^fraction_evaluate[[:space:]]*=[[:space:]]*[0-9.]+/fraction_evaluate = ${FRACTION_EVALUATE}/" pyproject.toml
 sedi "s/^local-epochs[[:space:]]*=[[:space:]]*[0-9]+/local-epochs = ${LOCAL_EPOCHS}/" pyproject.toml

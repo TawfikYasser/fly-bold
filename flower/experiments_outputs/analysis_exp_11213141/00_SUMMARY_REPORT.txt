@@ -20,66 +20,65 @@ EXPERIMENT CONFIGURATION
 
 TRAINING PERFORMANCE
 ------------------------------------------------------------------------------------------
-  Initial Training Score:.................... 0.5107
-  Final Training Score:...................... 0.5086
-  Best Training Score:....................... 0.5120 (Round 1)
-  Training Improvement:...................... -0.0022 (-0.43%)
+  Initial Training Score:.................... 0.5097
+  Final Training Score:...................... 0.5084
+  Best Training Score:....................... 0.5125 (Round 1)
+  Training Improvement:...................... -0.0013 (-0.26%)
 
-  Best Training mAP@0.5:..................... 0.5391 (Round 2)
-  Best Training mAP:......................... 0.3560 (Round 0)
-  Final Training Loss:....................... 0.1240
+  Best Training mAP@0.5:..................... 0.5400 (Round 2)
+  Best Training mAP:......................... 0.3565 (Round 2)
+  Final Training Loss:....................... 0.1245
 
 VALIDATION PERFORMANCE
 ------------------------------------------------------------------------------------------
-  Initial Validation Score:.................. 0.4845
-  Final Validation Score:.................... 0.4862
-  Best Validation Score:..................... 0.4915 (Round 4)
-  Validation Improvement:.................... 0.0017 (+0.35%)
+  Initial Validation Score:.................. 0.4959
+  Final Validation Score:.................... 0.4916
+  Best Validation Score:..................... 0.4984 (Round 3)
+  Validation Improvement:.................... -0.0043 (-0.87%)
 
-  Best Validation mAP@0.5:................... 0.5092 (Round 4)
-  Best Validation mAP:....................... 0.3364 (Round 4)
-  Final Validation Loss:..................... 0.1046
+  Best Validation mAP@0.5:................... 0.5218 (Round 10)
+  Best Validation mAP:....................... 0.3440 (Round 10)
+  Final Validation Loss:..................... 0.1047
 
 GENERALIZATION ANALYSIS
 ------------------------------------------------------------------------------------------
-  Final Generalization Gap:.................. 0.0224
-  Average Generalization Gap:................ 0.0235
-  Maximum Generalization Gap:................ 0.0268
-  Status:.................................... SLIGHT OVERFITTING
+  Final Generalization Gap:.................. 0.0169
+  Average Generalization Gap:................ 0.0158
+  Maximum Generalization Gap:................ 0.0230
+  Status:.................................... GOOD GENERALIZATION
 
 TIME STATISTICS
 ------------------------------------------------------------------------------------------
-  Total Training Time:....................... 772.19 min (12.87 hours)
-  Average Round Duration:.................... 51.48 min
-  Shortest Round:............................ 48.10 min (Round 3)
-  Longest Round:............................. 55.74 min (Round 8)
+  Total Training Time:....................... 710.08 min (11.83 hours)
+  Average Round Duration:.................... 47.34 min
+  Shortest Round:............................ 43.77 min (Round 7)
+  Longest Round:............................. 51.03 min (Round 12)
 
-  Avg Client Training Time:.................. 44.75 min
-  Avg Client Eval Time:...................... 51.50 sec
-  Total Eval Time:........................... 925.24 sec
+  Avg Client Training Time:.................. 40.02 min
+  Avg Client Eval Time:...................... 46.20 sec
+  Total Eval Time:........................... 922.48 sec
 
 COMMUNICATION STATISTICS
 ------------------------------------------------------------------------------------------
   Total Data Transferred:.................... 1925.60 MB (1.880 GB)
   Average per Round:......................... 128.37 MB
-  Data Transfer Rate:........................ 2.49 MB/min
+  Data Transfer Rate:........................ 2.71 MB/min
 
 CLIENT ANALYSIS
 ------------------------------------------------------------------------------------------
-  Best Training Client:...................... Client 4 (0.5295)
-  Worst Training Client:..................... Client 2 (0.4838)
-  Training Performance Gap:.................. 0.0458
+  Best Training Client:...................... Client 4 (0.5296)
+  Worst Training Client:..................... Client 2 (0.4835)
+  Training Performance Gap:.................. 0.0461
 
-  Best Validation Client:.................... Client 3 (0.5076)
-  Worst Validation Client:................... Client 5 (0.4695)
-  Validation Performance Gap:................ 0.0381
+  Best Validation Client:.................... Client 4 (0.5061)
+  Worst Validation Client:................... Client 5 (0.4667)
+  Validation Performance Gap:................ 0.0394
 
 KEY INSIGHTS
 ------------------------------------------------------------------------------------------
-  [-] Training performance decreased by 0.4%
-  [+] Validation performance improved by 0.3%
-  [!] Acceptable generalization (gap < 0.05)
-  [+] Clients are converging (variance reduced from 0.0147 to 0.0146)
-  [*] Data efficiency: 1146390.0 MB per 0.01 improvement
+  [-] Training performance decreased by 0.3%
+  [-] Validation performance decreased by 0.9%
+  [+] Excellent generalization (gap < 0.02)
+  [!] Clients diverging (variance increased from 0.0134 to 0.0140)
 
 ==========================================================================================

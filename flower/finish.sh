@@ -55,18 +55,18 @@ while true; do
         echo "[SUCCESS] Log file downloaded to: ./experiments_outputs/${RUN_ID}/${LOG_FILE}"
         echo "[SUCCESS] Model file downloaded to: ./experiments_outputs/${RUN_ID}/${MODEL_FILE}"
 
-        echo "[INFO] Stopping client VMs..."
-        for i in $(seq 1 5); do
-            VM_VAR="CLIENT_${i}_VM"
-            ZONE_VAR="CLIENT_${i}_ZONE"
-            gcloud compute instances stop "${!VM_VAR}" --zone="${!ZONE_VAR}" --quiet &
-        done
+        # echo "[INFO] Stopping client VMs..."
+        # for i in $(seq 1 5); do
+        #     VM_VAR="CLIENT_${i}_VM"
+        #     ZONE_VAR="CLIENT_${i}_ZONE"
+        #     gcloud compute instances stop "${!VM_VAR}" --zone="${!ZONE_VAR}" --quiet &
+        # done
 
-        echo "[INFO] Stopping server VM..."
-        gcloud compute instances stop "$SERVER_VM" --zone="$SERVER_ZONE" --quiet &
+        # echo "[INFO] Stopping server VM..."
+        # gcloud compute instances stop "$SERVER_VM" --zone="$SERVER_ZONE" --quiet &
 
-        wait
-        echo "[SUCCESS] All VMs stopped."
+        # wait
+        # echo "[SUCCESS] All VMs stopped."
         exit 0
     fi
 
