@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.122"
+version = "1.0.123"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -91,4 +91,4 @@ img_size = 416
 batch_size = 16
 dataset = 100
 strategy = 1
-run_id = 11213141
+run_id = 11213142

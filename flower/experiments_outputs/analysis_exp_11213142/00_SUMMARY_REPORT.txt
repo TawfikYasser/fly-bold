@@ -1,0 +1,84 @@
+==========================================================================================
+FEDERATED LEARNING EXPERIMENT REPORT
+==========================================================================================
+
+EXPERIMENT CONFIGURATION
+------------------------------------------------------------------------------------------
+  Experiment ID................................ 11213142
+  Total Clients................................ 10
+  Server Rounds................................ 15
+  Local Epochs................................. 3
+  Batch Size................................... 16
+  Learning Rate................................ 0.001
+  YOLO Model................................... s
+  Image Size................................... 416
+  Dataset...................................... 100
+  Strategy..................................... 1
+  NUM_CPUS..................................... 5
+  Fraction Train............................... 1.0
+  Fraction Evaluate............................ 1.0
+
+TRAINING PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Training Score:.................... 0.5102
+  Final Training Score:...................... 0.5066
+  Best Training Score:....................... 0.5115 (Round 2)
+  Training Improvement:...................... -0.0036 (-0.71%)
+
+  Best Training mAP@0.5:..................... 0.5396 (Round 2)
+  Best Training mAP:......................... 0.3563 (Round 2)
+  Final Training Loss:....................... 0.1246
+
+VALIDATION PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Validation Score:.................. 0.4919
+  Final Validation Score:.................... 0.4877
+  Best Validation Score:..................... 0.4977 (Round 1)
+  Validation Improvement:.................... -0.0042 (-0.85%)
+
+  Best Validation mAP@0.5:................... 0.5181 (Round 1)
+  Best Validation mAP:....................... 0.3424 (Round 1)
+  Final Validation Loss:..................... 0.1046
+
+GENERALIZATION ANALYSIS
+------------------------------------------------------------------------------------------
+  Final Generalization Gap:.................. 0.0189
+  Average Generalization Gap:................ 0.0186
+  Maximum Generalization Gap:................ 0.0250
+  Status:.................................... GOOD GENERALIZATION
+
+TIME STATISTICS
+------------------------------------------------------------------------------------------
+  Total Training Time:....................... 736.17 min (12.27 hours)
+  Average Round Duration:.................... 49.08 min
+  Shortest Round:............................ 44.13 min (Round 3)
+  Longest Round:............................. 52.43 min (Round 14)
+
+  Avg Client Training Time:.................. 41.48 min
+  Avg Client Eval Time:...................... 48.30 sec
+  Total Eval Time:........................... 940.91 sec
+
+COMMUNICATION STATISTICS
+------------------------------------------------------------------------------------------
+  Total Data Transferred:.................... 1842.48 MB (1.799 GB)
+  Average per Round:......................... 122.83 MB
+  Data Transfer Rate:........................ 2.50 MB/min
+
+CLIENT ANALYSIS
+------------------------------------------------------------------------------------------
+  Best Training Client:...................... Client 4 (0.5290)
+  Worst Training Client:..................... Client 2 (0.4821)
+  Training Performance Gap:.................. 0.0470
+
+  Best Validation Client:.................... Client 6 (0.5099)
+  Worst Validation Client:................... Client 2 (0.4571)
+  Validation Performance Gap:................ 0.0527
+
+KEY INSIGHTS
+------------------------------------------------------------------------------------------
+  [-] Training performance decreased by 0.7%
+  [-] Validation performance decreased by 0.8%
+  [+] Excellent generalization (gap < 0.02)
+  [!] Clients diverging (variance increased from 0.0146 to 0.0148)
+
+==========================================================================================
