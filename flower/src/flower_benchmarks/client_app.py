@@ -158,12 +158,13 @@ def prepare_client_yolo_dataset_prepartitioned(client_id: int):
         return _DATASET_CACHE[cache_key]
     
     dataset_number = int(get_config("dataset", context=None, default=1, type_converter=int))
+    dataset_str = str(dataset_number).zfill(3)
 
-    print(f"[dataset] Preparing pre-partitioned dataset for client {client_id} (dataset choice {dataset_number})")
+    print(f"[dataset] Preparing pre-partitioned dataset for client {client_id} (dataset choice {dataset_str})")
     
     # First-time setup
-    partition_root = f"/app/datasets_{dataset_number}/coco_partitions/client_{client_id}"
-    data_yaml = os.path.join(partition_root, f"coco_client_dataset_{dataset_number}.yaml")
+    partition_root = f"/app/datasets_{dataset_str}/coco_partitions/client_{client_id}"
+    data_yaml = os.path.join(partition_root, f"coco_client_dataset_{dataset_str}.yaml")
     
     # Verify partition exists (only once)
     if not os.path.exists(partition_root):

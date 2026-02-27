@@ -435,6 +435,7 @@ if [ -f .env ]; then
     use_existing=${use_existing:-y}
     if [[ $use_existing =~ ^[Yy]$ ]]; then
         source .env
+        DATASET_PADDED=$(printf "%03d" "$DATASET")
         SKIP_PROMPTS=true
         echo_warning "Overriding SERVER_INTERNAL_IP with current value from vm-info.txt"
         echo "  Old IP in .env: ${SERVER_INTERNAL_IP}"
@@ -510,6 +511,7 @@ if [ "$SKIP_PROMPTS" = false ]; then
 
     read -p "Dataset choice [1]: " DATASET
     DATASET=${DATASET:-1}
+    DATASET_PADDED=$(printf "%03d" "$DATASET")
 
     read -p "Use pretrained weights? (y/n) [y]: " pretrained_input
     USE_PRETRAINED=${pretrained_input:-y}
@@ -808,7 +810,7 @@ for i in $(seq 1 5); do
     echo "  → Verifying pre-partitioned data (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
     VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         set -e
-        DATASET=$DATASET
+        DATASET=$DATASET_PADDED
         for CLIENT_ID in $CLIENT_ID_1 $CLIENT_ID_2; do
             PARTITION_DIR=\"/app/datasets_\${DATASET}/coco_partitions/client_\${CLIENT_ID}\"
             
@@ -871,7 +873,7 @@ services:
       - "./yolov5:/app/yolov5"
       - "./logs:/app/logs"
       - "./certs:/app/certs:ro"
-      - "./datasets_${DATASET}:/app/datasets_${DATASET}"
+      - "./datasets_${DATASET_PADDED}:/app/datasets_${DATASET_PADDED}"
       - "./gcs-key.json:/app/gcs-key.json:ro"
       - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
@@ -900,7 +902,7 @@ services:
       - "./yolov5:/app/yolov5"
       - "./logs:/app/logs"
       - "./certs:/app/certs:ro"
-      - "./datasets_${DATASET}:/app/datasets_${DATASET}"
+      - "./datasets_${DATASET_PADDED}:/app/datasets_${DATASET_PADDED}"
       - "./gcs-key.json:/app/gcs-key.json:ro"
       - "./pyproject.toml:/app/pyproject.toml"
     restart: unless-stopped
@@ -942,7 +944,7 @@ echo "════════════════════════�
 echo "  Run ID: $RUN_ID"
 echo "  Server IP: $SERVER_INTERNAL_IP"
 echo "  All clients connected to: ${SERVER_INTERNAL_IP}:9092"
-echo "  ✅ Using Dataset $DATASET from /app/datasets_${DATASET}/coco_partitions/"
+echo "  ✅ Using Dataset $DATASET_PADDED from /app/datasets_${DATASET_PADDED}/coco_partitions/"
 echo "  ✅ All caches cleaned and containers recreated"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
