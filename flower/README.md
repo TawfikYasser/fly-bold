@@ -14,6 +14,7 @@ This project automates the deployment of a production-ready Federated Learning i
 - ✅ **Individual client management** (start/stop/restart any of 10 clients)
 - ✅ **Hot code updates** without full rebuild
 - ✅ **Optional GPU and TLS support**
+- ⭐ **Deterministic failure orchestrator** for reproducible client dropouts and experiment comparisons
 
 ## High-level Overview of the System Architecture
 <img src="system-architecture.png" alt="System Architecture" style="display:block; margin-left:auto; margin-right:auto;" />
@@ -32,6 +33,9 @@ This project automates the deployment of a production-ready Federated Learning i
 
 ## ⚡ Quick Start
 
+> **Optional prep:** if you plan to simulate failing clients, generate failure plans now. See the **Failure Orchestrator** section below.
+
+
 ### Full Setup (4 Steps)
 
 ```bash
@@ -43,14 +47,48 @@ This project automates the deployment of a production-ready Federated Learning i
 
 # 3. Partition Dataset (~10 minutes)
 ./run-partition-on-temp-vm.sh
+```
 
+---
+
+### Script: Failure Orchestrator
+
+Generate and inject client failure schedules to a running experiment. This
+utility is independent of the FL code and operates by SSH-ing to the server,
+stopping/starting individual containers according to a pre‑computed plan.
+
+```bash
+# generate one-time plan locally (do this once per percentage)
+python3 fl_failure_orchestrator.py generate-plan --failure-pct 25
+# copy plans & script to server VM
+gcloud compute scp fl_failure_orchestrator.py failure_plans/ flybold-server:/app/ --zone=us-central1-a
+# while an experiment is running on the server, execute the orchestrator
+python3 fl_failure_orchestrator.py run --failure-pct 25 --run-id EXP_11213141
+```
+
+- **failure-pct**: percentage of clients that will be taken offline over the
+  course of the training (25/50/75). The same concrete clients fail on the
+  same rounds every time, ensuring fair comparisons across experiments.
+- Plans live in `failure_plans/failure_plan_dim4_{pct}.json`.
+- Logs are stored under `orchestrator_logs/` for later analysis.
+
+The plan syntax includes `fail_round`, `restart_round`, and `absent_rounds`
+(see the script header for semantics). The orchestrator watches the server
+container logs to detect completed rounds before applying actions.
+
+---
+
+```bash
 # 4. Build and push Docker image (~15 minutes)
+
+This step runs on a temporary GCP VM so you don't need Docker locally.
+```
 ./build-push-image.sh
+```
 
 # 5. Deploy application with interactive prompts (~20 minutes)
 ./deploy-application.sh
 ```
-
 **Total time**: ~110-140 minutes (most time is COCO download)
 
 ### What Gets Created
@@ -77,6 +115,9 @@ flybold/
 ├── build-push-image.sh           # Build/push Docker image
 ├── deploy-application.sh         # Deploy FL application
 ├── finish.sh                     # Monitor training and download results (New!)
+├── fl_failure_orchestrator.py     # Generate & run client failure plans
+├── failure_plans/                 # JSON plans used by the orchestrator
+├── orchestrator_logs/             # Logs produced when running failure orchestrator
 ├── manage-clients.sh             # Manage individual clients
 ├── update-code.sh                # Hot update code
 ├── download-files.sh             # Download results from server
@@ -101,6 +142,18 @@ flybold/
 ```
 
 ## 🔧 Detailed Usage
+
+Before running any experiments with client dropouts you must generate a plan:
+
+```bash
+python3 fl_failure_orchestrator.py generate-plan --failure-pct 25  # light failures
+python3 fl_failure_orchestrator.py generate-plan --failure-pct 50  # medium
+python3 fl_failure_orchestrator.py generate-plan --failure-pct 75  # heavy
+```
+
+Plans are saved under `failure_plans/` and should be uploaded alongside the
+code to the server VM.
+
 
 ### Script: Setup Bucket and Dataset
 
@@ -164,6 +217,10 @@ Creates all GCP resources for FL deployment.
 
 Partitions the COCO dataset using Dirichlet distribution on a temporary VM.
 
+The workflow is kicked off by `run-partition-on-temp-vm.sh`, which creates a
+short-lived `partition-tmp-vm`, copies the partitioning code, and executes
+`partition-dataset.sh` there.
+
 ```bash
 ./run-partition-on-temp-vm.sh
 ```
@@ -171,6 +228,16 @@ Partitions the COCO dataset using Dirichlet distribution on a temporary VM.
 **Interactive Configuration**:
 - **Dataset ID**: Unique identifier for this partition set (e.g., `exp1`, `hetero_0.1`).
 - **IID Clients**: Comma-separated list (e.g., `0,3`) or `none` for all non-IID.
+
+During partitioning the script may prompt to *regenerate* an existing manifest
+if one already exists; you can choose to reuse or overwrite it. After the
+manifest is created the tool automatically uploads it (and any generated
+plots) to `gs://<bucket>/partitions/dataset_<ID>/` so the configuration is
+backed up.
+
+The underlying `partition-dataset.sh` accepts additional parameters from
+`.env` (train/val size ranges, Dirichlet seed, etc.) and will copy the final
+manifest to each client VM under `/app/datasets_${DATASET_ID}/coco_partitions/client_X/`.
 
 **What it does**:
 1. Creates a temporary VM (`partition-tmp-vm`).
@@ -187,7 +254,19 @@ Partitions the COCO dataset using Dirichlet distribution on a temporary VM.
 
 ### Script: Build and Push Image
 
-Builds Docker image with FL application and pushes to Docker Hub.
+Builds Docker image with FL application and pushes to Docker Hub using a
+**temporary GCP VM**. This avoids needing a local Docker installation and
+keeps the build environment isolated.
+
+```bash
+./build-push-image.sh
+```
+
+The script will prompt once for your Docker Hub username (stored in
+`.docker_username`), then ask for your password on each run. It creates a
+small `docker-builder-temp` VM, installs Docker/Compose, copies only the
+necessary files, builds the image, pushes it to `{username}/fly-bold-image:latest`,
+and then destroys the VM. Build metadata is saved in `docker-image-info.txt`.
 
 ```bash
 ./build-push-image.sh
@@ -258,8 +337,31 @@ Dirichlet alpha [0.5]: 0.5
 
 ### Script: Manage Clients
 
-Control individual clients at any time.
+Control individual clients (and the server) at any time with a simple CLI. A
+few handy features were added since the original README:
 
+```bash
+# View status of all clients
+./manage-clients.sh status
+
+# View logs for client 5
+./manage-clients.sh logs --client 5
+
+# Stop client 3
+./manage-clients.sh stop --client 3
+
+# Restart client 7
+./manage-clients.sh restart --client 7
+
+# Start all clients
+./manage-clients.sh start --all
+
+# Stop all clients
+./manage-clients.sh stop --all
+
+# Restart server containers and wipe server logs (fresh start)
+./manage-clients.sh server-fresh
+```
 ```bash
 # View status of all clients
 ./manage-clients.sh status
@@ -765,6 +867,36 @@ Configs saved to:
 - `gs://flybold-coco-inf022/configs/run_2_config.json`
 
 ---
+
+## 🧪 Experiment Design
+
+Experiments are parameterized along four independent dimensions (code names are
+used in run identifiers):
+
+1. **Framework** (Dim_1)
+   - `Dim_1_1`: Flower (this repo)
+   - `Dim_1_2`: FEDn
+   - `Dim_1_3`: FedML
+2. **Strategy** (Dim_2)
+   - `Dim_2_1`: FedAvg
+   - `Dim_2_2`: FedYogi
+   - `Dim_2_3`: FedAdam
+3. **Dataset IID level** (Dim_3)
+   - `Dim_3_1`: Dataset_100 (100% IID)
+   - `Dim_3_2`: Dataset_050 (50% IID)
+   - `Dim_3_3`: Dataset_000 (0% IID / fully non‑IID)
+4. **Failing clients** (Dim_4)
+   - `Dim_4_1`: 25% failures
+   - `Dim_4_2`: 50% failures
+   - `Dim_4_3`: 75% failures
+
+Each experiment generates a run ID of the form `EXP_<RUN_ID>` where the
+digits encode a specific combination of the above dimensions (the `Federated
+_Learning_Experimental_Design.md` document in the repo outlines the encoding
+and a handy tracking table).
+
+This README focuses on the Flower (Dim_1_1) branch, but the scripts and
+orchestrator are designed to be reused for cross-framework comparisons.
 
 ## 🎓 Research Use Cases
 
