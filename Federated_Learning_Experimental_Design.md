@@ -107,7 +107,7 @@ Legend:
 | FedAvg | 100IID | 25% | ✅ | ⬜ | ⬜ |
 | FedAvg | 100IID | 50% | ✅ | ⬜ | ⬜ |
 | FedAvg | 100IID | 75% | ✅ | ⬜ | ⬜ |
-| FedAvg | 050IID | 25% | ⬜ | ⬜ | ⬜ |
+| FedAvg | 050IID | 25% | 🟡 | ⬜ | ⬜ |
 | FedAvg | 050IID | 50% | ⬜ | ⬜ | ⬜ |
 | FedAvg | 050IID | 75% | ⬜ | ⬜ | ⬜ |
 | FedAvg | 000IID | 25% | ⬜ | ⬜ | ⬜ |
