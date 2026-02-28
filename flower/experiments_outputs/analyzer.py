@@ -68,7 +68,7 @@ def get_env(key, default, type_cast=str):
 
 
 # ==================== CONFIGURATION ====================
-INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213143/EXP_YOLOv5_s_detection_11213143_logs.json"
+INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213241/EXP_YOLOv5_s_detection_11213241_logs.json"
 
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
