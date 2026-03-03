@@ -1,6 +1,34 @@
 
 # 🧪 Federated Learning Experimental Design
 
+## 0. Experimental Setup Constrains
+
+Our setup is deployed on GCP VMs. We use one VM for the server and five VMs for the clients. The server VM is configured as e2-standard-8 (8 vCPUs, 32 GB RAM). Each client VM is configured as e2-standard-16 (16 vCPUs, 64 GB RAM). We are using CPU only.
+
+Based on this setup, the average experiment duration is approximately 12 hours. **Due to time and cost constraints**, we fixed the training parameters to match our available resources. Specifically, we train for 15 rounds with 3 local epochs per round, using datasets of up to 5,000 images.
+
+We constructed three datasets:
+- dataset_100: Partitioned among 10 clients. Each client is assigned a very large alpha value (1e6), ensuring that the Dirichlet partitioner distributes an equal number of samples from each class to all clients. This simulates a fully IID scenario.
+- dataset_050: Contains 10 clients. Five clients are assigned alpha = 1e6 to simulate IID behavior (as in dataset_100). The remaining five clients are assigned randomly generated alpha values in the range [0.5, 1.5] during the partitioning phase, simulating a partially IID setting (50% IID and 50% non-IID).
+- dataset_000: Partitioned among 10 clients, each assigned a randomly generated alpha value in the range [0.5, 1.5], simulating a fully non-IID scenario.
+
+====> Concluding that, given all constraints, the current experiments represent the most suitable configuration for our environment.
+
+**Dr. Feras notes:**
+1. Centralized baseline
+2. Server rounds between 50 and 100
+3. Metrics must include: 
+    a. communication costs
+    b. Resource utilization: CPU/Memory
+    c. Runtime per round
+4. Heterogeneity of IID: 0.1, 0.01, 
+5. Clients sampling <-> Client failure
+6. Clients 20,50,100
+7. Estimated cost per accuracy gain
+NOTE: Different seeds for each configuration and report the mean and STDV
+
+---
+
 ## 1. Experimental Dimensions
 
 We define four core dimensions that fully describe each experiment configuration.
@@ -100,6 +128,11 @@ Legend:
 - ⬜ Not started
 - 🟡 Running
 - ✅ Completed
+- EXP_ID: redirects to the directory which contains the logs and final model of the experiment.
+
+- Results: redirects to the directory which contains the summary and plots of the experiment.
+
+- Strategy, Dataset, & Fail % are Dim_2, Dim_3, & Dim_4. Below are 3 tables for Dim_1.
 
 ---
 
