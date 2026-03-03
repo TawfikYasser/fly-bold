@@ -107,15 +107,15 @@ Legend:
 
 | EXP_ID   | Strategy | Dataset | Fail % | Status |
 |----------|----------|---------|--------|--------|
-| [11213141](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213141) | FedAvg  | 100IID  | 25%    | ✅ |
-| [11213142](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213142) | FedAvg  | 100IID  | 50%    | ✅ |
-| [11213143](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213143) | FedAvg  | 100IID  | 75%    | ✅ |
-| [11213241](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213241) | FedAvg  | 050IID  | 25%    | ✅ |
-| [11213242](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213242) | FedAvg  | 050IID  | 50%    | ✅ |
-| [11213243](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213243) | FedAvg  | 050IID  | 75%    | ✅ |
-| [11213341](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213341) | FedAvg  | 000IID  | 25%    | ✅ |
-| [11213342](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213342) | FedAvg  | 000IID  | 50%    | ✅ |
-| [11213343](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213343) | FedAvg  | 000IID  | 75%    | 🟡 |
+| [11213141](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213141) | FedAvg  | 100IID  | 25%    | ✅ |
+| [11213142](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213142) | FedAvg  | 100IID  | 50%    | ✅ |
+| [11213143](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213143) | FedAvg  | 100IID  | 75%    | ✅ |
+| [11213241](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213241) | FedAvg  | 050IID  | 25%    | ✅ |
+| [11213242](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213242) | FedAvg  | 050IID  | 50%    | ✅ |
+| [11213243](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213243) | FedAvg  | 050IID  | 75%    | ✅ |
+| [11213341](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213341) | FedAvg  | 000IID  | 25%    | ✅ |
+| [11213342](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213342) | FedAvg  | 000IID  | 50%    | ✅ |
+| [11213343](https://github.com/TawfikYasser/fly-bold/tree/main/flower/experiments_outputs/11213343) | FedAvg  | 000IID  | 75%    | 🟡 |
 | 11223141 | FedYogi | 100IID  | 25%    | ⬜ |
 | 11223142 | FedYogi | 100IID  | 50%    | ⬜ |
 | 11223143 | FedYogi | 100IID  | 75%    | ⬜ |
