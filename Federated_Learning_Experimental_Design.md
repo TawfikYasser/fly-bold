@@ -100,34 +100,103 @@ Legend:
 - ⬜ Not started
 - 🟡 Running
 - ✅ Completed
-- ❌ Failed
 
-| Strategy | Dataset | Fail % | Flower | FEDn | FedML |
-|-----------|----------|--------|--------|------|--------|
-| FedAvg | 100IID | 25% | ✅ | ⬜ | ⬜ |
-| FedAvg | 100IID | 50% | ✅ | ⬜ | ⬜ |
-| FedAvg | 100IID | 75% | ✅ | ⬜ | ⬜ |
-| FedAvg | 050IID | 25% | ✅ | ⬜ | ⬜ |
-| FedAvg | 050IID | 50% | ✅ | ⬜ | ⬜ |
-| FedAvg | 050IID | 75% | ✅ | ⬜ | ⬜ |
-| FedAvg | 000IID | 25% | ✅ | ⬜ | ⬜ |
-| FedAvg | 000IID | 50% | ✅ | ⬜ | ⬜ |
-| FedAvg | 000IID | 75% | 🟡 | ⬜ | ⬜ |
-| FedYogi | 100IID | 25% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 100IID | 50% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 100IID | 75% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 050IID | 25% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 050IID | 50% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 050IID | 75% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 000IID | 25% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 000IID | 50% | ⬜ | ⬜ | ⬜ |
-| FedYogi | 000IID | 75% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 100IID | 25% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 100IID | 50% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 100IID | 75% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 050IID | 25% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 050IID | 50% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 050IID | 75% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 000IID | 25% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 000IID | 50% | ⬜ | ⬜ | ⬜ |
-| FedAdam | 000IID | 75% | ⬜ | ⬜ | ⬜ |
+---
+
+### Flower Experiments
+
+| EXP_ID   | Strategy | Dataset | Fail % | Status |
+|----------|----------|---------|--------|--------|
+| [11213141](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213141) | FedAvg  | 100IID  | 25%    | ✅ |
+| [11213142](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213142) | FedAvg  | 100IID  | 50%    | ✅ |
+| [11213143](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213143) | FedAvg  | 100IID  | 75%    | ✅ |
+| [11213241](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213241) | FedAvg  | 050IID  | 25%    | ✅ |
+| [11213242](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213242) | FedAvg  | 050IID  | 50%    | ✅ |
+| [11213243](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213243) | FedAvg  | 050IID  | 75%    | ✅ |
+| [11213341](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213341) | FedAvg  | 000IID  | 25%    | ✅ |
+| [11213342](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213342) | FedAvg  | 000IID  | 50%    | ✅ |
+| [11213343](/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213343) | FedAvg  | 000IID  | 75%    | 🟡 |
+| 11223141 | FedYogi | 100IID  | 25%    | ⬜ |
+| 11223142 | FedYogi | 100IID  | 50%    | ⬜ |
+| 11223143 | FedYogi | 100IID  | 75%    | ⬜ |
+| 11223241 | FedYogi | 050IID  | 25%    | ⬜ |
+| 11223242 | FedYogi | 050IID  | 50%    | ⬜ |
+| 11223243 | FedYogi | 050IID  | 75%    | ⬜ |
+| 11223341 | FedYogi | 000IID  | 25%    | ⬜ |
+| 11223342 | FedYogi | 000IID  | 50%    | ⬜ |
+| 11223343 | FedYogi | 000IID  | 75%    | ⬜ |
+| 11233141 | FedAdam | 100IID  | 25%    | ⬜ |
+| 11233142 | FedAdam | 100IID  | 50%    | ⬜ |
+| 11233143 | FedAdam | 100IID  | 75%    | ⬜ |
+| 11233241 | FedAdam | 050IID  | 25%    | ⬜ |
+| 11233242 | FedAdam | 050IID  | 50%    | ⬜ |
+| 11233243 | FedAdam | 050IID  | 75%    | ⬜ |
+| 11233341 | FedAdam | 000IID  | 25%    | ⬜ |
+| 11233342 | FedAdam | 000IID  | 50%    | ⬜ |
+| 11233343 | FedAdam | 000IID  | 75%    | ⬜ |
+
+---
+### FEDn Experiments
+
+| EXP_ID   | Strategy | Dataset | Fail % | Status |
+|----------|----------|---------|--------|--------|
+| 12213141 | FedAvg  | 100IID  | 25%    | ⬜ |
+| 12213142 | FedAvg  | 100IID  | 50%    | ⬜ |
+| 12213143 | FedAvg  | 100IID  | 75%    | ⬜ |
+| 12213241 | FedAvg  | 050IID  | 25%    | ⬜ |
+| 12213242 | FedAvg  | 050IID  | 50%    | ⬜ |
+| 12213243 | FedAvg  | 050IID  | 75%    | ⬜ |
+| 12213341 | FedAvg  | 000IID  | 25%    | ⬜ |
+| 12213342 | FedAvg  | 000IID  | 50%    | ⬜ |
+| 12213343 | FedAvg  | 000IID  | 75%    | ⬜ |
+| 12223141 | FedYogi | 100IID  | 25%    | ⬜ |
+| 12223142 | FedYogi | 100IID  | 50%    | ⬜ |
+| 12223143 | FedYogi | 100IID  | 75%    | ⬜ |
+| 12223241 | FedYogi | 050IID  | 25%    | ⬜ |
+| 12223242 | FedYogi | 050IID  | 50%    | ⬜ |
+| 12223243 | FedYogi | 050IID  | 75%    | ⬜ |
+| 12223341 | FedYogi | 000IID  | 25%    | ⬜ |
+| 12223342 | FedYogi | 000IID  | 50%    | ⬜ |
+| 12223343 | FedYogi | 000IID  | 75%    | ⬜ |
+| 12233141 | FedAdam | 100IID  | 25%    | ⬜ |
+| 12233142 | FedAdam | 100IID  | 50%    | ⬜ |
+| 12233143 | FedAdam | 100IID  | 75%    | ⬜ |
+| 12233241 | FedAdam | 050IID  | 25%    | ⬜ |
+| 12233242 | FedAdam | 050IID  | 50%    | ⬜ |
+| 12233243 | FedAdam | 050IID  | 75%    | ⬜ |
+| 12233341 | FedAdam | 000IID  | 25%    | ⬜ |
+| 12233342 | FedAdam | 000IID  | 50%    | ⬜ |
+| 12233343 | FedAdam | 000IID  | 75%    | ⬜ |
+
+---
+### FedML Experiments
+
+| EXP_ID   | Strategy | Dataset | Fail % | Status |
+|----------|----------|---------|--------|--------|
+| 13213141 | FedAvg  | 100IID  | 25%    | ⬜ |
+| 13213142 | FedAvg  | 100IID  | 50%    | ⬜ |
+| 13213143 | FedAvg  | 100IID  | 75%    | ⬜ |
+| 13213241 | FedAvg  | 050IID  | 25%    | ⬜ |
+| 13213242 | FedAvg  | 050IID  | 50%    | ⬜ |
+| 13213243 | FedAvg  | 050IID  | 75%    | ⬜ |
+| 13213341 | FedAvg  | 000IID  | 25%    | ⬜ |
+| 13213342 | FedAvg  | 000IID  | 50%    | ⬜ |
+| 13213343 | FedAvg  | 000IID  | 75%    | ⬜ |
+| 13223141 | FedYogi | 100IID  | 25%    | ⬜ |
+| 13223142 | FedYogi | 100IID  | 50%    | ⬜ |
+| 13223143 | FedYogi | 100IID  | 75%    | ⬜ |
+| 13223241 | FedYogi | 050IID  | 25%    | ⬜ |
+| 13223242 | FedYogi | 050IID  | 50%    | ⬜ |
+| 13223243 | FedYogi | 050IID  | 75%    | ⬜ |
+| 13223341 | FedYogi | 000IID  | 25%    | ⬜ |
+| 13223342 | FedYogi | 000IID  | 50%    | ⬜ |
+| 13223343 | FedYogi | 000IID  | 75%    | ⬜ |
+| 13233141 | FedAdam | 100IID  | 25%    | ⬜ |
+| 13233142 | FedAdam | 100IID  | 50%    | ⬜ |
+| 13233143 | FedAdam | 100IID  | 75%    | ⬜ |
+| 13233241 | FedAdam | 050IID  | 25%    | ⬜ |
+| 13233242 | FedAdam | 050IID  | 50%    | ⬜ |
+| 13233243 | FedAdam | 050IID  | 75%    | ⬜ |
+| 13233341 | FedAdam | 000IID  | 25%    | ⬜ |
+| 13233342 | FedAdam | 000IID  | 50%    | ⬜ |
+| 13233343 | FedAdam | 000IID  | 75%    | ⬜ |
