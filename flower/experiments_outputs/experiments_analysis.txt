@@ -1,0 +1,176 @@
+============================================================================================================================================================================================================================
+FEDERATED LEARNING EXPERIMENTS COMPREHENSIVE ANALYSIS
+============================================================================================================================================================================================================================
+
+  Exp ID  Dataset Dataset Type  Clients Min/Max Train  Total Train  Failure %  Fail Clients  Fail Rounds  Max Fail Dur  Rounds Time(min) Data(MB) Train mAP@0.5 Val mAP@0.5 Train Loss Val Loss
+11213141      100          IID       10     4000-5000        46142         25             3            8             4      15       710     1926        0.5400      0.5218     0.1245   0.1047
+11213142      100          IID       10     4000-5000        46142         50             5           11             4      15       736     1842        0.5396      0.5181     0.1246   0.1046
+11213143      100          IID       10     4000-5000        46142         75             8           14             4      15       742     1662        0.5397      0.5162     0.1246   0.1049
+11213241       50        Mixed       10     4000-5000        42882         25             3            8             4      15       767     1926        0.5455      0.5245     0.1259   0.1042
+11213242       50        Mixed       10     4000-5000        42882         50             5           11             4      15       808     1801        0.5457      0.5270     0.1257   0.1042
+11213243       50        Mixed       10     4000-5000        42882         75             8           14             4      15       791     1649        0.5463      0.5246     0.1257   0.1041
+11213341        0      Non-IID       10     4000-5000        31270         25             3            8             4      15       689     1801        0.5584      0.5309     0.1256   0.1046
+11213342        0      Non-IID       10     4000-5000        31270         50             5           11             4      15       692     1842        0.5553      0.5211     0.1251   0.1047
+11213343        0      Non-IID       10     4000-5000        31270         75             8           14             4      15       637     1662        0.5602      0.5200     0.1257   0.1040
+
+============================================================================================================================================================================================================================
+DETAILED EXPERIMENT BREAKDOWN
+============================================================================================================================================================================================================================
+
+Experiment 1: ID 11213141
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           100 | Type: All clients IID (α=1e6)
+                     10 Clients, 46,142 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    25% failure rate
+                     3 clients fail, 8 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 710.08 min total, 1925.60 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5400 | Val mAP@0.5: 0.5218
+                     Train Loss: 0.1245 | Val Loss: 0.1047
+
+Experiment 2: ID 11213142
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           100 | Type: All clients IID (α=1e6)
+                     10 Clients, 46,142 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    50% failure rate
+                     5 clients fail, 11 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 736.17 min total, 1842.48 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5396 | Val mAP@0.5: 0.5181
+                     Train Loss: 0.1246 | Val Loss: 0.1046
+
+Experiment 3: ID 11213143
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           100 | Type: All clients IID (α=1e6)
+                     10 Clients, 46,142 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    75% failure rate
+                     8 clients fail, 14 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 742.31 min total, 1662.39 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5397 | Val mAP@0.5: 0.5162
+                     Train Loss: 0.1246 | Val Loss: 0.1049
+
+Experiment 4: ID 11213241
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           50 | Type: Clients 0,1,2,3,4 IID (α=1e6), others non-IID (α=0.5-1.5)
+                     10 Clients, 42,882 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    25% failure rate
+                     3 clients fail, 8 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 766.95 min total, 1925.60 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5455 | Val mAP@0.5: 0.5245
+                     Train Loss: 0.1259 | Val Loss: 0.1042
+
+Experiment 5: ID 11213242
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           50 | Type: Clients 0,1,2,3,4 IID (α=1e6), others non-IID (α=0.5-1.5)
+                     10 Clients, 42,882 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    50% failure rate
+                     5 clients fail, 11 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 808.31 min total, 1800.92 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5457 | Val mAP@0.5: 0.5270
+                     Train Loss: 0.1257 | Val Loss: 0.1042
+
+Experiment 6: ID 11213243
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           50 | Type: Clients 0,1,2,3,4 IID (α=1e6), others non-IID (α=0.5-1.5)
+                     10 Clients, 42,882 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    75% failure rate
+                     8 clients fail, 14 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 790.71 min total, 1648.53 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5463 | Val mAP@0.5: 0.5246
+                     Train Loss: 0.1257 | Val Loss: 0.1041
+
+Experiment 7: ID 11213341
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           0 | Type: All clients non-IID (α=0.5-1.5)
+                     10 Clients, 31,270 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    25% failure rate
+                     3 clients fail, 8 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 688.65 min total, 1800.92 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5584 | Val mAP@0.5: 0.5309
+                     Train Loss: 0.1256 | Val Loss: 0.1046
+
+Experiment 8: ID 11213342
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           0 | Type: All clients non-IID (α=0.5-1.5)
+                     10 Clients, 31,270 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    50% failure rate
+                     5 clients fail, 11 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 691.83 min total, 1842.48 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5553 | Val mAP@0.5: 0.5211
+                     Train Loss: 0.1251 | Val Loss: 0.1047
+
+Experiment 9: ID 11213343
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  DATASET:           0 | Type: All clients non-IID (α=0.5-1.5)
+                     10 Clients, 31,270 total samples, 4000-5000 per client
+
+  FAILURE CONFIG:    75% failure rate
+                     8 clients fail, 14 rounds affected, max 4 round(s) downtime
+
+  TRAINING CONFIG:   15 rounds, 637.03 min total, 1662.39 MB transferred
+
+  PERFORMANCE:       Train mAP@0.5: 0.5602 | Val mAP@0.5: 0.5200
+                     Train Loss: 0.1257 | Val Loss: 0.1040
+
+============================================================================================================================================================================================================================
+SUMMARY STATISTICS
+============================================================================================================================================================================================================================
+
+
+Train mAP@0.5:
+  Mean: 0.5479
+  Std:  0.0081
+  Min:  0.5396
+  Max:  0.5602
+
+Val mAP@0.5:
+  Mean: 0.5227
+  Std:  0.0046
+  Min:  0.5162
+  Max:  0.5309
+
+Train Loss:
+  Mean: 0.1253
+  Std:  0.0006
+  Min:  0.1245
+  Max:  0.1259
+
+Val Loss:
+  Mean: 0.1044
+  Std:  0.0003
+  Min:  0.1040
+  Max:  0.1049
+
+Training Time (min):
+  Mean: 730.2267
+  Std:  54.2904
+  Min:  637.0300
+  Max:  808.3100
+
+Data Transferred (MB):
+  Mean: 1790.1456
+  Std:  109.0319
+  Min:  1648.5300
+  Max:  1925.6000
