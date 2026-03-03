@@ -1,0 +1,85 @@
+==========================================================================================
+FEDERATED LEARNING EXPERIMENT REPORT
+==========================================================================================
+
+EXPERIMENT CONFIGURATION
+------------------------------------------------------------------------------------------
+  Experiment ID................................ 11213343
+  Total Clients................................ 10
+  Server Rounds................................ 15
+  Local Epochs................................. 3
+  Batch Size................................... 16
+  Learning Rate................................ 0.001
+  YOLO Model................................... s
+  Image Size................................... 416
+  Dataset...................................... 0
+  Strategy..................................... 1
+  NUM_CPUS..................................... 5
+  Fraction Train............................... 1.0
+  Fraction Evaluate............................ 1.0
+
+TRAINING PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Training Score:.................... 0.5211
+  Final Training Score:...................... 0.5195
+  Best Training Score:....................... 0.5286 (Round 4)
+  Training Improvement:...................... -0.0016 (-0.31%)
+
+  Best Training mAP@0.5:..................... 0.5602 (Round 4)
+  Best Training mAP:......................... 0.3744 (Round 4)
+  Final Training Loss:....................... 0.1257
+
+VALIDATION PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Validation Score:.................. 0.4953
+  Final Validation Score:.................... 0.4970
+  Best Validation Score:..................... 0.5012 (Round 1)
+  Validation Improvement:.................... 0.0017 (+0.35%)
+
+  Best Validation mAP@0.5:................... 0.5200 (Round 1)
+  Best Validation mAP:....................... 0.3496 (Round 1)
+  Final Validation Loss:..................... 0.1040
+
+GENERALIZATION ANALYSIS
+------------------------------------------------------------------------------------------
+  Final Generalization Gap:.................. 0.0225
+  Average Generalization Gap:................ 0.0248
+  Maximum Generalization Gap:................ 0.0392
+  Status:.................................... SLIGHT OVERFITTING
+
+TIME STATISTICS
+------------------------------------------------------------------------------------------
+  Total Training Time:....................... 637.03 min (10.62 hours)
+  Average Round Duration:.................... 42.47 min
+  Shortest Round:............................ 30.46 min (Round 7)
+  Longest Round:............................. 47.51 min (Round 12)
+
+  Avg Client Training Time:.................. 26.44 min
+  Avg Client Eval Time:...................... 31.68 sec
+  Total Eval Time:........................... 744.49 sec
+
+COMMUNICATION STATISTICS
+------------------------------------------------------------------------------------------
+  Total Data Transferred:.................... 1662.39 MB (1.623 GB)
+  Average per Round:......................... 110.83 MB
+  Data Transfer Rate:........................ 2.61 MB/min
+
+CLIENT ANALYSIS
+------------------------------------------------------------------------------------------
+  Best Training Client:...................... Client 9 (0.6328)
+  Worst Training Client:..................... Client 7 (0.4779)
+  Training Performance Gap:.................. 0.1549
+
+  Best Validation Client:.................... Client 9 (0.6546)
+  Worst Validation Client:................... Client 7 (0.4636)
+  Validation Performance Gap:................ 0.1910
+
+KEY INSIGHTS
+------------------------------------------------------------------------------------------
+  [-] Training performance decreased by 0.3%
+  [+] Validation performance improved by 0.4%
+  [!] Acceptable generalization (gap < 0.05)
+  [!] Clients diverging (variance increased from 0.0477 to 0.0493)
+  [*] Data efficiency: 953935.7 MB per 0.01 improvement
+
+==========================================================================================
