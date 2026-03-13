@@ -73,7 +73,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════════════════════════════
 
 TOTAL_CLIENTS    = 10       # fl-client-0 … fl-client-9
-NUM_ROUNDS       = 15
+NUM_ROUNDS       = 30
 PLANS_DIR        = Path("./failure_plans")
 LOGS_DIR         = Path("./orchestrator_logs")
 VM_INFO_FILE     = Path("./vm-info.txt")

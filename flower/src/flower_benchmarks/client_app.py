@@ -21,7 +21,8 @@ from flower_benchmarks.plugins.yolov5.model import (
 )
 from flower_benchmarks.task import (
     yolo_train_from_state_and_return_state_dict, 
-    yolo_evaluate_weights_and_parse_map
+    yolo_evaluate_weights_and_parse_map,
+    ResourceMonitor
 )
 
 # =====================================================================
@@ -201,7 +202,7 @@ def prepare_client_yolo_dataset_prepartitioned(client_id: int):
 
 @app.train()
 def train(msg: Message, context: Context):
-    """Training function with guaranteed consistent metric structure."""
+    """Training function with guaranteed consistent metric structure and resource monitoring."""
     Path("/app/.healthy").touch()
 
     ensure_yolo_models_available()
@@ -211,6 +212,11 @@ def train(msg: Message, context: Context):
     run_id = str(get_config("run_id", context, default="1"))
 
     print(f"\n[CLIENT {client_id}] Starting training for round {server_round}")
+
+    # ✅ START OVERALL ROUND MONITORING
+    round_monitor = ResourceMonitor(sample_interval=0.5)
+    round_monitor.start()
+    round_start_time = time.perf_counter()
 
     received_state = msg.content["arrays"].to_torch_state_dict()
     data_yaml, client_dataset_root = prepare_client_yolo_dataset_prepartitioned(client_id)
@@ -224,6 +230,10 @@ def train(msg: Message, context: Context):
     train_status = "FAILED"
     train_error_msg = ""
     round_log = {}
+    
+    # ✅ START TRAINING PHASE MONITORING
+    train_monitor = ResourceMonitor(sample_interval=0.5)
+    train_monitor.start()
 
     try:
         print(f"[CLIENT {client_id}] Calling yolo_train_from_state_and_return_state_dict...")
@@ -248,6 +258,10 @@ def train(msg: Message, context: Context):
         traceback.print_exc()
         train_error_msg = f"{type(e).__name__}: {str(e)}"
         new_state = received_state
+    
+    # ✅ STOP TRAINING PHASE MONITORING
+    train_resources = train_monitor.stop()
+    print(f"[CLIENT {client_id}] Training resources: CPU peak {train_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {train_resources['per_process']['memory_mb']['peak']:.1f} MB")
 
     train_time = time.perf_counter() - train_start
 
@@ -287,6 +301,19 @@ def train(msg: Message, context: Context):
         "round_duration": float(round_log.get("round_duration", 0.0)),
         "round_start_time": float(round_log.get("round_start_time", 0.0)),
         "round_end_time": float(round_log.get("round_end_time", 0.0)),
+        # ✅ Training phase resource metrics
+        "train_resources_per_process_cpu_peak": float(train_resources['per_process']['cpu_percent']['peak']),
+        "train_resources_per_process_cpu_avg": float(train_resources['per_process']['cpu_percent']['avg']),
+        "train_resources_per_process_ram_peak_mb": float(train_resources['per_process']['memory_mb']['peak']),
+        "train_resources_per_process_ram_avg_mb": float(train_resources['per_process']['memory_mb']['avg']),
+        "train_resources_per_process_ram_peak_pct": float(train_resources['per_process']['memory_percent']['peak']),
+        "train_resources_per_process_ram_avg_pct": float(train_resources['per_process']['memory_percent']['avg']),
+        "train_resources_system_cpu_peak": float(train_resources['system_wide']['cpu_percent']['peak']),
+        "train_resources_system_cpu_avg": float(train_resources['system_wide']['cpu_percent']['avg']),
+        "train_resources_system_ram_peak_mb": float(train_resources['system_wide']['memory_mb']['peak']),
+        "train_resources_system_ram_avg_mb": float(train_resources['system_wide']['memory_mb']['avg']),
+        "train_resources_system_ram_peak_pct": float(train_resources['system_wide']['memory_percent']['peak']),
+        "train_resources_system_ram_avg_pct": float(train_resources['system_wide']['memory_percent']['avg']),
     }
 
     status_icon = "✅" if train_status == "SUCCESS" else "❌"
@@ -308,17 +335,27 @@ def train(msg: Message, context: Context):
 
 @app.evaluate()
 def evaluate(msg: Message, context: Context):
-    """Evaluate the model on local validation data with guaranteed consistent metrics."""
+    """Evaluate the model on local validation data with guaranteed consistent metrics and resource monitoring."""
     partition_id = context.node_config.get("partition-id", int(get_config("partition-id", context, default=0)))
     client_id = partition_id
     
     print(f"\n[CLIENT {client_id}] Starting evaluation")
+    
+    # ✅ START OVERALL ROUND MONITORING
+    round_monitor = ResourceMonitor(sample_interval=0.5)
+    round_monitor.start()
+    round_start_time = time.perf_counter()
     
     eval_status = "FAILED"
     eval_error_msg = ""
     val_metrics = {}
     eval_time = 0.0
     checkpoint_path = None
+    
+    # ✅ START EVALUATION PHASE MONITORING
+    eval_monitor = ResourceMonitor(sample_interval=0.5)
+    eval_monitor.start()
+    eval_phase_start = time.perf_counter()
     
     try:
         # Use the same dataset preparation as train function
@@ -382,6 +419,10 @@ def evaluate(msg: Message, context: Context):
         traceback.print_exc()
         eval_error_msg = f"{type(e).__name__}: {str(e)}"
     
+    # ✅ STOP EVALUATION PHASE MONITORING
+    eval_resources = eval_monitor.stop()
+    print(f"[CLIENT {client_id}] Evaluation resources: CPU peak {eval_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {eval_resources['per_process']['memory_mb']['peak']:.1f} MB")
+    
     print(f"[CLIENT {client_id}] Validation metrics: {val_metrics}")
     
     val_cache_key = f"client_{client_id}_num_val_examples"
@@ -402,6 +443,19 @@ def evaluate(msg: Message, context: Context):
         "client_eval_acc_mAP": float(val_metrics.get("mAP", 0.0)),
         "client_eval_loss": float(val_metrics.get("loss", 0.0)),
         "client_eval_time": float(eval_time),
+        # ✅ Evaluation phase resource metrics
+        "eval_resources_per_process_cpu_peak": float(eval_resources['per_process']['cpu_percent']['peak']),
+        "eval_resources_per_process_cpu_avg": float(eval_resources['per_process']['cpu_percent']['avg']),
+        "eval_resources_per_process_ram_peak_mb": float(eval_resources['per_process']['memory_mb']['peak']),
+        "eval_resources_per_process_ram_avg_mb": float(eval_resources['per_process']['memory_mb']['avg']),
+        "eval_resources_per_process_ram_peak_pct": float(eval_resources['per_process']['memory_percent']['peak']),
+        "eval_resources_per_process_ram_avg_pct": float(eval_resources['per_process']['memory_percent']['avg']),
+        "eval_resources_system_cpu_peak": float(eval_resources['system_wide']['cpu_percent']['peak']),
+        "eval_resources_system_cpu_avg": float(eval_resources['system_wide']['cpu_percent']['avg']),
+        "eval_resources_system_ram_peak_mb": float(eval_resources['system_wide']['memory_mb']['peak']),
+        "eval_resources_system_ram_avg_mb": float(eval_resources['system_wide']['memory_mb']['avg']),
+        "eval_resources_system_ram_peak_pct": float(eval_resources['system_wide']['memory_percent']['peak']),
+        "eval_resources_system_ram_avg_pct": float(eval_resources['system_wide']['memory_percent']['avg']),
     }
     
     status_icon = "✅" if eval_status == "SUCCESS" else "❌"

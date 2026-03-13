@@ -68,7 +68,7 @@ def get_env(key, default, type_cast=str):
 
 
 # ==================== CONFIGURATION ====================
-INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/11213343/EXP_YOLOv5_s_detection_11213343_logs.json"
+INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/1121314130/EXP_YOLOv5_s_detection_1121314130_logs.json"
 
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
@@ -191,6 +191,107 @@ def filter_zero_metrics_clients(df_clients):
     print(f"    • Filtered records: {len(df_clients_filtered)}")
     
     return df_clients_filtered
+
+
+# ==================== RESOURCE METRICS EXTRACTION ====================
+
+def extract_resource_metrics(data):
+    """Extract resource metrics from round-level data"""
+    resources = []
+    
+    for round_data in data:
+        round_id = round_data['round_id']
+        
+        # Training resources - aggregated
+        train_res = round_data.get('aggregated_client_training_resources', {})
+        eval_res = round_data.get('aggregated_client_eval_resources', {})
+        server_train_res = round_data.get('server_aggregation_resources', {})
+        server_eval_res = round_data.get('server_eval_resources', {})
+        
+        resource_dict = {
+            'round_id': round_id,
+            # Training - per-process (client)
+            'train_cpu_peak': train_res.get('per_process', {}).get('cpu_percent_peak_avg', 0),
+            'train_cpu_avg': train_res.get('per_process', {}).get('cpu_percent_avg', 0),
+            'train_ram_peak_mb': train_res.get('per_process', {}).get('ram_mb_peak_max', 0),
+            'train_ram_avg_mb': train_res.get('per_process', {}).get('ram_mb_avg', 0),
+            'train_ram_peak_pct': train_res.get('per_process', {}).get('ram_percent_peak_max', 0),
+            'train_ram_avg_pct': train_res.get('per_process', {}).get('ram_percent_avg', 0),
+            # Training - system-wide
+            'train_sys_cpu_peak': train_res.get('system_wide', {}).get('cpu_percent_peak_avg', 0),
+            'train_sys_cpu_avg': train_res.get('system_wide', {}).get('cpu_percent_avg', 0),
+            'train_sys_ram_peak_mb': train_res.get('system_wide', {}).get('ram_mb_peak_max', 0),
+            'train_sys_ram_avg_mb': train_res.get('system_wide', {}).get('ram_mb_avg', 0),
+            # Evaluation - per-process (client)
+            'eval_cpu_peak': eval_res.get('per_process', {}).get('cpu_percent_peak_avg', 0),
+            'eval_cpu_avg': eval_res.get('per_process', {}).get('cpu_percent_avg', 0),
+            'eval_ram_peak_mb': eval_res.get('per_process', {}).get('ram_mb_peak_max', 0),
+            'eval_ram_avg_mb': eval_res.get('per_process', {}).get('ram_mb_avg', 0),
+            'eval_ram_peak_pct': eval_res.get('per_process', {}).get('ram_percent_peak_max', 0),
+            'eval_ram_avg_pct': eval_res.get('per_process', {}).get('ram_percent_avg', 0),
+            # Server - training
+            'server_train_cpu_peak': server_train_res.get('per_process', {}).get('cpu_percent_peak', 0),
+            'server_train_cpu_avg': server_train_res.get('per_process', {}).get('cpu_percent_avg', 0),
+            'server_train_ram_peak_mb': server_train_res.get('per_process', {}).get('ram_mb_peak', 0),
+            'server_train_ram_avg_mb': server_train_res.get('per_process', {}).get('ram_mb_avg', 0),
+            # Server - evaluation
+            'server_eval_cpu_peak': server_eval_res.get('per_process', {}).get('cpu_percent_peak', 0),
+            'server_eval_cpu_avg': server_eval_res.get('per_process', {}).get('cpu_percent_avg', 0),
+            'server_eval_ram_peak_mb': server_eval_res.get('per_process', {}).get('ram_mb_peak', 0),
+            'server_eval_ram_avg_mb': server_eval_res.get('per_process', {}).get('ram_mb_avg', 0),
+        }
+        
+        resources.append(resource_dict)
+    
+    return pd.DataFrame(resources)
+
+
+def extract_per_client_resources(data):
+    """Extract per-client resource metrics"""
+    client_resources = []
+    
+    for round_data in data:
+        round_id = round_data['round_id']
+        
+        for client in round_data.get('clients_logs', []):
+            client_id = client['client_id']
+            
+            # Training resources
+            train_res = client.get('client_train_resources', {})
+            eval_res = client.get('client_eval_resources', {})
+            
+            resource_dict = {
+                'round_id': round_id,
+                'client_id': client_id,
+                # Training - per-process
+                'train_cpu_peak': train_res.get('per_process', {}).get('cpu_percent_peak', 0),
+                'train_cpu_avg': train_res.get('per_process', {}).get('cpu_percent_avg', 0),
+                'train_ram_peak_mb': train_res.get('per_process', {}).get('ram_mb_peak', 0),
+                'train_ram_avg_mb': train_res.get('per_process', {}).get('ram_mb_avg', 0),
+                'train_ram_peak_pct': train_res.get('per_process', {}).get('ram_percent_peak', 0),
+                'train_ram_avg_pct': train_res.get('per_process', {}).get('ram_percent_avg', 0),
+                # Training - system-wide
+                'train_sys_cpu_peak': train_res.get('system_wide', {}).get('cpu_percent_peak', 0),
+                'train_sys_cpu_avg': train_res.get('system_wide', {}).get('cpu_percent_avg', 0),
+                'train_sys_ram_peak_mb': train_res.get('system_wide', {}).get('ram_mb_peak', 0),
+                'train_sys_ram_avg_mb': train_res.get('system_wide', {}).get('ram_mb_avg', 0),
+                # Evaluation - per-process
+                'eval_cpu_peak': eval_res.get('per_process', {}).get('cpu_percent_peak', 0),
+                'eval_cpu_avg': eval_res.get('per_process', {}).get('cpu_percent_avg', 0),
+                'eval_ram_peak_mb': eval_res.get('per_process', {}).get('ram_mb_peak', 0),
+                'eval_ram_avg_mb': eval_res.get('per_process', {}).get('ram_mb_avg', 0),
+                'eval_ram_peak_pct': eval_res.get('per_process', {}).get('ram_percent_peak', 0),
+                'eval_ram_avg_pct': eval_res.get('per_process', {}).get('ram_percent_avg', 0),
+                # Evaluation - system-wide
+                'eval_sys_cpu_peak': eval_res.get('system_wide', {}).get('cpu_percent_peak', 0),
+                'eval_sys_cpu_avg': eval_res.get('system_wide', {}).get('cpu_percent_avg', 0),
+                'eval_sys_ram_peak_mb': eval_res.get('system_wide', {}).get('ram_mb_peak', 0),
+                'eval_sys_ram_avg_mb': eval_res.get('system_wide', {}).get('ram_mb_avg', 0),
+            }
+            
+            client_resources.append(resource_dict)
+    
+    return pd.DataFrame(client_resources)
 
 
 # ==================== PLOTTING FUNCTIONS ====================
@@ -734,6 +835,461 @@ def plot_communication_overhead(df_rounds, output_dir):
     plt.close()
 
 
+# ==================== RESOURCE ANALYSIS PLOTS ====================
+
+def plot_client_resource_evolution(df_resources, output_dir):
+    """Plot client resource usage evolution over rounds"""
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    fig.suptitle('Client Resource Usage Evolution', fontsize=16, fontweight='bold')
+    
+    # 1. CPU Usage - Training
+    ax = axes[0, 0]
+    ax.plot(df_resources['round_id'], df_resources['train_cpu_peak'], 
+            marker='o', linewidth=2.5, markersize=8, label='Peak CPU %', 
+            color='#2E86AB', alpha=0.8)
+    ax.plot(df_resources['round_id'], df_resources['train_cpu_avg'], 
+            marker='s', linewidth=2.5, markersize=8, label='Avg CPU %', 
+            color='#A23B72', alpha=0.8, linestyle='--')
+    
+    ax.fill_between(df_resources['round_id'], 
+                     df_resources['train_cpu_avg'], 
+                     df_resources['train_cpu_peak'],
+                     alpha=0.2, color='gray')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('CPU %', fontsize=11)
+    ax.set_title('Training: Client CPU Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 2. RAM Usage - Training
+    ax = axes[0, 1]
+    ax.plot(df_resources['round_id'], df_resources['train_ram_peak_mb'], 
+            marker='o', linewidth=2.5, markersize=8, label='Peak RAM (MB)', 
+            color='#F18F01', alpha=0.8)
+    ax.plot(df_resources['round_id'], df_resources['train_ram_avg_mb'], 
+            marker='s', linewidth=2.5, markersize=8, label='Avg RAM (MB)', 
+            color='#C73E1D', alpha=0.8, linestyle='--')
+    
+    ax.fill_between(df_resources['round_id'], 
+                     df_resources['train_ram_avg_mb'], 
+                     df_resources['train_ram_peak_mb'],
+                     alpha=0.2, color='gray')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('RAM (MB)', fontsize=11)
+    ax.set_title('Training: Client RAM Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 3. CPU Usage - Evaluation
+    ax = axes[1, 0]
+    ax.plot(df_resources['round_id'], df_resources['eval_cpu_peak'], 
+            marker='o', linewidth=2.5, markersize=8, label='Peak CPU %', 
+            color='#6A994E', alpha=0.8)
+    ax.plot(df_resources['round_id'], df_resources['eval_cpu_avg'], 
+            marker='s', linewidth=2.5, markersize=8, label='Avg CPU %', 
+            color='#BC4B51', alpha=0.8, linestyle='--')
+    
+    ax.fill_between(df_resources['round_id'], 
+                     df_resources['eval_cpu_avg'], 
+                     df_resources['eval_cpu_peak'],
+                     alpha=0.2, color='gray')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('CPU %', fontsize=11)
+    ax.set_title('Evaluation: Client CPU Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 4. RAM Usage - Evaluation
+    ax = axes[1, 1]
+    ax.plot(df_resources['round_id'], df_resources['eval_ram_peak_mb'], 
+            marker='o', linewidth=2.5, markersize=8, label='Peak RAM (MB)', 
+            color='#2E86AB', alpha=0.8)
+    ax.plot(df_resources['round_id'], df_resources['eval_ram_avg_mb'], 
+            marker='s', linewidth=2.5, markersize=8, label='Avg RAM (MB)', 
+            color='#A23B72', alpha=0.8, linestyle='--')
+    
+    ax.fill_between(df_resources['round_id'], 
+                     df_resources['eval_ram_avg_mb'], 
+                     df_resources['eval_ram_peak_mb'],
+                     alpha=0.2, color='gray')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('RAM (MB)', fontsize=11)
+    ax.set_title('Evaluation: Client RAM Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(df_resources['round_id'])
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/08_client_resource_evolution.png", 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_server_resource_overhead(df_resources, output_dir):
+    """Plot server resource overhead during aggregation"""
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    fig.suptitle('Server Resource Overhead During Aggregation', fontsize=16, fontweight='bold')
+    
+    # 1. Server CPU - Training Aggregation
+    ax = axes[0, 0]
+    ax.bar(df_resources['round_id'] - 0.15, df_resources['server_train_cpu_peak'], 
+           width=0.3, label='Peak', color='#2E86AB', alpha=0.8, edgecolor='black')
+    ax.bar(df_resources['round_id'] + 0.15, df_resources['server_train_cpu_avg'], 
+           width=0.3, label='Average', color='#A23B72', alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('CPU %', fontsize=11)
+    ax.set_title('Training Aggregation: Server CPU Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 2. Server RAM - Training Aggregation
+    ax = axes[0, 1]
+    ax.bar(df_resources['round_id'] - 0.15, df_resources['server_train_ram_peak_mb'], 
+           width=0.3, label='Peak', color='#F18F01', alpha=0.8, edgecolor='black')
+    ax.bar(df_resources['round_id'] + 0.15, df_resources['server_train_ram_avg_mb'], 
+           width=0.3, label='Average', color='#C73E1D', alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('RAM (MB)', fontsize=11)
+    ax.set_title('Training Aggregation: Server RAM Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 3. Server CPU - Evaluation Aggregation
+    ax = axes[1, 0]
+    ax.bar(df_resources['round_id'] - 0.15, df_resources['server_eval_cpu_peak'], 
+           width=0.3, label='Peak', color='#6A994E', alpha=0.8, edgecolor='black')
+    ax.bar(df_resources['round_id'] + 0.15, df_resources['server_eval_cpu_avg'], 
+           width=0.3, label='Average', color='#BC4B51', alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('CPU %', fontsize=11)
+    ax.set_title('Evaluation Aggregation: Server CPU Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 4. Server RAM - Evaluation Aggregation
+    ax = axes[1, 1]
+    ax.bar(df_resources['round_id'] - 0.15, df_resources['server_eval_ram_peak_mb'], 
+           width=0.3, label='Peak', color='#2E86AB', alpha=0.8, edgecolor='black')
+    ax.bar(df_resources['round_id'] + 0.15, df_resources['server_eval_ram_avg_mb'], 
+           width=0.3, label='Average', color='#A23B72', alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('RAM (MB)', fontsize=11)
+    ax.set_title('Evaluation Aggregation: Server RAM Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/09_server_resource_overhead.png", 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_training_vs_eval_resources(df_resources, output_dir):
+    """Compare client resources between training and evaluation phases"""
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    fig.suptitle('Training vs Evaluation: Resource Comparison', fontsize=16, fontweight='bold')
+    
+    # 1. CPU Comparison
+    ax = axes[0, 0]
+    x = np.arange(len(df_resources))
+    width = 0.35
+    
+    ax.bar(x - width/2, df_resources['train_cpu_peak'], width, 
+           label='Training Peak', color='#2E86AB', alpha=0.8, edgecolor='black')
+    ax.bar(x + width/2, df_resources['eval_cpu_peak'], width, 
+           label='Evaluation Peak', color='#F18F01', alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('CPU % (Peak)', fontsize=11)
+    ax.set_title('CPU Usage: Training vs Evaluation', fontsize=13, fontweight='bold', pad=10)
+    ax.set_xticks(x)
+    ax.set_xticklabels(df_resources['round_id'])
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # 2. RAM Comparison
+    ax = axes[0, 1]
+    ax.bar(x - width/2, df_resources['train_ram_peak_mb'], width, 
+           label='Training Peak', color='#6A994E', alpha=0.8, edgecolor='black')
+    ax.bar(x + width/2, df_resources['eval_ram_peak_mb'], width, 
+           label='Evaluation Peak', color='#BC4B51', alpha=0.8, edgecolor='black')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('RAM (MB) (Peak)', fontsize=11)
+    ax.set_title('RAM Usage: Training vs Evaluation', fontsize=13, fontweight='bold', pad=10)
+    ax.set_xticks(x)
+    ax.set_xticklabels(df_resources['round_id'])
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # 3. CPU Ratio (Train/Eval)
+    ax = axes[1, 0]
+    cpu_ratio = df_resources['train_cpu_peak'] / (df_resources['eval_cpu_peak'] + 0.1)
+    colors = ['#2E86AB' if r > 1 else '#F18F01' for r in cpu_ratio]
+    
+    ax.bar(df_resources['round_id'], cpu_ratio, color=colors, alpha=0.7, edgecolor='black')
+    ax.axhline(y=1, color='black', linestyle='--', alpha=0.5, linewidth=2)
+    
+    for i, (r, ratio) in enumerate(zip(df_resources['round_id'], cpu_ratio)):
+        ax.text(r, ratio, f'{ratio:.2f}x', ha='center', va='bottom', 
+               fontsize=10, fontweight='bold')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Ratio (Train/Eval)', fontsize=11)
+    ax.set_title('CPU Usage Ratio: Training / Evaluation', fontsize=13, fontweight='bold', pad=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 4. RAM Ratio (Train/Eval)
+    ax = axes[1, 1]
+    ram_ratio = df_resources['train_ram_peak_mb'] / (df_resources['eval_ram_peak_mb'] + 0.1)
+    colors = ['#6A994E' if r > 1 else '#BC4B51' for r in ram_ratio]
+    
+    ax.bar(df_resources['round_id'], ram_ratio, color=colors, alpha=0.7, edgecolor='black')
+    ax.axhline(y=1, color='black', linestyle='--', alpha=0.5, linewidth=2)
+    
+    for i, (r, ratio) in enumerate(zip(df_resources['round_id'], ram_ratio)):
+        ax.text(r, ratio, f'{ratio:.2f}x', ha='center', va='bottom', 
+               fontsize=10, fontweight='bold')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Ratio (Train/Eval)', fontsize=11)
+    ax.set_title('RAM Usage Ratio: Training / Evaluation', fontsize=13, fontweight='bold', pad=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/10_training_vs_eval_resources.png", 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_per_client_resource_heatmap(df_client_resources, output_dir):
+    """Heatmap showing resource usage per client across rounds"""
+    if df_client_resources.empty:
+        print("  ⚠️ Skipping per-client resource heatmap (no per-client data)")
+        return
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    fig.suptitle('Per-Client Resource Usage Heatmap', fontsize=16, fontweight='bold')
+    
+    # 1. Training CPU Peak per Client
+    ax = axes[0, 0]
+    pivot = df_client_resources.pivot(index='client_id', columns='round_id', 
+                                       values='train_cpu_peak')
+    
+    im = ax.imshow(pivot.values, cmap='YlOrRd', aspect='auto')
+    ax.set_xticks(np.arange(len(pivot.columns)))
+    ax.set_yticks(np.arange(len(pivot.index)))
+    ax.set_xticklabels([f'R{c}' for c in pivot.columns], fontsize=10)
+    ax.set_yticklabels([f'C{i}' for i in pivot.index], fontsize=10)
+    
+    # Annotate cells
+    for i in range(len(pivot.index)):
+        for j in range(len(pivot.columns)):
+            value = pivot.values[i, j]
+            if not np.isnan(value):
+                text_color = 'black'
+                ax.text(j, i, f'{value:.0f}%', ha="center", va="center", 
+                       color=text_color, fontsize=8, fontweight='bold')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Client ID', fontsize=12, fontweight='bold')
+    ax.set_title('Training: CPU Peak %', fontsize=13, fontweight='bold', pad=10)
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('CPU %', rotation=270, labelpad=20)
+    
+    # 2. Training RAM Peak per Client
+    ax = axes[0, 1]
+    pivot = df_client_resources.pivot(index='client_id', columns='round_id', 
+                                       values='train_ram_peak_mb')
+    
+    im = ax.imshow(pivot.values, cmap='YlGnBu', aspect='auto')
+    ax.set_xticks(np.arange(len(pivot.columns)))
+    ax.set_yticks(np.arange(len(pivot.index)))
+    ax.set_xticklabels([f'R{c}' for c in pivot.columns], fontsize=10)
+    ax.set_yticklabels([f'C{i}' for i in pivot.index], fontsize=10)
+    
+    for i in range(len(pivot.index)):
+        for j in range(len(pivot.columns)):
+            value = pivot.values[i, j]
+            if not np.isnan(value):
+                ax.text(j, i, f'{value:.0f}', ha="center", va="center", 
+                       color='black', fontsize=8, fontweight='bold')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Client ID', fontsize=12, fontweight='bold')
+    ax.set_title('Training: RAM Peak (MB)', fontsize=13, fontweight='bold', pad=10)
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('RAM (MB)', rotation=270, labelpad=20)
+    
+    # 3. Evaluation CPU Peak per Client
+    ax = axes[1, 0]
+    pivot = df_client_resources.pivot(index='client_id', columns='round_id', 
+                                       values='eval_cpu_peak')
+    
+    im = ax.imshow(pivot.values, cmap='YlOrRd', aspect='auto')
+    ax.set_xticks(np.arange(len(pivot.columns)))
+    ax.set_yticks(np.arange(len(pivot.index)))
+    ax.set_xticklabels([f'R{c}' for c in pivot.columns], fontsize=10)
+    ax.set_yticklabels([f'C{i}' for i in pivot.index], fontsize=10)
+    
+    for i in range(len(pivot.index)):
+        for j in range(len(pivot.columns)):
+            value = pivot.values[i, j]
+            if not np.isnan(value):
+                ax.text(j, i, f'{value:.0f}%', ha="center", va="center", 
+                       color='black', fontsize=8, fontweight='bold')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Client ID', fontsize=12, fontweight='bold')
+    ax.set_title('Evaluation: CPU Peak %', fontsize=13, fontweight='bold', pad=10)
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('CPU %', rotation=270, labelpad=20)
+    
+    # 4. Evaluation RAM Peak per Client
+    ax = axes[1, 1]
+    pivot = df_client_resources.pivot(index='client_id', columns='round_id', 
+                                       values='eval_ram_peak_mb')
+    
+    im = ax.imshow(pivot.values, cmap='YlGnBu', aspect='auto')
+    ax.set_xticks(np.arange(len(pivot.columns)))
+    ax.set_yticks(np.arange(len(pivot.index)))
+    ax.set_xticklabels([f'R{c}' for c in pivot.columns], fontsize=10)
+    ax.set_yticklabels([f'C{i}' for i in pivot.index], fontsize=10)
+    
+    for i in range(len(pivot.index)):
+        for j in range(len(pivot.columns)):
+            value = pivot.values[i, j]
+            if not np.isnan(value):
+                ax.text(j, i, f'{value:.0f}', ha="center", va="center", 
+                       color='black', fontsize=8, fontweight='bold')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Client ID', fontsize=12, fontweight='bold')
+    ax.set_title('Evaluation: RAM Peak (MB)', fontsize=13, fontweight='bold', pad=10)
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('RAM (MB)', rotation=270, labelpad=20)
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/11_per_client_resource_heatmap.png", 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_resource_efficiency(df_rounds, df_resources, output_dir):
+    """Analyze resource efficiency vs accuracy improvement"""
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    fig.suptitle('Resource Efficiency Analysis', fontsize=16, fontweight='bold')
+    
+    # 1. Accuracy vs CPU Usage
+    ax = axes[0, 0]
+    scatter = ax.scatter(df_resources['train_cpu_peak'], df_rounds['train_agg'], 
+                        s=300, alpha=0.6, c=df_resources['round_id'], 
+                        cmap='viridis', edgecolors='black', linewidth=2)
+    
+    z = np.polyfit(df_resources['train_cpu_peak'], df_rounds['train_agg'], 2)
+    p = np.poly1d(z)
+    x_smooth = np.linspace(df_resources['train_cpu_peak'].min(), 
+                           df_resources['train_cpu_peak'].max(), 100)
+    ax.plot(x_smooth, p(x_smooth), "r--", linewidth=2, alpha=0.7, label='Trend')
+    
+    ax.set_xlabel('Client CPU Usage (Peak %)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Training Accuracy', fontsize=12, fontweight='bold')
+    ax.set_title('Training Accuracy vs CPU Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label('Round', rotation=270, labelpad=20)
+    
+    # 2. Accuracy vs RAM Usage
+    ax = axes[0, 1]
+    scatter = ax.scatter(df_resources['train_ram_peak_mb'], df_rounds['train_agg'], 
+                        s=300, alpha=0.6, c=df_resources['round_id'], 
+                        cmap='viridis', edgecolors='black', linewidth=2)
+    
+    z = np.polyfit(df_resources['train_ram_peak_mb'], df_rounds['train_agg'], 2)
+    p = np.poly1d(z)
+    x_smooth = np.linspace(df_resources['train_ram_peak_mb'].min(), 
+                           df_resources['train_ram_peak_mb'].max(), 100)
+    ax.plot(x_smooth, p(x_smooth), "r--", linewidth=2, alpha=0.7, label='Trend')
+    
+    ax.set_xlabel('Client RAM Usage (Peak MB)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Training Accuracy', fontsize=12, fontweight='bold')
+    ax.set_title('Training Accuracy vs RAM Usage', fontsize=13, fontweight='bold', pad=10)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label('Round', rotation=270, labelpad=20)
+    
+    # 3. Resource Efficiency Score
+    ax = axes[1, 0]
+    accuracy_improvement = df_rounds['train_agg'] - df_rounds['train_agg'].iloc[0]
+    total_resources = df_resources['train_cpu_peak'] + (df_resources['train_ram_peak_mb'] / 100)
+    
+    efficiency = accuracy_improvement / total_resources
+    efficiency = efficiency.fillna(0)
+    
+    colors = ['#6A994E' if e > 0 else '#C73E1D' for e in efficiency]
+    
+    ax.bar(df_resources['round_id'], efficiency, color=colors, alpha=0.7, edgecolor='black')
+    ax.axhline(y=0, color='black', linestyle='-', alpha=0.5, linewidth=2)
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Efficiency Score', fontsize=12, fontweight='bold')
+    ax.set_title('Resource Efficiency (Accuracy Gain / Resource Use)', 
+                fontsize=13, fontweight='bold', pad=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(df_resources['round_id'])
+    
+    # 4. Cumulative Resource vs Cumulative Improvement
+    ax = axes[1, 1]
+    cumulative_resources = (df_resources['train_cpu_peak'] + 
+                           (df_resources['train_ram_peak_mb'] / 100)).cumsum()
+    cumulative_improvement = (df_rounds['train_agg'] - df_rounds['train_agg'].iloc[0]).cumsum()
+    
+    ax2 = ax.twinx()
+    
+    line1 = ax.plot(df_resources['round_id'], cumulative_resources, 
+                   marker='o', linewidth=2.5, markersize=8, color='#2E86AB', 
+                   label='Cumulative Resources')
+    line2 = ax2.plot(df_resources['round_id'], cumulative_improvement, 
+                    marker='s', linewidth=2.5, markersize=8, color='#A23B72', 
+                    label='Cumulative Improvement')
+    
+    ax.set_xlabel('Round', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Cumulative Resources', fontsize=12, fontweight='bold', color='#2E86AB')
+    ax2.set_ylabel('Cumulative Improvement', fontsize=12, fontweight='bold', color='#A23B72')
+    ax.set_title('Resource Consumption vs Accuracy Improvement (Cumulative)', 
+                fontsize=13, fontweight='bold', pad=10)
+    
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, loc='upper left', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(df_resources['round_id'])
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/12_resource_efficiency.png", 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+
 def plot_per_client_analysis(df_clients, output_dir):
     """Generate individual plots for each client showing train/val accuracy and round times"""
     clients = sorted(df_clients['client_id'].unique())
@@ -1049,6 +1605,80 @@ def generate_summary_report(df_rounds, df_clients, output_dir):
     return report_path
 
 
+def generate_resource_summary(df_resources, df_client_resources, output_dir):
+    """Generate resource usage summary"""
+    summary = []
+    
+    summary.append("\n" + "=" * 90)
+    summary.append("RESOURCE USAGE ANALYSIS")
+    summary.append("=" * 90)
+    summary.append("")
+    
+    # Client Training Resources
+    summary.append("CLIENT TRAINING RESOURCES")
+    summary.append("-" * 90)
+    summary.append(f"  CPU Peak (Average):........................ {df_resources['train_cpu_peak'].mean():.1f}% ({df_resources['train_cpu_peak'].min():.1f}% - {df_resources['train_cpu_peak'].max():.1f}%)")
+    summary.append(f"  CPU Average (Average):..................... {df_resources['train_cpu_avg'].mean():.1f}%")
+    summary.append(f"  RAM Peak (Max):............................ {df_resources['train_ram_peak_mb'].max():.1f} MB")
+    summary.append(f"  RAM Average (Average):..................... {df_resources['train_ram_avg_mb'].mean():.1f} MB")
+    summary.append("")
+    
+    # Client Evaluation Resources
+    summary.append("CLIENT EVALUATION RESOURCES")
+    summary.append("-" * 90)
+    summary.append(f"  CPU Peak (Average):........................ {df_resources['eval_cpu_peak'].mean():.1f}% ({df_resources['eval_cpu_peak'].min():.1f}% - {df_resources['eval_cpu_peak'].max():.1f}%)")
+    summary.append(f"  CPU Average (Average):..................... {df_resources['eval_cpu_avg'].mean():.1f}%")
+    summary.append(f"  RAM Peak (Max):............................ {df_resources['eval_ram_peak_mb'].max():.1f} MB")
+    summary.append(f"  RAM Average (Average):..................... {df_resources['eval_ram_avg_mb'].mean():.1f} MB")
+    summary.append("")
+    
+    # Server Resources
+    summary.append("SERVER AGGREGATION RESOURCES")
+    summary.append("-" * 90)
+    summary.append(f"  Training Aggregation CPU Peak:............ {df_resources['server_train_cpu_peak'].mean():.1f}% (avg)")
+    summary.append(f"  Training Aggregation RAM Peak:............ {df_resources['server_train_ram_peak_mb'].mean():.1f} MB (avg)")
+    summary.append(f"  Evaluation Aggregation CPU Peak:.......... {df_resources['server_eval_cpu_peak'].mean():.1f}% (avg)")
+    summary.append(f"  Evaluation Aggregation RAM Peak:.......... {df_resources['server_eval_ram_peak_mb'].mean():.1f} MB (avg)")
+    summary.append("")
+    
+    # Training vs Evaluation
+    summary.append("TRAINING VS EVALUATION RESOURCE COMPARISON")
+    summary.append("-" * 90)
+    cpu_ratio = df_resources['train_cpu_peak'].mean() / (df_resources['eval_cpu_peak'].mean() + 0.1)
+    ram_ratio = df_resources['train_ram_peak_mb'].mean() / (df_resources['eval_ram_peak_mb'].mean() + 0.1)
+    
+    summary.append(f"  CPU Usage Ratio (Train/Eval):............. {cpu_ratio:.2f}x")
+    summary.append(f"  RAM Usage Ratio (Train/Eval):............. {ram_ratio:.2f}x")
+    summary.append("")
+    
+    if not df_client_resources.empty:
+        # Per-client variability
+        summary.append("PER-CLIENT RESOURCE VARIABILITY")
+        summary.append("-" * 90)
+        client_cpu_var = df_client_resources.groupby('round_id')['train_cpu_peak'].std()
+        client_ram_var = df_client_resources.groupby('round_id')['train_ram_peak_mb'].std()
+        
+        summary.append(f"  Client CPU Variability (Std Dev):........ {client_cpu_var.mean():.1f}% (avg across rounds)")
+        summary.append(f"  Client RAM Variability (Std Dev):........ {client_ram_var.mean():.1f} MB (avg across rounds)")
+        
+        if client_cpu_var.mean() < 10:
+            summary.append(f"  Status:.................................... GOOD RESOURCE BALANCE")
+        elif client_cpu_var.mean() < 20:
+            summary.append(f"  Status:.................................... ACCEPTABLE RESOURCE BALANCE")
+        else:
+            summary.append(f"  Status:.................................... POOR RESOURCE BALANCE (High variance)")
+        summary.append("")
+    
+    summary.append("=" * 90 + "\n")
+    
+    # Append to existing report
+    report_path = f"{output_dir}/00_SUMMARY_REPORT.txt"
+    with open(report_path, 'a') as f:
+        f.write('\n'.join(summary))
+    
+    print('\n'.join(summary))
+
+
 # ==================== MAIN EXECUTION ====================
 
 def main():
@@ -1071,8 +1701,14 @@ def main():
     print("\n[*] Extracting metrics...")
     df_rounds = extract_round_metrics(data)
     df_clients = extract_client_metrics(data)
+    df_resources = extract_resource_metrics(data)
+    df_client_resources = extract_per_client_resources(data)
+    
     print(f"[OK] Extracted round-level metrics")
     print(f"[OK] Extracted client-level metrics ({len(df_clients)} records)")
+    print(f"[OK] Extracted resource metrics ({len(df_resources)} records)")
+    if not df_client_resources.empty:
+        print(f"[OK] Extracted per-client resource metrics ({len(df_client_resources)} records)")
     
     # Filter zero metrics clients
     print("\n[*] Filtering clients with zero metrics...")
@@ -1086,10 +1722,15 @@ def main():
         ("Generalization gap analysis", plot_generalization_gap, (df_rounds,)),
         ("Client performance heatmap", plot_client_performance_heatmap, (df_clients,)),
         ("Client train vs eval comparison", plot_client_train_vs_eval_comparison, (df_clients,)),
+        ("Per-client analysis", plot_per_client_analysis, (df_clients,)),
         ("Time analysis", plot_time_analysis, (df_clients, df_rounds)),
         ("Convergence analysis", plot_convergence_analysis, (df_rounds, df_clients)),
         ("Communication overhead", plot_communication_overhead, (df_rounds,)),
-        ("Per-client analysis", plot_per_client_analysis, (df_clients,)),
+        ("Client resource evolution", plot_client_resource_evolution, (df_resources,)),
+        ("Server resource overhead", plot_server_resource_overhead, (df_resources,)),
+        ("Training vs eval resources", plot_training_vs_eval_resources, (df_resources,)),
+        ("Per-client resource heatmap", plot_per_client_resource_heatmap, (df_client_resources,)),
+        ("Resource efficiency analysis", plot_resource_efficiency, (df_rounds, df_resources)),
     ]
 
     for desc, plot_func, args in plots:
@@ -1102,6 +1743,10 @@ def main():
     # Generate summary
     print("\n[*] Generating summary report...")
     report_path = generate_summary_report(df_rounds, df_clients, output_dir)
+    
+    # Generate resource summary
+    print("[*] Generating resource analysis summary...")
+    generate_resource_summary(df_resources, df_client_resources, output_dir)
     
     # Final summary
     num_plots = len(list(output_dir.glob('*.png')))
