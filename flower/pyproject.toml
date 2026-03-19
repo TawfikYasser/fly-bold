@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.137"
+version = "1.0.149"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -27,6 +27,7 @@ dependencies = [
     "flwr-datasets[vision]>=0.5.0",
     "protobuf>=5.28.2",
     "numpy>=1.24.4,<2.0.0",
+    "optuna>=4.8.0",
     "torch==2.0.0+cpu",
     "torchvision==0.15.1+cpu",
     "pycocotools>=2.0.6",
@@ -91,4 +92,6 @@ img_size = 416
 batch_size = 16
 dataset = 100
 strategy = 1
-run_id = 1121314130
+n_optuna_trials = 15   # set to 0 to skip HPO entirely
+hpo_rounds = 1         # proxy rounds per trial
+run_id = 30101001

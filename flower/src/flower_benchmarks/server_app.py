@@ -9,7 +9,7 @@ import time
 from typing import List, Tuple, Dict, Optional
 from flwr.app import ArrayRecord, Context, MetricRecord, RecordDict, ConfigRecord
 from flwr.serverapp import Grid, ServerApp
-from flwr.serverapp.strategy import FedAvg, FedAdam, FedYogi
+from flwr.serverapp.strategy import FedAvg, FedAdam, FedYogi, FedProx
 from flower_benchmarks.task import Net
 
 # Ensure parent directory is in sys.path
@@ -25,6 +25,8 @@ from flower_benchmarks.plugins.yolov5.model import (
 from flower_benchmarks.task import ResourceMonitor
 from yolov5.models.yolo import Model
 from yolov5.utils.downloads import attempt_download
+import numpy as np
+import optuna
 
 # =====================================================================
 # GLOBAL STATE (needed for Flower's aggregation callbacks)
@@ -62,7 +64,6 @@ def _safe_float(v, default=0.0):
         return float(v)
     except Exception:
         return default
-
 
 def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_key: str) -> MetricRecord:
     """
@@ -525,6 +526,24 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for ServerApp with optimized configuration."""
 
+    # ── FedAdam / FedYogi Array-compatibility patch ───────────────────────
+    # Flower's FedOpt strategies call Array(v) after momentum math, but the
+    # result can be a plain Python/dict value that Array() rejects.  We swap
+    # the Array symbol in both module namespaces with a thin wrapper that
+    # coerces any non-tensor/ndarray value through np.asarray() first.
+    import flwr.serverapp.strategy.fedadam as _fedadam_mod
+    import flwr.serverapp.strategy.fedyogi as _fedyogi_mod
+    from flwr.common.record.array import Array as _OrigArray
+
+    def _NpSafeArray(v, *args, **kwargs):
+        if not isinstance(v, (np.ndarray, torch.Tensor)):
+            v = np.asarray(v)
+        return _OrigArray(v, *args, **kwargs)
+
+    _fedadam_mod.Array = _NpSafeArray
+    _fedyogi_mod.Array = _NpSafeArray
+    # ─────────────────────────────────────────────────────────────────────
+
     # Get configuration
     fraction_train = get_config("fraction-train", context, default=1.0, type_converter=float)
     fraction_evaluate = get_config("fraction-evaluate", context, default=1.0, type_converter=float)
@@ -601,49 +620,191 @@ def main(grid: Grid, context: Context) -> None:
         print(f"âœ… Classification model initialized")
 
 
-    strategy_id = get_config("strategy", context, default=1, type_converter=int)
+    strategy_id     = get_config("strategy",        context, default=1,  type_converter=int)
+    n_optuna_trials = get_config("n_optuna_trials", context, default=0,  type_converter=int)
+    hpo_rounds      = get_config("hpo_rounds",      context, default=5,  type_converter=int)
 
-    if strategy_id == 1:
-        print(f"Using strategy: FedAvg")
-        strategy = FedAvg(
+    # -- Snapshot initial weights ONCE so every trial/run starts identically.
+    # ArrayRecord is consumed by strategy.start(), so we keep the raw state_dict
+    # and rebuild a fresh ArrayRecord before each strategy.start() call.
+    initial_state_dict = arrays.to_torch_state_dict()
+
+    def _make_strategy(sid):
+        """Always construct a fresh strategy instance.
+        Stateful strategies (FedAdam/FedYogi) carry momentum buffers; reusing the
+        same instance across trials would corrupt the server optimizer state for
+        trial N+1 with gradients from trial N.
+        """
+        kwargs = dict(
             fraction_train=fraction_train,
             fraction_evaluate=fraction_evaluate,
             train_metrics_aggr_fn=custom_train_metrics_aggregation,
             evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
         )
-    elif strategy_id == 2:
-        print(f"Using strategy: FedYogi")
-        strategy = FedYogi(
-            fraction_train=fraction_train,
-            fraction_evaluate=fraction_evaluate,
-            train_metrics_aggr_fn=custom_train_metrics_aggregation,
-            evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
+        if sid == 2:
+            print("Using strategy: FedYogi")
+            return FedYogi(**kwargs)
+        elif sid == 3:
+            print("Using strategy: FedAdam")
+            return FedAdam(**kwargs)
+        elif sid == 4:
+            print("Using strategy: FedProx")
+            return FedProx(**kwargs, proximal_mu=2.0)
+        else:
+            print("Using strategy: FedAvg")
+            return FedAvg(**kwargs)
+
+    def _run_trial(trial_lr, n_rounds, trial_tag, trial_strategy=None):
+        """Execute one complete FL session and return (result, logs_snapshot).
+
+        Resets global round state before every call so round IDs and metric
+        extraction are relative to THIS session, never polluted by a prior trial.
+
+        trial_strategy: if provided, overrides the strategy_id read from config.
+        This lets Optuna suggest a strategy per trial without touching the outer
+        strategy_id variable.
+        """
+        global ALL_ROUND_LOGS, CURRENT_ROUND
+        ALL_ROUND_LOGS = []
+        CURRENT_ROUND  = 0
+
+        # Fresh weights: scientifically mandatory -- every trial must start from
+        # identical weights or HP comparison is meaningless.
+        fresh_arrays  = ArrayRecord(torch_state_dict=initial_state_dict, keep_input=True)
+        effective_sid = trial_strategy if trial_strategy is not None else strategy_id
+        strategy      = _make_strategy(sid=effective_sid)
+
+        train_cfg = {
+            "lr":           trial_lr,
+            "num_rounds":   n_rounds,
+        }
+        # train_cfg = {
+        #     "lr":           trial_lr,
+        #     "num_rounds":   n_rounds,
+        #     "local-epochs": trial_epochs,   # client reads from msg.content["config"]
+        #     "batch_size":   trial_batch,    # client reads from msg.content["config"]
+        # }
+        if task_type == "detection":
+            train_cfg["yolo_size"] = yolo_size
+
+        print(f"\n{'='*70}")
+        print(f"STARTING FL TRIAL  [{trial_tag}]")
+        print(f"  lr={trial_lr:.6f}  rounds={n_rounds} strategy={effective_sid}")
+        print(f"{'='*70}\n")
+
+        result = strategy.start(
+            grid=grid,
+            initial_arrays=fresh_arrays,
+            train_config=ConfigRecord(train_cfg),
+            num_rounds=n_rounds,
+            timeout=18000,
         )
-    elif strategy_id == 3:
-        print(f"Using strategy: FedAdam")
-        strategy = FedAdam(
-            fraction_train=fraction_train,
-            fraction_evaluate=fraction_evaluate,
-            train_metrics_aggr_fn=custom_train_metrics_aggregation,
-            evaluate_metrics_aggr_fn=custom_eval_metrics_aggregation,
+
+        # Return a copy so the global can be safely reset next trial
+        return result, list(ALL_ROUND_LOGS)
+
+    # ================================================================
+    # OPTUNA HPO BLOCK -- skipped entirely when n_optuna_trials == 0
+    # ================================================================
+    if n_optuna_trials > 0:
+        print(f"\n{'='*70}")
+        print(f"OPTUNA HPO: {n_optuna_trials} trials x {hpo_rounds} proxy rounds each")
+        print(f"{'='*70}\n")
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        # SQLite storage: completed trials survive VM preemption / crashes.
+        # load_if_exists=True means a restarted run resumes from where it stopped.
+        study = optuna.create_study(
+            study_name=f"{experiment_name}_{run_id}_hpo",
+            direction="maximize",
+            storage=f"sqlite:///{experiment_name}_{run_id}_hpo.db",
+            load_if_exists=True,
+            sampler=optuna.samplers.TPESampler(seed=42),
         )
 
-    # Training configuration
-    train_cfg = {"lr": lr, "num_rounds": num_rounds}
-    if task_type == "detection":
-        train_cfg["yolo_size"] = yolo_size
+        def objective(trial):
+            trial_lr = trial.suggest_categorical("lr", [0.01, 0.001, 0.0001, 0.05, 0.005, 0.0005, 0.03, 0.003, 0.0003])
+            # trial_epochs   = trial.suggest_int("local_epochs",   1, 5)
+            # trial_batch    = trial.suggest_categorical("batch_size", [8, 16, 32])
+            trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
 
-    print(f"\n{'='*70}")
-    print(f"STARTING FEDERATED LEARNING")
-    print(f"{'='*70}\n")
+            _, trial_logs = _run_trial(
+                trial_lr,
+                n_rounds=hpo_rounds,
+                trial_tag=f"optuna_trial_{(trial.number)+1}",
+                trial_strategy=trial_strategy,
+            )
 
-    result = strategy.start(
-        grid=grid,
-        initial_arrays=arrays,
-        train_config=ConfigRecord(train_cfg),
-        num_rounds=num_rounds,
-        timeout=3600
-    )
+            # Empty logs means all clients failed -- treat as a pruned trial
+            if not trial_logs:
+                raise optuna.exceptions.TrialPruned()
+
+            mAP = trial_logs[-1].get("round_eval_acc", {}).get("mAP@0.5", 0.0)
+
+            # Persist per-trial logs for post-analysis (non-fatal if it fails)
+            try:
+                trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
+                with open(trial_logs_path, "w") as f:
+                    json.dump(trial_logs, f, indent=2)
+            except Exception as e:
+                print(f"[OPTUNA] Warning: could not save trial logs: {e}")
+
+            print(f"[OPTUNA] Trial {trial.number:>3} -> mAP@0.5={mAP:.4f}  "
+                  f"(lr={trial_lr:.5f}, strategy={trial_strategy})")
+            return mAP
+
+        study.optimize(objective, n_trials=n_optuna_trials)
+
+        best = study.best_params
+        print(f"\n{'='*70}")
+        print(f"OPTUNA COMPLETE -- Best trial #{study.best_trial.number}")
+        print(f"  mAP@0.5  = {study.best_value:.4f}")
+        print(f"  lr       = {best['lr']:.6f}")
+        # print(f"  epochs   = {best['local_epochs']}")
+        # print(f"  batch    = {best['batch_size']}")
+        print(f"  strategy = {best['strategy']} "
+              f"({'FedAvg' if best['strategy']==1 else 'FedYogi' if best['strategy']==2 else 'FedAdam' if best['strategy']==3 else 'FedProx'})")
+        print(f"{'='*70}\n")
+
+        # Promote HPO winners as values for the final full run
+        lr             = best["lr"]
+        # final_epochs   = best["local_epochs"]
+        # final_batch    = best["batch_size"]
+        final_strategy = best["strategy"]
+    else:
+        # No HPO -- fall through using values already read from config
+        # final_epochs   = int(get_config("local-epochs", context, default=3, type_converter=int))
+        # final_batch    = int(get_config("batch_size",   context, default=16, type_converter=int))
+        final_strategy = strategy_id  # use whatever was set in config, unchanged
+
+    # ================================================================
+    # FINAL (or sole) FULL RUN
+    # num_rounds is the TOTAL budget.  HPO already consumed
+    # n_optuna_trials * hpo_rounds of it, so the final run only
+    # gets the remainder.  When HPO is off, hpo_consumed = 0 and
+    # final_rounds == num_rounds, preserving the original behaviour.
+    # ================================================================
+    hpo_consumed = n_optuna_trials * hpo_rounds if n_optuna_trials > 0 else 0
+    final_rounds = num_rounds - hpo_consumed
+ 
+    if final_rounds <= 0:
+        print(f"[WARN] HPO consumed all {num_rounds} rounds "
+              f"({n_optuna_trials} trials x {hpo_rounds} hpo_rounds). "
+              f"No rounds left for the final run. "
+              f"Increase num-server-rounds or reduce n_optuna_trials/hpo_rounds.")
+    else:
+        print(f"\n[INFO] Round budget: {num_rounds} total -- "
+              f"{hpo_consumed} HPO -- {final_rounds} final run")
+        result, _ = _run_trial(
+            lr,
+            n_rounds=final_rounds,
+            trial_tag=f"final_run_{run_id}",
+            trial_strategy=final_strategy,
+        )
+ 
+    if final_rounds <= 0:
+        return  # budget exhausted by HPO, nothing to save
 
     print(f"\n{'='*70}")
     print(f"TRAINING COMPLETE")
@@ -657,24 +818,24 @@ def main(grid: Grid, context: Context) -> None:
         yolo_size = context.run_config.get("yolo_size", "n")
         try:
             save_state_dict_as_yolo_checkpoint(state_dict, yolo_size, out_path)
-            print(f"âœ… Final YOLO model saved: {out_path}")
+            print(f"[OK] Final YOLO model saved: {out_path}")
         except Exception as e:
-            print(f"âš ï¸  Could not save YOLO checkpoint: {e}")
+            print(f"[WARN] Could not save YOLO checkpoint: {e}")
             torch.save({"model": state_dict}, out_path)
-            print(f"âœ… Saved as PyTorch state dict: {out_path}")
+            print(f"[OK] Saved as PyTorch state dict: {out_path}")
     else:
         out_path = f"{experiment_name}_{run_id}_final_model.pt"
         torch.save(state_dict, out_path)
-        print(f"âœ… Final model saved: {out_path}")
+        print(f"[OK] Final model saved: {out_path}")
 
-    # Save round logs
+    # Save round logs (ALL_ROUND_LOGS now holds only the final run's rounds)
     logs_path = f"{experiment_name}_{run_id}_logs.json"
     try:
         with open(logs_path, "w") as f:
             json.dump(ALL_ROUND_LOGS, f, indent=2)
-        print(f"âœ… Training logs saved: {logs_path}")
+        print(f"[OK] Training logs saved: {logs_path}")
     except Exception as e:
-        print(f"âš ï¸  Could not save logs: {e}")
+        print(f"[WARN] Could not save logs: {e}")
 
     # Print summary statistics
     if ALL_ROUND_LOGS:
@@ -682,19 +843,19 @@ def main(grid: Grid, context: Context) -> None:
         print(f"TRAINING SUMMARY")
         print(f"{'='*70}")
         print(f"Total Rounds:      {len(ALL_ROUND_LOGS)}")
-        
+
         final_round = ALL_ROUND_LOGS[-1]
         print(f"\nFinal Round Metrics:")
         print(f"  Training Loss:   {final_round.get('round_train_loss', 0):.4f}")
         print(f"  Training mAP:    {final_round.get('round_training_acc', {}).get('mAP', 0):.4f}")
-        
+
         if 'round_eval_acc' in final_round:
             print(f"  Validation Loss: {final_round.get('round_eval_loss', 0):.4f}")
             print(f"  Validation mAP:  {final_round.get('round_eval_acc', {}).get('mAP', 0):.4f}")
-        
-        total_time = sum(r.get('round_duration', 0) for r in ALL_ROUND_LOGS)
-        total_data_mb = sum(r.get('round_data_transferred_mb', 0) for r in ALL_ROUND_LOGS)
-        
+
+        total_time    = sum(r.get("round_duration", 0)            for r in ALL_ROUND_LOGS)
+        total_data_mb = sum(r.get("round_data_transferred_mb", 0) for r in ALL_ROUND_LOGS)
+
         print(f"\nTotal Training Time: {total_time/60:.2f} minutes")
         print(f"Total Data Transfer: {total_data_mb:.2f} MB")
         print(f"{'='*70}\n")

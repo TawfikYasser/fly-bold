@@ -676,6 +676,7 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
                         continue
 
         print(f"[yolo_eval] Subprocess evaluation completed. Final metrics: {metrics}")
+        return metrics
 
 
 # =====================================================================

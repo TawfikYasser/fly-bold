@@ -222,9 +222,34 @@ def train(msg: Message, context: Context):
     data_yaml, client_dataset_root = prepare_client_yolo_dataset_prepartitioned(client_id)
 
     model_size = get_config("yolo_size", context, default="n")
+    # Read local-epochs and batch_size from msg.content["config"] first so the
+    # server can override them per-trial during Optuna HPO without restarting
+    # the run.  Falls back to run_config / node_config / default as before.
     epochs = int(get_config("local-epochs", context, default=1))
-    img = int(get_config("img_size", context, default=640))
     batch = int(get_config("batch_size", context, default=16))
+    # epochs = int(msg.content["config"].get(
+    #     "local-epochs", get_config("local-epochs", context, default=1)))
+    img = int(get_config("img_size", context, default=640))
+    # batch = int(msg.content["config"].get(
+    #     "batch_size",   get_config("batch_size",   context, default=16)))
+
+    # Read lr from msg config (server injects the trial's lr here).
+    # Then patch hyp.scratch-low.yaml so YOLO actually trains with it.
+    # Without this patch, YOLO reads lr0 from the YAML that was baked at
+    # deploy time and silently ignores whatever lr Optuna suggested.
+    lr = float(msg.content["config"].get("lr", get_config("lr", context, default=0.001)))
+    hyp_path = os.path.join(os.getcwd(), "yolov5", "data", "hyps", "hyp.scratch-low.yaml")
+    if os.path.exists(hyp_path):
+        try:
+            import re
+            with open(hyp_path, "r") as _f:
+                _hyp = _f.read()
+            _hyp = re.sub(r'(lr0:\s*)[0-9.eE+-]+', rf'\g<1>{lr}', _hyp)
+            with open(hyp_path, "w") as _f:
+                _f.write(_hyp)
+            print(f"[CLIENT {client_id}] Patched hyp.scratch-low.yaml: lr0={lr}")
+        except Exception as _e:
+            print(f"[CLIENT {client_id}] Warning: could not patch hyp YAML: {_e}")
 
     train_start = time.perf_counter()
     train_status = "FAILED"
@@ -418,6 +443,11 @@ def evaluate(msg: Message, context: Context):
         import traceback
         traceback.print_exc()
         eval_error_msg = f"{type(e).__name__}: {str(e)}"
+    
+    if val_metrics is None:
+        print(f"[CLIENT {client_id}] WARNING: val_metrics is None, defaulting to zeros")
+        val_metrics = {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
+
     
     # ✅ STOP EVALUATION PHASE MONITORING
     eval_resources = eval_monitor.stop()

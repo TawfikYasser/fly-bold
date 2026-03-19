@@ -68,7 +68,7 @@ def get_env(key, default, type_cast=str):
 
 
 # ==================== CONFIGURATION ====================
-INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/1121314130/EXP_YOLOv5_s_detection_1121314130_logs.json"
+INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/30101001/EXP_YOLOv5_s_detection_30101001_logs.json"
 
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
@@ -1595,7 +1595,7 @@ def generate_summary_report(df_rounds, df_clients, output_dir):
     summary.append("=" * 90)
     
     # Save report
-    report_path = f"{output_dir}/00_SUMMARY_REPORT.txt"
+    report_path = f"{output_dir}/00_SUMMARY_REPORT_{exp_id}.txt"
     with open(report_path, 'w') as f:
         f.write('\n'.join(summary))
     
@@ -1672,7 +1672,7 @@ def generate_resource_summary(df_resources, df_client_resources, output_dir):
     summary.append("=" * 90 + "\n")
     
     # Append to existing report
-    report_path = f"{output_dir}/00_SUMMARY_REPORT.txt"
+    report_path = f"{output_dir}/00_SUMMARY_REPORT_{exp_id}.txt"
     with open(report_path, 'a') as f:
         f.write('\n'.join(summary))
     
