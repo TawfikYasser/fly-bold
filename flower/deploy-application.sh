@@ -520,6 +520,12 @@ if [ "$SKIP_PROMPTS" = false ]; then
     else
         USE_PRETRAINED=0
     fi
+    
+    read -p "Number of Optuna HPO trials [0]: " OPTUNA_TRIALS
+    OPTUNA_TRIALS=${OPTUNA_TRIALS:-0}
+    
+    read -p "Rounds per Optuna trial [3]: " HPO_ROUNDS
+    HPO_ROUNDS=${HPO_ROUNDS:-3}
 fi
 
 # Load RUN_ID directly from .env (no auto-increment)
@@ -564,6 +570,8 @@ cat > /tmp/run_config.json <<EOJSON
   "alpha_max": $DIRICHLET_ALPHA_MAX,
   "enable_gpu": $ENABLE_GPU,
   "enable_tls": $ENABLE_TLS,
+  "optuna_trials": $OPTUNA_TRIALS,
+  "hpo_rounds": $HPO_ROUNDS,
   "server_internal_ip": "$SERVER_INTERNAL_IP",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -586,6 +594,8 @@ sedi "s/^batch_size[[:space:]]*=[[:space:]]*[0-9]+/batch_size = ${BATCH_SIZE}/" 
 sedi "s/^dataset[[:space:]]*=[[:space:]]*[0-9]+/dataset = ${DATASET}/" pyproject.toml
 sedi "s/^strategy[[:space:]]*=[[:space:]]*[0-9]+/strategy = ${STRATEGY}/" pyproject.toml
 sedi "s/^use_pretrained[[:space:]]*=[[:space:]]*[0-9]+/use_pretrained = ${USE_PRETRAINED}/" pyproject.toml
+sedi "s/^n_optuna_trials[[:space:]]*=[[:space:]]*[0-9]+/n_optuna_trials = ${OPTUNA_TRIALS}/" pyproject.toml
+sedi "s/^hpo_rounds[[:space:]]*=[[:space:]]*[0-9]+/hpo_rounds = ${HPO_ROUNDS}/" pyproject.toml
 sedi "s|^gcs_bucket[[:space:]]*=[[:space:]]*\".*\"|gcs_bucket = \"${BUCKET_NAME}\"|" pyproject.toml
 
 # Increment version in pyproject.toml

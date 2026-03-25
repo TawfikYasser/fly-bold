@@ -34,6 +34,19 @@ import optuna
 ALL_ROUND_LOGS = []
 CURRENT_ROUND = 0
 
+# FIX 4: Global trial handle so the eval callback can report intermediate
+# mAP values to Optuna and trigger early pruning without restructuring
+# strategy.start() into a round-by-round loop.
+CURRENT_OPTUNA_TRIAL = None
+
+
+class _TrialPruneSignal(Exception):
+    """Raised inside the eval aggregation callback when Optuna decides to prune.
+    Caught by _run_trial() and re-raised as optuna.exceptions.TrialPruned so
+    strategy.start() is interrupted cleanly without corrupting the study DB.
+    """
+    pass
+
 
 def get_config(key: str, context: Context, default=None, type_converter=str):
     """Get configuration with precedence: env var > run_config > node_config > default."""
@@ -96,10 +109,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             continue
         
         metrics = record_dict["metrics"]
-        
-        # Debug: print first client's keys
-        if i == 0:
-            print(f"[SERVER] First client metrics keys: {sorted(metrics.keys())}")
+    
 
         # Defensive defaults (server never trusts clients)
         num_examples = max(1, int(_safe_float(metrics.get("num-examples", 1))))
@@ -139,7 +149,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
         
         # Print per-client result with metrics
         print(f"[SERVER] ✅ [CLIENT {client_id}] TRAIN COMPLETE - Loss: {client_data['loss']:.4f}, mAP@0.5: {client_data['mAP50']:.4f}, mAP: {client_data['mAP']:.4f}, Time: {client_data['train_time']:.2f}s")
-        print(f"[SERVER]    Resources - CPU: {client_data['train_cpu_peak']:.1f}% peak / {client_data['train_cpu_avg']:.1f}% avg, RAM: {client_data['train_ram_peak_mb']:.1f} MB peak / {client_data['train_ram_avg_mb']:.1f} MB avg")
+        print(f"[SERVER]                         Resources -      CPU: {client_data['train_cpu_peak']:.1f}% peak / {client_data['train_cpu_avg']:.1f}% avg, RAM: {client_data['train_ram_peak_mb']:.1f} MB peak / {client_data['train_ram_avg_mb']:.1f} MB avg")
     
     if not clients_data:
         print("[SERVER] No valid client data extracted")
@@ -301,7 +311,7 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     return MetricRecord({
         "train_loss": round_train_loss,
         "train_accuracy": round_train_acc_aggregated,
-        "train_mAP": round_train_acc_mAP,
+        "train_mAP50": round_train_acc_mAP50,
     })
 
 def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_key: str) -> MetricRecord:
@@ -339,10 +349,7 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             continue
         
         metrics = record_dict["metrics"]
-        
-        # Debug: print first client's keys
-        if i == 0:
-            print(f"[SERVER] First client eval keys: {sorted(metrics.keys())}")
+    
         
         client_id = int(_safe_float(metrics.get("client_id", 0)))
         eval_success_count += 1  # Metrics received = client completed evaluation
@@ -375,7 +382,7 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
         
         # Print per-client evaluation results
         print(f"[SERVER] ✅ [CLIENT {client_id}] EVAL COMPLETE - Loss: {client_eval['loss']:.4f}, mAP@0.5: {client_eval['mAP50']:.4f}, mAP: {client_eval['mAP']:.4f}, Time: {client_eval['eval_time']:.2f}s")
-        print(f"[SERVER]    Resources - CPU: {client_eval['eval_cpu_peak']:.1f}% peak / {client_eval['eval_cpu_avg']:.1f}% avg, RAM: {client_eval['eval_ram_peak_mb']:.1f} MB peak / {client_eval['eval_ram_avg_mb']:.1f} MB avg")
+        print(f"[SERVER]                         Resources -     CPU: {client_eval['eval_cpu_peak']:.1f}% peak / {client_eval['eval_cpu_avg']:.1f}% avg, RAM: {client_eval['eval_ram_peak_mb']:.1f} MB peak / {client_eval['eval_ram_avg_mb']:.1f} MB avg")
     
     if not eval_data:
         print("[SERVER] No valid evaluation data extracted")
@@ -514,11 +521,24 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
     print(f"[SERVER] Server CPU: {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}% (peak), RAM: {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB (peak)")
     print(f"[SERVER] {'='*80}\n")
     
-    # âœ… FIXED: Return aggregated metrics for Flower
+    # FIX 4: Report intermediate result to Optuna after every eval round so
+    # MedianPruner can kill diverging trials early (e.g. FedAdam + high LR
+    # is detectable by round 2).  step = 0-indexed round number relative to
+    # this trial.  Only active during HPO; CURRENT_OPTUNA_TRIAL is None for
+    # the final full run, so this block is a no-op there.
+    if CURRENT_OPTUNA_TRIAL is not None:
+        step = len(ALL_ROUND_LOGS) - 1  # 0-indexed: just appended above
+        CURRENT_OPTUNA_TRIAL.report(round_eval_acc_mAP50, step=step)
+        if CURRENT_OPTUNA_TRIAL.should_prune():
+            print(f"[OPTUNA] Pruning trial at step {step} "
+                  f"(mAP@0.5={round_eval_acc_mAP50:.4f})")
+            raise _TrialPruneSignal()
+
+    # ✅ FIXED: Return aggregated metrics for Flower
     return MetricRecord({
         "eval_loss": round_eval_loss,
         "eval_accuracy": round_eval_acc_aggregated,
-        "eval_mAP": round_eval_acc_mAP,
+        "eval_mAP50": round_eval_acc_mAP50,
     })
 
 
@@ -622,18 +642,22 @@ def main(grid: Grid, context: Context) -> None:
 
     strategy_id     = get_config("strategy",        context, default=1,  type_converter=int)
     n_optuna_trials = get_config("n_optuna_trials", context, default=0,  type_converter=int)
-    hpo_rounds      = get_config("hpo_rounds",      context, default=5,  type_converter=int)
+    hpo_rounds      = get_config("hpo_rounds",      context, default=3,  type_converter=int)
 
     # -- Snapshot initial weights ONCE so every trial/run starts identically.
     # ArrayRecord is consumed by strategy.start(), so we keep the raw state_dict
     # and rebuild a fresh ArrayRecord before each strategy.start() call.
     initial_state_dict = arrays.to_torch_state_dict()
 
-    def _make_strategy(sid):
+    def _make_strategy(sid, eta=None, eta_l=None, beta_1=None, beta_2=None,
+                       tau=None, proximal_mu=None):
         """Always construct a fresh strategy instance.
         Stateful strategies (FedAdam/FedYogi) carry momentum buffers; reusing the
         same instance across trials would corrupt the server optimizer state for
         trial N+1 with gradients from trial N.
+
+        Strategy-specific kwargs are forwarded only when explicitly provided so
+        that Flower's documented defaults are preserved whenever a param is None.
         """
         kwargs = dict(
             fraction_train=fraction_train,
@@ -643,18 +667,39 @@ def main(grid: Grid, context: Context) -> None:
         )
         if sid == 2:
             print("Using strategy: FedYogi")
+            # FedYogi defaults: eta=1e-2, eta_l=0.0316, beta_1=0.9, beta_2=0.99, tau=1e-3
+            if eta         is not None: kwargs["eta"]    = eta
+            if eta_l       is not None: kwargs["eta_l"]  = eta_l
+            if beta_1      is not None: kwargs["beta_1"] = beta_1
+            if beta_2      is not None: kwargs["beta_2"] = beta_2
+            if tau         is not None: kwargs["tau"]    = tau
             return FedYogi(**kwargs)
         elif sid == 3:
             print("Using strategy: FedAdam")
+            # FedAdam defaults: eta=1e-1, eta_l=1e-1, beta_1=0.9, beta_2=0.99, tau=1e-3
+            if eta         is not None: kwargs["eta"]    = eta
+            if eta_l       is not None: kwargs["eta_l"]  = eta_l
+            if beta_1      is not None: kwargs["beta_1"] = beta_1
+            if beta_2      is not None: kwargs["beta_2"] = beta_2
+            if tau         is not None: kwargs["tau"]    = tau
             return FedAdam(**kwargs)
         elif sid == 4:
             print("Using strategy: FedProx")
-            return FedProx(**kwargs, proximal_mu=2.0)
+            # FedProx default: proximal_mu=0.0 (0.0 == FedAvg; higher = more regularisation)
+            if proximal_mu is not None: kwargs["proximal_mu"] = proximal_mu
+            return FedProx(**kwargs)
         else:
             print("Using strategy: FedAvg")
             return FedAvg(**kwargs)
 
-    def _run_trial(trial_lr, n_rounds, trial_tag, trial_strategy=None):
+    def _run_trial(
+        trial_lr, n_rounds, trial_epochs, trial_batch, trial_tag,
+        trial_strategy=None, optuna_trial=None,
+        # FedYogi / FedAdam params (None → use Flower's documented defaults)
+        eta=None, eta_l=None, beta_1=None, beta_2=None, tau=None,
+        # FedProx param
+        proximal_mu=None,
+    ):
         """Execute one complete FL session and return (result, logs_snapshot).
 
         Resets global round state before every call so round IDs and metric
@@ -663,42 +708,58 @@ def main(grid: Grid, context: Context) -> None:
         trial_strategy: if provided, overrides the strategy_id read from config.
         This lets Optuna suggest a strategy per trial without touching the outer
         strategy_id variable.
+
+        optuna_trial: the live Optuna Trial object (or None for the final run).
+        When provided, each eval round reports its mAP@0.5 so MedianPruner can
+        kill diverging trials before they waste their remaining proxy rounds.
+
+        Strategy-specific params are forwarded to _make_strategy and then into
+        Flower's strategy constructor only when not None, preserving defaults.
         """
-        global ALL_ROUND_LOGS, CURRENT_ROUND
+        global ALL_ROUND_LOGS, CURRENT_ROUND, CURRENT_OPTUNA_TRIAL
         ALL_ROUND_LOGS = []
         CURRENT_ROUND  = 0
+        CURRENT_OPTUNA_TRIAL = optuna_trial  # FIX 4: expose to eval callback
 
         # Fresh weights: scientifically mandatory -- every trial must start from
         # identical weights or HP comparison is meaningless.
         fresh_arrays  = ArrayRecord(torch_state_dict=initial_state_dict, keep_input=True)
         effective_sid = trial_strategy if trial_strategy is not None else strategy_id
-        strategy      = _make_strategy(sid=effective_sid)
+        strategy      = _make_strategy(
+            sid=effective_sid,
+            eta=eta, eta_l=eta_l, beta_1=beta_1, beta_2=beta_2, tau=tau,
+            proximal_mu=proximal_mu,
+        )
 
         train_cfg = {
             "lr":           trial_lr,
             "num_rounds":   n_rounds,
+            "local-epochs": trial_epochs,   # client reads from msg.content["config"]
+            "batch_size":   trial_batch,    # client reads from msg.content["config"]
         }
-        # train_cfg = {
-        #     "lr":           trial_lr,
-        #     "num_rounds":   n_rounds,
-        #     "local-epochs": trial_epochs,   # client reads from msg.content["config"]
-        #     "batch_size":   trial_batch,    # client reads from msg.content["config"]
-        # }
         if task_type == "detection":
             train_cfg["yolo_size"] = yolo_size
 
         print(f"\n{'='*70}")
         print(f"STARTING FL TRIAL  [{trial_tag}]")
-        print(f"  lr={trial_lr:.6f}  rounds={n_rounds} strategy={effective_sid}")
+        print(f"  lr={trial_lr:.6f}  rounds={n_rounds} strategy={effective_sid} local_epochs={trial_epochs} batch_size={trial_batch}")
         print(f"{'='*70}\n")
 
-        result = strategy.start(
-            grid=grid,
-            initial_arrays=fresh_arrays,
-            train_config=ConfigRecord(train_cfg),
-            num_rounds=n_rounds,
-            timeout=18000,
-        )
+        try:
+            result = strategy.start(
+                grid=grid,
+                initial_arrays=fresh_arrays,
+                train_config=ConfigRecord(train_cfg),
+                num_rounds=n_rounds,
+                timeout=18000,
+            )
+        except _TrialPruneSignal:
+            # FIX 4: eval callback raised the prune signal -- re-raise as the
+            # Optuna exception so the study records this trial as pruned cleanly.
+            CURRENT_OPTUNA_TRIAL = None
+            raise optuna.exceptions.TrialPruned()
+        finally:
+            CURRENT_OPTUNA_TRIAL = None  # always clear after the trial ends
 
         # Return a copy so the global can be safely reset next trial
         return result, list(ALL_ROUND_LOGS)
@@ -721,26 +782,99 @@ def main(grid: Grid, context: Context) -> None:
             storage=f"sqlite:///{experiment_name}_{run_id}_hpo.db",
             load_if_exists=True,
             sampler=optuna.samplers.TPESampler(seed=42),
+            # FIX 4: MedianPruner kills a trial at step S if its reported mAP
+            # is below the median of all completed trials at the same step.
+            # n_startup_trials=3: don't prune before we have enough baseline data.
+            # n_warmup_steps=1: never prune on the very first round (too noisy).
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=1),
         )
 
         def objective(trial):
-            trial_lr = trial.suggest_categorical("lr", [0.01, 0.001, 0.0001, 0.05, 0.005, 0.0005, 0.03, 0.003, 0.0003])
-            # trial_epochs   = trial.suggest_int("local_epochs",   1, 5)
-            # trial_batch    = trial.suggest_categorical("batch_size", [8, 16, 32])
+            trial_lr = trial.suggest_float("lr", 0.0001, 0.01, log=True)
+            trial_epochs   = trial.suggest_int("local_epochs",   1, 5)
+            trial_batch    = trial.suggest_categorical("batch_size", [8, 16, 32])
             trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
 
-            _, trial_logs = _run_trial(
-                trial_lr,
-                n_rounds=hpo_rounds,
-                trial_tag=f"optuna_trial_{(trial.number)+1}",
-                trial_strategy=trial_strategy,
-            )
+            print(f"\n[OPTUNA-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f}, "
+                  f"strategy={trial_strategy}, local_epochs={trial_epochs}, batch_size={trial_batch}")
+
+            if trial_strategy == 1: # FedAvg
+
+                _, trial_logs = _run_trial(
+                    trial_lr,
+                    n_rounds=hpo_rounds,
+                    trial_epochs=trial_epochs,
+                    trial_batch=trial_batch,
+                    trial_tag=f"optuna_trial_{(trial.number)+1}",
+                    trial_strategy=trial_strategy,
+                    optuna_trial=trial,
+                )
+
+            elif trial_strategy == 2: # FedYogi
+                # Suggest around FedYogi defaults: eta=1e-2, eta_l=0.0316, tau=1e-3
+                t_eta    = trial.suggest_float("yogi_eta",    1e-4, 1e-1, log=True)
+                t_eta_l  = trial.suggest_float("yogi_eta_l",  1e-3, 1e-1, log=True)
+                t_beta_1 = trial.suggest_float("yogi_beta_1", 0.8,  0.99)
+                t_beta_2 = trial.suggest_float("yogi_beta_2", 0.9,  0.999)
+                t_tau    = trial.suggest_float("yogi_tau",    1e-4, 1e-2, log=True)
+
+                _, trial_logs = _run_trial(
+                    trial_lr,
+                    n_rounds=hpo_rounds,
+                    trial_epochs=trial_epochs,
+                    trial_batch=trial_batch,
+                    trial_tag=f"optuna_trial_{(trial.number)+1}",
+                    trial_strategy=trial_strategy,
+                    optuna_trial=trial,
+                    eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
+                    beta_2=t_beta_2, tau=t_tau,
+                )
+
+            elif trial_strategy == 3: # FedAdam
+                # Suggest around FedAdam defaults: eta=1e-1, eta_l=1e-1, tau=1e-3
+                t_eta    = trial.suggest_float("adam_eta",    1e-3, 5e-1, log=True)
+                t_eta_l  = trial.suggest_float("adam_eta_l",  1e-3, 5e-1, log=True)
+                t_beta_1 = trial.suggest_float("adam_beta_1", 0.8,  0.99)
+                t_beta_2 = trial.suggest_float("adam_beta_2", 0.9,  0.999)
+                t_tau    = trial.suggest_float("adam_tau",    1e-4, 1e-2, log=True)
+
+                _, trial_logs = _run_trial(
+                    trial_lr,
+                    n_rounds=hpo_rounds,
+                    trial_epochs=trial_epochs,
+                    trial_batch=trial_batch,
+                    trial_tag=f"optuna_trial_{(trial.number)+1}",
+                    trial_strategy=trial_strategy,
+                    optuna_trial=trial,
+                    eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
+                    beta_2=t_beta_2, tau=t_tau,
+                )
+
+            elif trial_strategy == 4: # FedProx
+                # proximal_mu=0.0 == FedAvg; useful range is [0.001, 10.0]
+                t_proximal_mu = trial.suggest_float("proximal_mu", 0.001, 10.0, log=True)
+
+                _, trial_logs = _run_trial(
+                    trial_lr,
+                    n_rounds=hpo_rounds,
+                    trial_epochs=trial_epochs,
+                    trial_batch=trial_batch,
+                    trial_tag=f"optuna_trial_{(trial.number)+1}",
+                    trial_strategy=trial_strategy,
+                    optuna_trial=trial,
+                    proximal_mu=t_proximal_mu,
+                )
 
             # Empty logs means all clients failed -- treat as a pruned trial
             if not trial_logs:
                 raise optuna.exceptions.TrialPruned()
 
-            mAP = trial_logs[-1].get("round_eval_acc", {}).get("mAP@0.5", 0.0)
+            # FIX 2: Use max mAP@0.5 across all proxy rounds, not just the last.
+            # A single dip at round N (FL non-IID variance is high) would unfairly
+            # kill a good config if we only read the final round.  max() is more
+            # robust; mean-of-last-2 is an alternative if you prefer smoothing.
+            eval_maps = [r.get("round_eval_acc", {}).get("mAP@0.5", 0.0) for r in trial_logs]
+            mAP = max(eval_maps) if eval_maps else 0.0
 
             # Persist per-trial logs for post-analysis (non-fatal if it fails)
             try:
@@ -750,33 +884,65 @@ def main(grid: Grid, context: Context) -> None:
             except Exception as e:
                 print(f"[OPTUNA] Warning: could not save trial logs: {e}")
 
-            print(f"[OPTUNA] Trial {trial.number:>3} -> mAP@0.5={mAP:.4f}  "
-                  f"(lr={trial_lr:.5f}, strategy={trial_strategy})")
+            print(f"[OPTUNA] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  "
+                  f"(lr={trial_lr:.5f}, strategy={trial_strategy}, epochs={trial_epochs}, batch={trial_batch})")
             return mAP
+
+        # Seed with the known best baseline before letting Optuna explore.
+        # This becomes trial 0 — TPE builds its probability model around it
+        # immediately instead of starting blind.  load_if_exists=True means
+        # this is skipped automatically if the study already ran it (resume).
+        if len(study.trials) == 0:
+            study.enqueue_trial({"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1})
 
         study.optimize(objective, n_trials=n_optuna_trials)
 
         best = study.best_params
         print(f"\n{'='*70}")
-        print(f"OPTUNA COMPLETE -- Best trial #{study.best_trial.number}")
+        print(f"OPTUNA COMPLETE -- Best trial #{(study.best_trial.number)+1}")
         print(f"  mAP@0.5  = {study.best_value:.4f}")
         print(f"  lr       = {best['lr']:.6f}")
-        # print(f"  epochs   = {best['local_epochs']}")
-        # print(f"  batch    = {best['batch_size']}")
+        print(f"  epochs   = {best['local_epochs']}")
+        print(f"  batch    = {best['batch_size']}")
         print(f"  strategy = {best['strategy']} "
               f"({'FedAvg' if best['strategy']==1 else 'FedYogi' if best['strategy']==2 else 'FedAdam' if best['strategy']==3 else 'FedProx'})")
         print(f"{'='*70}\n")
 
         # Promote HPO winners as values for the final full run
         lr             = best["lr"]
-        # final_epochs   = best["local_epochs"]
-        # final_batch    = best["batch_size"]
+        final_epochs   = best["local_epochs"]
+        final_batch    = best["batch_size"]
         final_strategy = best["strategy"]
+
+        # Retrieve the best strategy-specific params (may not exist if
+        # the winning strategy has no tunable params beyond lr, e.g. FedAvg)
+        final_strategy_kwargs = {}
+        if final_strategy == 2:  # FedYogi
+            final_strategy_kwargs = dict(
+                eta    = best.get("yogi_eta"),
+                eta_l  = best.get("yogi_eta_l"),
+                beta_1 = best.get("yogi_beta_1"),
+                beta_2 = best.get("yogi_beta_2"),
+                tau    = best.get("yogi_tau"),
+            )
+        elif final_strategy == 3:  # FedAdam
+            final_strategy_kwargs = dict(
+                eta    = best.get("adam_eta"),
+                eta_l  = best.get("adam_eta_l"),
+                beta_1 = best.get("adam_beta_1"),
+                beta_2 = best.get("adam_beta_2"),
+                tau    = best.get("adam_tau"),
+            )
+        elif final_strategy == 4:  # FedProx
+            final_strategy_kwargs = dict(
+                proximal_mu = best.get("proximal_mu"),
+            )
     else:
         # No HPO -- fall through using values already read from config
-        # final_epochs   = int(get_config("local-epochs", context, default=3, type_converter=int))
-        # final_batch    = int(get_config("batch_size",   context, default=16, type_converter=int))
+        final_epochs   = int(get_config("local-epochs", context, default=3, type_converter=int))
+        final_batch    = int(get_config("batch_size",   context, default=16, type_converter=int))
         final_strategy = strategy_id  # use whatever was set in config, unchanged
+        final_strategy_kwargs = {}    # no HPO-tuned params; _make_strategy uses Flower defaults
 
     # ================================================================
     # FINAL (or sole) FULL RUN
@@ -799,8 +965,11 @@ def main(grid: Grid, context: Context) -> None:
         result, _ = _run_trial(
             lr,
             n_rounds=final_rounds,
+            trial_epochs=final_epochs,
+            trial_batch=final_batch,
             trial_tag=f"final_run_{run_id}",
             trial_strategy=final_strategy,
+            **final_strategy_kwargs,
         )
  
     if final_rounds <= 0:

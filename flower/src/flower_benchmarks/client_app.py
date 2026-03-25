@@ -225,13 +225,13 @@ def train(msg: Message, context: Context):
     # Read local-epochs and batch_size from msg.content["config"] first so the
     # server can override them per-trial during Optuna HPO without restarting
     # the run.  Falls back to run_config / node_config / default as before.
-    epochs = int(get_config("local-epochs", context, default=1))
-    batch = int(get_config("batch_size", context, default=16))
-    # epochs = int(msg.content["config"].get(
-    #     "local-epochs", get_config("local-epochs", context, default=1)))
+    # epochs = int(get_config("local-epochs", context, default=1))
+    # batch = int(get_config("batch_size", context, default=16))
+    epochs = int(msg.content["config"].get(
+        "local-epochs", get_config("local-epochs", context, default=3)))
     img = int(get_config("img_size", context, default=640))
-    # batch = int(msg.content["config"].get(
-    #     "batch_size",   get_config("batch_size",   context, default=16)))
+    batch = int(msg.content["config"].get(
+        "batch_size",   get_config("batch_size",   context, default=16)))
 
     # Read lr from msg config (server injects the trial's lr here).
     # Then patch hyp.scratch-low.yaml so YOLO actually trains with it.
@@ -350,7 +350,9 @@ def train(msg: Message, context: Context):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
+    del received_state, new_state
     gc.collect()
+    round_monitor.stop()
     print(f"[CLIENT {client_id}] Memory cleanup completed after training")
 
     metric_record = MetricRecord(metrics)
@@ -365,7 +367,9 @@ def evaluate(msg: Message, context: Context):
     client_id = partition_id
     
     print(f"\n[CLIENT {client_id}] Starting evaluation")
-    
+
+    run_dir = context.run_config.get("yolo_runs_dir", "runs/train")
+
     # ✅ START OVERALL ROUND MONITORING
     round_monitor = ResourceMonitor(sample_interval=0.5)
     round_monitor.start()
@@ -390,7 +394,7 @@ def evaluate(msg: Message, context: Context):
         
         # ✅ FIX: Look for actual checkpoint files (best.pt or last.pt)
         weights_dir = os.path.join(
-            context.run_config.get("yolo_runs_dir", "runs/train"),
+            run_dir,
             f"client{client_id}_r{server_round}", "weights"
         )
         
@@ -429,7 +433,7 @@ def evaluate(msg: Message, context: Context):
         val_metrics = yolo_evaluate_weights_and_parse_map(
             checkpoint_path, data_yaml, 
             img=get_config("img_size", context, default=640),
-            run_dir=context.run_config.get("yolo_runs_dir", "runs/train"),
+            run_dir=run_dir,
             client_tag=f"client{client_id}",
             round_idx=server_round
         )
@@ -496,6 +500,11 @@ def evaluate(msg: Message, context: Context):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
+    round_monitor.stop()
+    import shutil
+    prev_run = Path(run_dir) / f"client{client_id}_r{server_round - 1}"
+    if prev_run.exists():
+        shutil.rmtree(prev_run)
     gc.collect()
     print(f"[CLIENT {client_id}] Memory cleanup completed after evaluation")
     metric_record = MetricRecord(metrics)
