@@ -27,6 +27,7 @@ from yolov5.models.yolo import Model
 from yolov5.utils.downloads import attempt_download
 import numpy as np
 import optuna
+from optuna.distributions import FloatDistribution, IntDistribution, CategoricalDistribution
 
 # =====================================================================
 # GLOBAL STATE (needed for Flower's aggregation callbacks)
@@ -895,19 +896,122 @@ def main(grid: Grid, context: Context) -> None:
         if len(study.trials) == 0:
             study.enqueue_trial({"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1})
         
+        distributions = {
+            "fedavg":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+            "local_epochs": optuna.distributions.IntDistribution(1, 5),
+            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),},
+            
+            "fedyogi":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+            "local_epochs": optuna.distributions.IntDistribution(1, 5),
+            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
+                "yogi_eta": optuna.distributions.FloatDistribution(1e-4, 1e-1, log=True),
+                "yogi_eta_l": optuna.distributions.FloatDistribution(1e-3, 1e-1, log=True),
+                "yogi_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
+                "yogi_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
+                "yogi_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
+            
+            "fedadam":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+            "local_epochs": optuna.distributions.IntDistribution(1, 5),
+            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
+                "adam_eta": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
+                "adam_eta_l": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
+                "adam_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
+                "adam_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
+                "adam_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
+
+            "fedprox":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+            "local_epochs": optuna.distributions.IntDistribution(1, 5),
+            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
+                "proximal_mu": optuna.distributions.FloatDistribution(0.001, 10.0, log=True),},
+        }
+        best_prev_params = {
+        1:{"lr": 0.001,
+            "local_epochs": 3,
+            "batch_size": 16,
+            "strategy": 1,},
+        2:{"lr": 0.000561,
+            "local_epochs": 5,
+            "batch_size": 8,
+            "strategy": 3,
+            "adam_eta": 0.0814829,
+            "adam_eta_l": 0.00113647,
+            "adam_beta_1": 0.984283,
+            "adam_beta_2": 0.982412,
+            "adam_tau": 0.000265875,},
+        3:{"lr": 0.000231,
+            "local_epochs": 1,
+            "batch_size": 16,
+            "strategy": 2,
+            "yogi_eta": 0.00125628,
+            "yogi_eta_l": 0.00816846,
+            "yogi_beta_1": 0.949183,
+            "yogi_beta_2": 0.919768,
+            "yogi_tau": 0.00106775,},
+        4:{"lr": 0.001530,
+            "local_epochs": 1,
+            "batch_size": 8,
+            "strategy": 2,
+            "yogi_eta": 0.000196343,
+            "yogi_eta_l": 0.0233596,
+            "yogi_beta_1": 0.883629,
+            "yogi_beta_2": 0.912082,
+            "yogi_tau": 0.000978034,},
+        5:{"lr": 0.000117,
+            "local_epochs": 5,
+            "batch_size": 16,
+            "strategy": 4,
+            "proximal_mu": 1.2604664585649468,},
+        }
         study.add_trial(optuna.trial.create_trial(
-            params={"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1},
+            params=best_prev_params[1],
+            distributions=distributions["fedavg"],
             value=0.5218,
             state=optuna.trial.TrialState.COMPLETE,
         ))
         study.add_trial(optuna.trial.create_trial(
-            params={"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1},
+            params=best_prev_params[1],
+            distributions=distributions["fedavg"],
             value=0.5181,
             state=optuna.trial.TrialState.COMPLETE,
         ))
         study.add_trial(optuna.trial.create_trial(
-            params={"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1},
+            params=best_prev_params[1],
+            distributions=distributions["fedavg"],
             value=0.5162,
+            state=optuna.trial.TrialState.COMPLETE,
+        ))
+        study.add_trial(optuna.trial.create_trial(
+            params=best_prev_params[1],
+            distributions=distributions["fedavg"],
+            value=0.5048,
+            state=optuna.trial.TrialState.COMPLETE,
+        ))
+        study.add_trial(optuna.trial.create_trial(
+            params=best_prev_params[2],
+            distributions=distributions["fedadam"],
+            value=0.5001,
+            state=optuna.trial.TrialState.COMPLETE,
+        ))
+        study.add_trial(optuna.trial.create_trial(
+            params=best_prev_params[3],
+            distributions=distributions["fedyogi"],
+            value=0.5001,
+            state=optuna.trial.TrialState.COMPLETE,
+        ))
+        study.add_trial(optuna.trial.create_trial(
+            params=best_prev_params[4],
+            distributions=distributions["fedyogi"],
+            value=0.4448,
+            state=optuna.trial.TrialState.PRUNED,
+        ))
+        study.add_trial(optuna.trial.create_trial(
+            params=best_prev_params[5],
+            distributions=distributions["fedprox"],
+            value=0.5039,
             state=optuna.trial.TrialState.COMPLETE,
         ))
 
