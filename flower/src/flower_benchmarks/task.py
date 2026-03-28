@@ -680,174 +680,174 @@ def yolo_evaluate_weights_and_parse_map(weights_pt: str, data_yaml: str, img: in
 
 
 # =====================================================================
-# RESOURCE MONITORING UTILITY
+# RESOURCE MONITORING UTILITY - COMMENTED: Resource monitoring disabled
 # =====================================================================
-import threading
-import psutil
+# import threading
+# import psutil
 
-class ResourceMonitor:
-    """
-    Continuous resource monitoring in background thread.
-    Tracks CPU% and RAM (both absolute and percentage) for per-process and system-wide.
-    """
-    
-    def __init__(self, sample_interval: float = 0.5, process_pid: int = None):
-        """
-        Initialize resource monitor.
-        
-        Args:
-            sample_interval: Seconds between samples (default 0.5)
-            process_pid: Process ID to monitor (default: current process)
-        """
-        self.sample_interval = sample_interval
-        self.process = psutil.Process(process_pid or os.getpid())
-        self.monitoring = False
-        self.samples = []
-        self.thread = None
-        self.start_time = None
-        self.end_time = None
-    
-    def _sample_resources(self):
-        """Collect a single resource sample."""
-        try:
-            timestamp = time.perf_counter()
-            
-            # Per-process metrics
-            proc_cpu_percent = self.process.cpu_percent(interval=0.05)
-            proc_memory_info = self.process.memory_info()
-            proc_memory_mb = proc_memory_info.rss / (1024 * 1024)
-            
-            # System-wide metrics
-            system_cpu_percent = psutil.cpu_percent(interval=0.05)
-            system_memory = psutil.virtual_memory()
-            system_memory_mb = system_memory.available / (1024 * 1024)
-            system_memory_percent = system_memory.percent
-            proc_memory_percent = self.process.memory_percent()
-            
-            sample = {
-                'timestamp': timestamp,
-                'per_process': {
-                    'cpu_percent': proc_cpu_percent,
-                    'memory_mb': proc_memory_mb,
-                    'memory_percent': proc_memory_percent,
-                },
-                'system_wide': {
-                    'cpu_percent': system_cpu_percent,
-                    'memory_mb': system_memory_mb,
-                    'memory_percent': system_memory_percent,
-                }
-            }
-            
-            self.samples.append(sample)
-        except Exception as e:
-            print(f"[ResourceMonitor] Error sampling resources: {e}")
-    
-    def _monitoring_loop(self):
-        """Background thread loop for continuous monitoring."""
-        while self.monitoring:
-            self._sample_resources()
-            time.sleep(self.sample_interval)
-    
-    def start(self):
-        """Start continuous resource monitoring."""
-        if self.monitoring:
-            print("[ResourceMonitor] Already monitoring")
-            return
-        
-        self.monitoring = True
-        self.samples = []
-        self.start_time = time.perf_counter()
-        self.thread = threading.Thread(target=self._monitoring_loop, daemon=True)
-        self.thread.start()
-        print(f"[ResourceMonitor] Started monitoring (interval: {self.sample_interval}s)")
-    
-    def stop(self) -> dict:
-        """
-        Stop monitoring and return aggregated statistics.
-        
-        Returns:
-            Dict with per-process and system-wide stats (peak, avg, min values)
-        """
-        if not self.monitoring:
-            print("[ResourceMonitor] Not currently monitoring")
-            return self._calculate_stats()
-        
-        self.monitoring = False
-        self.end_time = time.perf_counter()
-        
-        # Wait for thread to finish
-        if self.thread:
-            self.thread.join(timeout=2.0)
-        
-        duration = self.end_time - self.start_time
-        print(f"[ResourceMonitor] Stopped monitoring (duration: {duration:.2f}s, samples: {len(self.samples)})")
-        
-        return self._calculate_stats()
-    
-    def _calculate_stats(self) -> dict:
-        """Calculate aggregated statistics from collected samples."""
-        if not self.samples:
-            print("[ResourceMonitor] No samples collected")
-            return self._empty_stats()
-        
-        per_proc_samples = [s['per_process'] for s in self.samples]
-        system_samples = [s['system_wide'] for s in self.samples]
-        
-        stats = {
-            'per_process': {
-                'cpu_percent': {
-                    'peak': max(s['cpu_percent'] for s in per_proc_samples),
-                    'avg': sum(s['cpu_percent'] for s in per_proc_samples) / len(per_proc_samples),
-                    'min': min(s['cpu_percent'] for s in per_proc_samples),
-                },
-                'memory_mb': {
-                    'peak': max(s['memory_mb'] for s in per_proc_samples),
-                    'avg': sum(s['memory_mb'] for s in per_proc_samples) / len(per_proc_samples),
-                    'min': min(s['memory_mb'] for s in per_proc_samples),
-                },
-                'memory_percent': {
-                    'peak': max(s['memory_percent'] for s in per_proc_samples),
-                    'avg': sum(s['memory_percent'] for s in per_proc_samples) / len(per_proc_samples),
-                    'min': min(s['memory_percent'] for s in per_proc_samples),
-                },
-            },
-            'system_wide': {
-                'cpu_percent': {
-                    'peak': max(s['cpu_percent'] for s in system_samples),
-                    'avg': sum(s['cpu_percent'] for s in system_samples) / len(system_samples),
-                    'min': min(s['cpu_percent'] for s in system_samples),
-                },
-                'memory_mb': {
-                    'peak': max(s['memory_mb'] for s in system_samples),
-                    'avg': sum(s['memory_mb'] for s in system_samples) / len(system_samples),
-                    'min': min(s['memory_mb'] for s in system_samples),
-                },
-                'memory_percent': {
-                    'peak': max(s['memory_percent'] for s in system_samples),
-                    'avg': sum(s['memory_percent'] for s in system_samples) / len(system_samples),
-                    'min': min(s['memory_percent'] for s in system_samples),
-                },
-            },
-            'sample_count': len(self.samples),
-            'duration': self.end_time - self.start_time if self.end_time else 0.0,
-        }
-        
-        return stats
-    
-    def _empty_stats(self) -> dict:
-        """Return empty stats structure."""
-        return {
-            'per_process': {
-                'cpu_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
-                'memory_mb': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
-                'memory_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
-            },
-            'system_wide': {
-                'cpu_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
-                'memory_mb': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
-                'memory_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
-            },
-            'sample_count': 0,
-            'duration': 0.0,
-        }
-        return metrics
+# class ResourceMonitor:
+#     """
+#     Continuous resource monitoring in background thread.
+#     Tracks CPU% and RAM (both absolute and percentage) for per-process and system-wide.
+#     """
+#     
+#     def __init__(self, sample_interval: float = 0.5, process_pid: int = None):
+#         """
+#         Initialize resource monitor.
+#         
+#         Args:
+#             sample_interval: Seconds between samples (default 0.5)
+#             process_pid: Process ID to monitor (default: current process)
+#         """
+#         self.sample_interval = sample_interval
+#         self.process = psutil.Process(process_pid or os.getpid())
+#         self.monitoring = False
+#         self.samples = []
+#         self.thread = None
+#         self.start_time = None
+#         self.end_time = None
+#     
+#     def _sample_resources(self):
+#         """Collect a single resource sample."""
+#         try:
+#             timestamp = time.perf_counter()
+#             
+#             # Per-process metrics
+#             proc_cpu_percent = self.process.cpu_percent(interval=0.05)
+#             proc_memory_info = self.process.memory_info()
+#             proc_memory_mb = proc_memory_info.rss / (1024 * 1024)
+#             
+#             # System-wide metrics
+#             system_cpu_percent = psutil.cpu_percent(interval=0.05)
+#             system_memory = psutil.virtual_memory()
+#             system_memory_mb = system_memory.available / (1024 * 1024)
+#             system_memory_percent = system_memory.percent
+#             proc_memory_percent = self.process.memory_percent()
+#             
+#             sample = {
+#                 'timestamp': timestamp,
+#                 'per_process': {
+#                     'cpu_percent': proc_cpu_percent,
+#                     'memory_mb': proc_memory_mb,
+#                     'memory_percent': proc_memory_percent,
+#                 },
+#                 'system_wide': {
+#                     'cpu_percent': system_cpu_percent,
+#                     'memory_mb': system_memory_mb,
+#                     'memory_percent': system_memory_percent,
+#                 }
+#             }
+#             
+#             self.samples.append(sample)
+#         except Exception as e:
+#             print(f"[ResourceMonitor] Error sampling resources: {e}")
+#     
+#     def _monitoring_loop(self):
+#         """Background thread loop for continuous monitoring."""
+#         while self.monitoring:
+#             self._sample_resources()
+#             time.sleep(self.sample_interval)
+#     
+#     def start(self):
+#         """Start continuous resource monitoring."""
+#         if self.monitoring:
+#             print("[ResourceMonitor] Already monitoring")
+#             return
+#         
+#         self.monitoring = True
+#         self.samples = []
+#         self.start_time = time.perf_counter()
+#         self.thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+#         self.thread.start()
+#         print(f"[ResourceMonitor] Started monitoring (interval: {self.sample_interval}s)")
+#     
+#     def stop(self) -> dict:
+#         """
+#         Stop monitoring and return aggregated statistics.
+#         
+#         Returns:
+#             Dict with per-process and system-wide stats (peak, avg, min values)
+#         """
+#         if not self.monitoring:
+#             print("[ResourceMonitor] Not currently monitoring")
+#             return self._calculate_stats()
+#         
+#         self.monitoring = False
+#         self.end_time = time.perf_counter()
+#         
+#         # Wait for thread to finish
+#         if self.thread:
+#             self.thread.join(timeout=2.0)
+#         
+#         duration = self.end_time - self.start_time
+#         print(f"[ResourceMonitor] Stopped monitoring (duration: {duration:.2f}s, samples: {len(self.samples)})")
+#         
+#         return self._calculate_stats()
+#     
+#     def _calculate_stats(self) -> dict:
+#         """Calculate aggregated statistics from collected samples."""
+#         if not self.samples:
+#             print("[ResourceMonitor] No samples collected")
+#             return self._empty_stats()
+#         
+#         per_proc_samples = [s['per_process'] for s in self.samples]
+#         system_samples = [s['system_wide'] for s in self.samples]
+#         
+#         stats = {
+#             'per_process': {
+#                 'cpu_percent': {
+#                     'peak': max(s['cpu_percent'] for s in per_proc_samples),
+#                     'avg': sum(s['cpu_percent'] for s in per_proc_samples) / len(per_proc_samples),
+#                     'min': min(s['cpu_percent'] for s in per_proc_samples),
+#                 },
+#                 'memory_mb': {
+#                     'peak': max(s['memory_mb'] for s in per_proc_samples),
+#                     'avg': sum(s['memory_mb'] for s in per_proc_samples) / len(per_proc_samples),
+#                     'min': min(s['memory_mb'] for s in per_proc_samples),
+#                 },
+#                 'memory_percent': {
+#                     'peak': max(s['memory_percent'] for s in per_proc_samples),
+#                     'avg': sum(s['memory_percent'] for s in per_proc_samples) / len(per_proc_samples),
+#                     'min': min(s['memory_percent'] for s in per_proc_samples),
+#                 },
+#             },
+#             'system_wide': {
+#                 'cpu_percent': {
+#                     'peak': max(s['cpu_percent'] for s in system_samples),
+#                     'avg': sum(s['cpu_percent'] for s in system_samples) / len(system_samples),
+#                     'min': min(s['cpu_percent'] for s in system_samples),
+#                 },
+#                 'memory_mb': {
+#                     'peak': max(s['memory_mb'] for s in system_samples),
+#                     'avg': sum(s['memory_mb'] for s in system_samples) / len(system_samples),
+#                     'min': min(s['memory_mb'] for s in system_samples),
+#                 },
+#                 'memory_percent': {
+#                     'peak': max(s['memory_percent'] for s in system_samples),
+#                     'avg': sum(s['memory_percent'] for s in system_samples) / len(system_samples),
+#                     'min': min(s['memory_percent'] for s in system_samples),
+#                 },
+#             },
+#             'sample_count': len(self.samples),
+#             'duration': self.end_time - self.start_time if self.end_time else 0.0,
+#         }
+#         
+#         return stats
+#     
+#     def _empty_stats(self) -> dict:
+#         """Return empty stats structure."""
+#         return {
+#             'per_process': {
+#                 'cpu_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
+#                 'memory_mb': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
+#                 'memory_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
+#             },
+#             'system_wide': {
+#                 'cpu_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
+#                 'memory_mb': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
+#                 'memory_percent': {'peak': 0.0, 'avg': 0.0, 'min': 0.0},
+#             },
+#             'sample_count': 0,
+#             'duration': 0.0,
+#         }
+#         return metrics

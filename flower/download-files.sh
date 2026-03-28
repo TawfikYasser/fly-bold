@@ -12,7 +12,7 @@ echo ""
 
 # List available files
 FILES=$(gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
-    find /app -maxdepth 2 -type f \( -name '*.json' -o -name '*.log' -o -name '*.pt' -o -name '*.pth' -o -name '*.txt' \) 2>/dev/null | sort
+    find /app -maxdepth 2 -type f \( -name '*.json' -o -name '*.hpo' -o -name '*.log' -o -name '*.pt' -o -name '*.pth' -o -name '*.txt' \) 2>/dev/null | sort
 ")
 
 if [ -z "$FILES" ]; then

@@ -22,7 +22,7 @@ from flower_benchmarks.plugins.yolov5.model import (
 from flower_benchmarks.task import (
     yolo_train_from_state_and_return_state_dict, 
     yolo_evaluate_weights_and_parse_map,
-    ResourceMonitor
+    # ResourceMonitor  # COMMENTED: Resource monitoring disabled
 )
 
 # =====================================================================
@@ -213,10 +213,11 @@ def train(msg: Message, context: Context):
 
     print(f"\n[CLIENT {client_id}] Starting training for round {server_round}")
 
+    # COMMENTED: Resource monitoring disabled
     # ✅ START OVERALL ROUND MONITORING
-    round_monitor = ResourceMonitor(sample_interval=0.5)
-    round_monitor.start()
-    round_start_time = time.perf_counter()
+    # round_monitor = ResourceMonitor(sample_interval=0.5)  # COMMENTED: Resource monitoring disabled
+    # round_monitor.start()  # COMMENTED: Resource monitoring disabled
+    # round_start_time = time.perf_counter()  # COMMENTED: Resource monitoring disabled
 
     received_state = msg.content["arrays"].to_torch_state_dict()
     data_yaml, client_dataset_root = prepare_client_yolo_dataset_prepartitioned(client_id)
@@ -256,9 +257,10 @@ def train(msg: Message, context: Context):
     train_error_msg = ""
     round_log = {}
     
+    # COMMENTED: Resource monitoring disabled
     # ✅ START TRAINING PHASE MONITORING
-    train_monitor = ResourceMonitor(sample_interval=0.5)
-    train_monitor.start()
+    # train_monitor = ResourceMonitor(sample_interval=0.5)  # COMMENTED: Resource monitoring disabled
+    # train_monitor.start()  # COMMENTED: Resource monitoring disabled
 
     try:
         print(f"[CLIENT {client_id}] Calling yolo_train_from_state_and_return_state_dict...")
@@ -284,9 +286,10 @@ def train(msg: Message, context: Context):
         train_error_msg = f"{type(e).__name__}: {str(e)}"
         new_state = received_state
     
+    # COMMENTED: Resource monitoring disabled
     # ✅ STOP TRAINING PHASE MONITORING
-    train_resources = train_monitor.stop()
-    print(f"[CLIENT {client_id}] Training resources: CPU peak {train_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {train_resources['per_process']['memory_mb']['peak']:.1f} MB")
+    # train_resources = train_monitor.stop()  # COMMENTED: Resource monitoring disabled
+    # print(f"[CLIENT {client_id}] Training resources: CPU peak {train_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {train_resources['per_process']['memory_mb']['peak']:.1f} MB")  # COMMENTED: Resource monitoring disabled
 
     train_time = time.perf_counter() - train_start
 
@@ -326,33 +329,35 @@ def train(msg: Message, context: Context):
         "round_duration": float(round_log.get("round_duration", 0.0)),
         "round_start_time": float(round_log.get("round_start_time", 0.0)),
         "round_end_time": float(round_log.get("round_end_time", 0.0)),
-        # ✅ Training phase resource metrics
-        "train_resources_per_process_cpu_peak": float(train_resources['per_process']['cpu_percent']['peak']),
-        "train_resources_per_process_cpu_avg": float(train_resources['per_process']['cpu_percent']['avg']),
-        "train_resources_per_process_ram_peak_mb": float(train_resources['per_process']['memory_mb']['peak']),
-        "train_resources_per_process_ram_avg_mb": float(train_resources['per_process']['memory_mb']['avg']),
-        "train_resources_per_process_ram_peak_pct": float(train_resources['per_process']['memory_percent']['peak']),
-        "train_resources_per_process_ram_avg_pct": float(train_resources['per_process']['memory_percent']['avg']),
-        "train_resources_system_cpu_peak": float(train_resources['system_wide']['cpu_percent']['peak']),
-        "train_resources_system_cpu_avg": float(train_resources['system_wide']['cpu_percent']['avg']),
-        "train_resources_system_ram_peak_mb": float(train_resources['system_wide']['memory_mb']['peak']),
-        "train_resources_system_ram_avg_mb": float(train_resources['system_wide']['memory_mb']['avg']),
-        "train_resources_system_ram_peak_pct": float(train_resources['system_wide']['memory_percent']['peak']),
-        "train_resources_system_ram_avg_pct": float(train_resources['system_wide']['memory_percent']['avg']),
+        # COMMENTED: Resource monitoring disabled
+        # Training phase resource metrics
+        # "train_resources_per_process_cpu_peak": float(train_resources['per_process']['cpu_percent']['peak']),
+        # "train_resources_per_process_cpu_avg": float(train_resources['per_process']['cpu_percent']['avg']),
+        # "train_resources_per_process_ram_peak_mb": float(train_resources['per_process']['memory_mb']['peak']),
+        # "train_resources_per_process_ram_avg_mb": float(train_resources['per_process']['memory_mb']['avg']),
+        # "train_resources_per_process_ram_peak_pct": float(train_resources['per_process']['memory_percent']['peak']),
+        # "train_resources_per_process_ram_avg_pct": float(train_resources['per_process']['memory_percent']['avg']),
+        # "train_resources_system_cpu_peak": float(train_resources['system_wide']['cpu_percent']['peak']),
+        # "train_resources_system_cpu_avg": float(train_resources['system_wide']['cpu_percent']['avg']),
+        # "train_resources_system_ram_peak_mb": float(train_resources['system_wide']['memory_mb']['peak']),
+        # "train_resources_system_ram_avg_mb": float(train_resources['system_wide']['memory_mb']['avg']),
+        # "train_resources_system_ram_peak_pct": float(train_resources['system_wide']['memory_percent']['peak']),
+        # "train_resources_system_ram_avg_pct": float(train_resources['system_wide']['memory_percent']['avg']),
     }
 
     status_icon = "✅" if train_status == "SUCCESS" else "❌"
     print(f"[CLIENT {client_id}] {status_icon} Training {train_status}")
     print(f"[CLIENT {client_id}] Sent: {sent_size} bytes, Received: {received_size} bytes")
 
-    # ✅ Memory cleanup after training to prevent accumulation across rounds
+    # Memory cleanup after training to prevent accumulation across rounds
     import gc
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
     del received_state, new_state
     gc.collect()
-    round_monitor.stop()
+    # COMMENTED: Resource monitoring disabled
+    # round_monitor.stop()  # COMMENTED: Resource monitoring disabled
     print(f"[CLIENT {client_id}] Memory cleanup completed after training")
 
     metric_record = MetricRecord(metrics)
@@ -370,10 +375,11 @@ def evaluate(msg: Message, context: Context):
 
     run_dir = context.run_config.get("yolo_runs_dir", "runs/train")
 
+    # COMMENTED: Resource monitoring disabled
     # ✅ START OVERALL ROUND MONITORING
-    round_monitor = ResourceMonitor(sample_interval=0.5)
-    round_monitor.start()
-    round_start_time = time.perf_counter()
+    # round_monitor = ResourceMonitor(sample_interval=0.5)  # COMMENTED: Resource monitoring disabled
+    # round_monitor.start()  # COMMENTED: Resource monitoring disabled
+    # round_start_time = time.perf_counter()  # COMMENTED: Resource monitoring disabled
     
     eval_status = "FAILED"
     eval_error_msg = ""
@@ -381,10 +387,11 @@ def evaluate(msg: Message, context: Context):
     eval_time = 0.0
     checkpoint_path = None
     
+    # COMMENTED: Resource monitoring disabled
     # ✅ START EVALUATION PHASE MONITORING
-    eval_monitor = ResourceMonitor(sample_interval=0.5)
-    eval_monitor.start()
-    eval_phase_start = time.perf_counter()
+    # eval_monitor = ResourceMonitor(sample_interval=0.5)  # COMMENTED: Resource monitoring disabled
+    # eval_monitor.start()  # COMMENTED: Resource monitoring disabled
+    # eval_phase_start = time.perf_counter()  # COMMENTED: Resource monitoring disabled
     
     try:
         # Use the same dataset preparation as train function
@@ -453,9 +460,10 @@ def evaluate(msg: Message, context: Context):
         val_metrics = {"loss": 0.0, "mp": 0.0, "mr": 0.0, "mAP@0.5": 0.0, "mAP": 0.0}
 
     
+    # COMMENTED: Resource monitoring disabled
     # ✅ STOP EVALUATION PHASE MONITORING
-    eval_resources = eval_monitor.stop()
-    print(f"[CLIENT {client_id}] Evaluation resources: CPU peak {eval_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {eval_resources['per_process']['memory_mb']['peak']:.1f} MB")
+    # eval_resources = eval_monitor.stop()  # COMMENTED: Resource monitoring disabled
+    # print(f"[CLIENT {client_id}] Evaluation resources: CPU peak {eval_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {eval_resources['per_process']['memory_mb']['peak']:.1f} MB")  # COMMENTED: Resource monitoring disabled
     
     print(f"[CLIENT {client_id}] Validation metrics: {val_metrics}")
     
@@ -477,30 +485,32 @@ def evaluate(msg: Message, context: Context):
         "client_eval_acc_mAP": float(val_metrics.get("mAP", 0.0)),
         "client_eval_loss": float(val_metrics.get("loss", 0.0)),
         "client_eval_time": float(eval_time),
-        # ✅ Evaluation phase resource metrics
-        "eval_resources_per_process_cpu_peak": float(eval_resources['per_process']['cpu_percent']['peak']),
-        "eval_resources_per_process_cpu_avg": float(eval_resources['per_process']['cpu_percent']['avg']),
-        "eval_resources_per_process_ram_peak_mb": float(eval_resources['per_process']['memory_mb']['peak']),
-        "eval_resources_per_process_ram_avg_mb": float(eval_resources['per_process']['memory_mb']['avg']),
-        "eval_resources_per_process_ram_peak_pct": float(eval_resources['per_process']['memory_percent']['peak']),
-        "eval_resources_per_process_ram_avg_pct": float(eval_resources['per_process']['memory_percent']['avg']),
-        "eval_resources_system_cpu_peak": float(eval_resources['system_wide']['cpu_percent']['peak']),
-        "eval_resources_system_cpu_avg": float(eval_resources['system_wide']['cpu_percent']['avg']),
-        "eval_resources_system_ram_peak_mb": float(eval_resources['system_wide']['memory_mb']['peak']),
-        "eval_resources_system_ram_avg_mb": float(eval_resources['system_wide']['memory_mb']['avg']),
-        "eval_resources_system_ram_peak_pct": float(eval_resources['system_wide']['memory_percent']['peak']),
-        "eval_resources_system_ram_avg_pct": float(eval_resources['system_wide']['memory_percent']['avg']),
+        # COMMENTED: Resource monitoring disabled
+        # Evaluation phase resource metrics
+        # "eval_resources_per_process_cpu_peak": float(eval_resources['per_process']['cpu_percent']['peak']),
+        # "eval_resources_per_process_cpu_avg": float(eval_resources['per_process']['cpu_percent']['avg']),
+        # "eval_resources_per_process_ram_peak_mb": float(eval_resources['per_process']['memory_mb']['peak']),
+        # "eval_resources_per_process_ram_avg_mb": float(eval_resources['per_process']['memory_mb']['avg']),
+        # "eval_resources_per_process_ram_peak_pct": float(eval_resources['per_process']['memory_percent']['peak']),
+        # "eval_resources_per_process_ram_avg_pct": float(eval_resources['per_process']['memory_percent']['avg']),
+        # "eval_resources_system_cpu_peak": float(eval_resources['system_wide']['cpu_percent']['peak']),
+        # "eval_resources_system_cpu_avg": float(eval_resources['system_wide']['cpu_percent']['avg']),
+        # "eval_resources_system_ram_peak_mb": float(eval_resources['system_wide']['memory_mb']['peak']),
+        # "eval_resources_system_ram_avg_mb": float(eval_resources['system_wide']['memory_mb']['avg']),
+        # "eval_resources_system_ram_peak_pct": float(eval_resources['system_wide']['memory_percent']['peak']),
+        # "eval_resources_system_ram_avg_pct": float(eval_resources['system_wide']['memory_percent']['avg']),
     }
     
     status_icon = "✅" if eval_status == "SUCCESS" else "❌"
     print(f"[CLIENT {client_id}] {status_icon} Evaluation {eval_status}")
     
-    # ✅ Memory cleanup after evaluation to prevent accumulation across rounds
+    # Memory cleanup after evaluation to prevent accumulation across rounds
     import gc
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
-    round_monitor.stop()
+    # COMMENTED: Resource monitoring disabled
+    # round_monitor.stop()  # COMMENTED: Resource monitoring disabled
     import shutil
     prev_run = Path(run_dir) / f"client{client_id}_r{server_round - 1}"
     if prev_run.exists():

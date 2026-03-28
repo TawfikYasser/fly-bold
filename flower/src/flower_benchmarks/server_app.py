@@ -22,7 +22,7 @@ from flower_benchmarks.plugins.yolov5.model import (
     save_state_dict_as_yolo_checkpoint, 
     YoloSizeToPretrained
 )
-from flower_benchmarks.task import ResourceMonitor
+# from flower_benchmarks.task import ResourceMonitor  # COMMENTED: Resource monitoring disabled
 from yolov5.models.yolo import Model
 from yolov5.utils.downloads import attempt_download
 import numpy as np
@@ -87,9 +87,9 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     global ALL_ROUND_LOGS, CURRENT_ROUND
     
     # ✅ START SERVER AGGREGATION MONITORING
-    aggregation_monitor = ResourceMonitor(sample_interval=0.5)
-    aggregation_monitor.start()
-    aggregation_start_time = time.perf_counter()
+    # aggregation_monitor = ResourceMonitor(sample_interval=0.5)  # COMMENTED: Resource monitoring disabled
+    # aggregation_monitor.start()  # COMMENTED: Resource monitoring disabled
+    # aggregation_start_time = time.perf_counter()  # COMMENTED: Resource monitoring disabled
 
     if not record_dicts:
         print("[SERVER] No training results to aggregate")
@@ -130,27 +130,28 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             'data_received': _safe_float(metrics.get("data_received_from_server", 0.0)),
             'data_sent': _safe_float(metrics.get("data_sent_to_server", 0.0)),
             'round_duration': _safe_float(metrics.get("round_duration", 0.0)),
-            # ✅ Training phase resource metrics (per-process)
-            'train_cpu_peak': _safe_float(metrics.get("train_resources_per_process_cpu_peak", 0.0)),
-            'train_cpu_avg': _safe_float(metrics.get("train_resources_per_process_cpu_avg", 0.0)),
-            'train_ram_peak_mb': _safe_float(metrics.get("train_resources_per_process_ram_peak_mb", 0.0)),
-            'train_ram_avg_mb': _safe_float(metrics.get("train_resources_per_process_ram_avg_mb", 0.0)),
-            'train_ram_peak_pct': _safe_float(metrics.get("train_resources_per_process_ram_peak_pct", 0.0)),
-            'train_ram_avg_pct': _safe_float(metrics.get("train_resources_per_process_ram_avg_pct", 0.0)),
-            # ✅ Training phase resource metrics (system-wide)
-            'train_sys_cpu_peak': _safe_float(metrics.get("train_resources_system_cpu_peak", 0.0)),
-            'train_sys_cpu_avg': _safe_float(metrics.get("train_resources_system_cpu_avg", 0.0)),
-            'train_sys_ram_peak_mb': _safe_float(metrics.get("train_resources_system_ram_peak_mb", 0.0)),
-            'train_sys_ram_avg_mb': _safe_float(metrics.get("train_resources_system_ram_avg_mb", 0.0)),
-            'train_sys_ram_peak_pct': _safe_float(metrics.get("train_resources_system_ram_peak_pct", 0.0)),
-            'train_sys_ram_avg_pct': _safe_float(metrics.get("train_resources_system_ram_avg_pct", 0.0)),
+            # COMMENTED: Resource monitoring disabled
+            # 'train_cpu_peak': _safe_float(metrics.get("train_resources_per_process_cpu_peak", 0.0)),
+            # 'train_cpu_avg': _safe_float(metrics.get("train_resources_per_process_cpu_avg", 0.0)),
+            # 'train_ram_peak_mb': _safe_float(metrics.get("train_resources_per_process_ram_peak_mb", 0.0)),
+            # 'train_ram_avg_mb': _safe_float(metrics.get("train_resources_per_process_ram_avg_mb", 0.0)),
+            # 'train_ram_peak_pct': _safe_float(metrics.get("train_resources_per_process_ram_peak_pct", 0.0)),
+            # 'train_ram_avg_pct': _safe_float(metrics.get("train_resources_per_process_ram_avg_pct", 0.0)),
+            # COMMENTED: Resource monitoring disabled
+            # 'train_sys_cpu_peak': _safe_float(metrics.get("train_resources_system_cpu_peak", 0.0)),
+            # 'train_sys_cpu_avg': _safe_float(metrics.get("train_resources_system_cpu_avg", 0.0)),
+            # 'train_sys_ram_peak_mb': _safe_float(metrics.get("train_resources_system_ram_peak_mb", 0.0)),
+            # 'train_sys_ram_avg_mb': _safe_float(metrics.get("train_resources_system_ram_avg_mb", 0.0)),
+            # 'train_sys_ram_peak_pct': _safe_float(metrics.get("train_resources_system_ram_peak_pct", 0.0)),
+            # 'train_sys_ram_avg_pct': _safe_float(metrics.get("train_resources_system_ram_avg_pct", 0.0)),
         }
         clients_data.append(client_data)
         train_success_count += 1
         
         # Print per-client result with metrics
         print(f"[SERVER] ✅ [CLIENT {client_id}] TRAIN COMPLETE - Loss: {client_data['loss']:.4f}, mAP@0.5: {client_data['mAP50']:.4f}, mAP: {client_data['mAP']:.4f}, Time: {client_data['train_time']:.2f}s")
-        print(f"[SERVER]    Resources -      CPU: {client_data['train_cpu_peak']:.1f}% peak / {client_data['train_cpu_avg']:.1f}% avg, RAM: {client_data['train_ram_peak_mb']:.1f} MB peak / {client_data['train_ram_avg_mb']:.1f} MB avg")
+        # COMMENTED: Resource monitoring disabled
+        # print(f"[SERVER]    Resources -      CPU: {client_data['train_cpu_peak']:.1f}% peak / {client_data['train_cpu_avg']:.1f}% avg, RAM: {client_data['train_ram_peak_mb']:.1f} MB peak / {client_data['train_ram_avg_mb']:.1f} MB avg")
     
     if not clients_data:
         print("[SERVER] No valid client data extracted")
@@ -174,20 +175,21 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     total_data_transferred = sum(c['data_received'] + c['data_sent'] for c in clients_data)
     total_data_mb = round(total_data_transferred / (1024 ** 2), 4)
     
+    # COMMENTED: Resource monitoring disabled
     # ✅ AGGREGATE CLIENT RESOURCE METRICS
-    avg_train_cpu_peak = sum(c['train_cpu_peak'] for c in clients_data) / len(clients_data)
-    avg_train_cpu_avg = sum(c['train_cpu_avg'] for c in clients_data) / len(clients_data)
-    max_train_ram_peak_mb = max(c['train_ram_peak_mb'] for c in clients_data)
-    avg_train_ram_avg_mb = sum(c['train_ram_avg_mb'] for c in clients_data) / len(clients_data)
-    max_train_ram_peak_pct = max(c['train_ram_peak_pct'] for c in clients_data)
-    avg_train_ram_avg_pct = sum(c['train_ram_avg_pct'] for c in clients_data) / len(clients_data)
-    
-    avg_train_sys_cpu_peak = sum(c['train_sys_cpu_peak'] for c in clients_data) / len(clients_data)
-    avg_train_sys_cpu_avg = sum(c['train_sys_cpu_avg'] for c in clients_data) / len(clients_data)
-    max_train_sys_ram_peak_mb = max(c['train_sys_ram_peak_mb'] for c in clients_data)
-    avg_train_sys_ram_avg_mb = sum(c['train_sys_ram_avg_mb'] for c in clients_data) / len(clients_data)
-    max_train_sys_ram_peak_pct = max(c['train_sys_ram_peak_pct'] for c in clients_data)
-    avg_train_sys_ram_avg_pct = sum(c['train_sys_ram_avg_pct'] for c in clients_data) / len(clients_data)
+    # avg_train_cpu_peak = sum(c['train_cpu_peak'] for c in clients_data) / len(clients_data)
+    # avg_train_cpu_avg = sum(c['train_cpu_avg'] for c in clients_data) / len(clients_data)
+    # max_train_ram_peak_mb = max(c['train_ram_peak_mb'] for c in clients_data)
+    # avg_train_ram_avg_mb = sum(c['train_ram_avg_mb'] for c in clients_data) / len(clients_data)
+    # max_train_ram_peak_pct = max(c['train_ram_peak_pct'] for c in clients_data)
+    # avg_train_ram_avg_pct = sum(c['train_ram_avg_pct'] for c in clients_data) / len(clients_data)
+    # 
+    # avg_train_sys_cpu_peak = sum(c['train_sys_cpu_peak'] for c in clients_data) / len(clients_data)
+    # avg_train_sys_cpu_avg = sum(c['train_sys_cpu_avg'] for c in clients_data) / len(clients_data)
+    # max_train_sys_ram_peak_mb = max(c['train_sys_ram_peak_mb'] for c in clients_data)
+    # avg_train_sys_ram_avg_mb = sum(c['train_sys_ram_avg_mb'] for c in clients_data) / len(clients_data)
+    # max_train_sys_ram_peak_pct = max(c['train_sys_ram_peak_pct'] for c in clients_data)
+    # avg_train_sys_ram_avg_pct = sum(c['train_sys_ram_avg_pct'] for c in clients_data) / len(clients_data)
     
     # Get learning rate (should be same for all clients)
     lr = clients_data[0]['lr'] if clients_data else 0.01
@@ -207,31 +209,32 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             "client_train_loss": c['loss'],
             "client_train_time": c['train_time'],
             "client_train_num_examples": int(c['examples']),
+            # COMMENTED: Resource monitoring disabled
             # ✅ Per-client resource metrics
-            "client_train_resources": {
-                "per_process": {
-                    "cpu_percent_peak": c['train_cpu_peak'],
-                    "cpu_percent_avg": c['train_cpu_avg'],
-                    "ram_mb_peak": c['train_ram_peak_mb'],
-                    "ram_mb_avg": c['train_ram_avg_mb'],
-                    "ram_percent_peak": c['train_ram_peak_pct'],
-                    "ram_percent_avg": c['train_ram_avg_pct'],
-                },
-                "system_wide": {
-                    "cpu_percent_peak": c['train_sys_cpu_peak'],
-                    "cpu_percent_avg": c['train_sys_cpu_avg'],
-                    "ram_mb_peak": c['train_sys_ram_peak_mb'],
-                    "ram_mb_avg": c['train_sys_ram_avg_mb'],
-                    "ram_percent_peak": c['train_sys_ram_peak_pct'],
-                    "ram_percent_avg": c['train_sys_ram_avg_pct'],
-                }
-            }
+            # "client_train_resources": {
+            #     "per_process": {
+            #         "cpu_percent_peak": c['train_cpu_peak'],
+            #         "cpu_percent_avg": c['train_cpu_avg'],
+            #         "ram_mb_peak": c['train_ram_peak_mb'],
+            #         "ram_mb_avg": c['train_ram_avg_mb'],
+            #         "ram_percent_peak": c['train_ram_peak_pct'],
+            #         "ram_percent_avg": c['train_ram_avg_pct'],
+            #     },
+            #     "system_wide": {
+            #         "cpu_percent_peak": c['train_sys_cpu_peak'],
+            #         "cpu_percent_avg": c['train_sys_cpu_avg'],
+            #         "ram_mb_peak": c['train_sys_ram_peak_mb'],
+            #         "ram_mb_avg": c['train_sys_ram_avg_mb'],
+            #         "ram_percent_peak": c['train_sys_ram_peak_pct'],
+            #         "ram_percent_avg": c['train_sys_ram_avg_pct'],
+            #     }
+            # }
         }
         clients_logs.append(client_log)
     
     # ✅ STOP SERVER AGGREGATION MONITORING
-    aggregation_resources = aggregation_monitor.stop()
-    print(f"[SERVER] Aggregation resources: CPU peak {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB")
+    # aggregation_resources = aggregation_monitor.stop()  # COMMENTED: Resource monitoring disabled
+    # print(f"[SERVER] Aggregation resources: CPU peak {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB")  # COMMENTED: Resource monitoring disabled
     
     # Update global round logs
     CURRENT_ROUND = len(ALL_ROUND_LOGS)
@@ -252,44 +255,45 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
         },
         "round_data_transferred_mb": total_data_mb,
         "round_data_transferred_bytes": int(total_data_transferred),
+        # COMMENTED: Resource monitoring disabled
         # ✅ SERVER RESOURCE METRICS
-        "server_aggregation_resources": {
-            "per_process": {
-                "cpu_percent_peak": aggregation_resources['per_process']['cpu_percent']['peak'],
-                "cpu_percent_avg": aggregation_resources['per_process']['cpu_percent']['avg'],
-                "ram_mb_peak": aggregation_resources['per_process']['memory_mb']['peak'],
-                "ram_mb_avg": aggregation_resources['per_process']['memory_mb']['avg'],
-                "ram_percent_peak": aggregation_resources['per_process']['memory_percent']['peak'],
-                "ram_percent_avg": aggregation_resources['per_process']['memory_percent']['avg'],
-            },
-            "system_wide": {
-                "cpu_percent_peak": aggregation_resources['system_wide']['cpu_percent']['peak'],
-                "cpu_percent_avg": aggregation_resources['system_wide']['cpu_percent']['avg'],
-                "ram_mb_peak": aggregation_resources['system_wide']['memory_mb']['peak'],
-                "ram_mb_avg": aggregation_resources['system_wide']['memory_mb']['avg'],
-                "ram_percent_peak": aggregation_resources['system_wide']['memory_percent']['peak'],
-                "ram_percent_avg": aggregation_resources['system_wide']['memory_percent']['avg'],
-            }
-        },
+        # "server_aggregation_resources": {
+        #     "per_process": {
+        #         "cpu_percent_peak": aggregation_resources['per_process']['cpu_percent']['peak'],
+        #         "cpu_percent_avg": aggregation_resources['per_process']['cpu_percent']['avg'],
+        #         "ram_mb_peak": aggregation_resources['per_process']['memory_mb']['peak'],
+        #         "ram_mb_avg": aggregation_resources['per_process']['memory_mb']['avg'],
+        #         "ram_percent_peak": aggregation_resources['per_process']['memory_percent']['peak'],
+        #         "ram_percent_avg": aggregation_resources['per_process']['memory_percent']['avg'],
+        #     },
+        #     "system_wide": {
+        #         "cpu_percent_peak": aggregation_resources['system_wide']['cpu_percent']['peak'],
+        #         "cpu_percent_avg": aggregation_resources['system_wide']['cpu_percent']['avg'],
+        #         "ram_mb_peak": aggregation_resources['system_wide']['memory_mb']['peak'],
+        #         "ram_mb_avg": aggregation_resources['system_wide']['memory_mb']['avg'],
+        #         "ram_percent_peak": aggregation_resources['system_wide']['memory_percent']['peak'],
+        #         "ram_percent_avg": aggregation_resources['system_wide']['memory_percent']['avg'],
+        #     }
+        # },
         # ✅ AGGREGATED CLIENT TRAINING RESOURCES
-        "aggregated_client_training_resources": {
-            "per_process": {
-                "cpu_percent_peak_avg": avg_train_cpu_peak,
-                "cpu_percent_avg": avg_train_cpu_avg,
-                "ram_mb_peak_max": max_train_ram_peak_mb,
-                "ram_mb_avg": avg_train_ram_avg_mb,
-                "ram_percent_peak_max": max_train_ram_peak_pct,
-                "ram_percent_avg": avg_train_ram_avg_pct,
-            },
-            "system_wide": {
-                "cpu_percent_peak_avg": avg_train_sys_cpu_peak,
-                "cpu_percent_avg": avg_train_sys_cpu_avg,
-                "ram_mb_peak_max": max_train_sys_ram_peak_mb,
-                "ram_mb_avg": avg_train_sys_ram_avg_mb,
-                "ram_percent_peak_max": max_train_sys_ram_peak_pct,
-                "ram_percent_avg": avg_train_sys_ram_avg_pct,
-            }
-        }
+        # "aggregated_client_training_resources": {
+        #     "per_process": {
+        #         "cpu_percent_peak_avg": avg_train_cpu_peak,
+        #         "cpu_percent_avg": avg_train_cpu_avg,
+        #         "ram_mb_peak_max": max_train_ram_peak_mb,
+        #         "ram_mb_avg": avg_train_ram_avg_mb,
+        #         "ram_percent_peak_max": max_train_ram_peak_pct,
+        #         "ram_percent_avg": avg_train_ram_avg_pct,
+        #     },
+        #     "system_wide": {
+        #         "cpu_percent_peak_avg": avg_train_sys_cpu_peak,
+        #         "cpu_percent_avg": avg_train_sys_cpu_avg,
+        #         "ram_mb_peak_max": max_train_sys_ram_peak_mb,
+        #         "ram_mb_avg": avg_train_sys_ram_avg_mb,
+        #         "ram_percent_peak_max": max_train_sys_ram_peak_pct,
+        #         "ram_percent_avg": avg_train_sys_ram_avg_pct,
+        #     }
+        # }
     }
     
     ALL_ROUND_LOGS.append(round_log)
@@ -304,8 +308,9 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
     print(f"[SERVER] Aggregated Score:  {round_train_acc_aggregated:.4f}")
     print(f"[SERVER] Round Duration:    {max_round_duration:.2f}s")
     print(f"[SERVER] Data Transferred:  {total_data_mb:.2f} MB")
-    print(f"[SERVER] Avg Client CPU: {avg_train_cpu_peak:.1f}% (peak), RAM: {max_train_ram_peak_mb:.1f} MB (peak)")
-    print(f"[SERVER] Server CPU: {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}% (peak), RAM: {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB (peak)")
+    # COMMENTED: Resource monitoring disabled
+    # print(f"[SERVER] Avg Client CPU: {avg_train_cpu_peak:.1f}% (peak), RAM: {max_train_ram_peak_mb:.1f} MB (peak)")
+    # print(f"[SERVER] Server CPU: {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}% (peak), RAM: {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB (peak)")
     print(f"[SERVER] {'='*80}\n")
     
     # FIXED: Return aggregated metrics for Flower (not empty dict)
@@ -322,10 +327,11 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
     """
     global ALL_ROUND_LOGS
     
-    # ✅ START SERVER AGGREGATION MONITORING FOR EVALUATION
-    aggregation_monitor = ResourceMonitor(sample_interval=0.5)
-    aggregation_monitor.start()
-    aggregation_start_time = time.perf_counter()
+    # COMMENTED: Resource monitoring disabled
+    # START SERVER AGGREGATION MONITORING FOR EVALUATION
+    # aggregation_monitor = ResourceMonitor(sample_interval=0.5)  # COMMENTED: Resource monitoring disabled
+    # aggregation_monitor.start()  # COMMENTED: Resource monitoring disabled
+    # aggregation_start_time = time.perf_counter()  # COMMENTED: Resource monitoring disabled
 
     if not record_dicts:
         print("[SERVER] No evaluation results to aggregate")
@@ -364,26 +370,28 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             'mAP50': _safe_float(metrics.get("client_eval_acc_mAP@0.5", 0.0)),
             'mAP': _safe_float(metrics.get("client_eval_acc_mAP", 0.0)),
             'eval_time': _safe_float(metrics.get("client_eval_time", 0.0)),
-            # ✅ Evaluation phase resource metrics (per-process)
-            'eval_cpu_peak': _safe_float(metrics.get("eval_resources_per_process_cpu_peak", 0.0)),
-            'eval_cpu_avg': _safe_float(metrics.get("eval_resources_per_process_cpu_avg", 0.0)),
-            'eval_ram_peak_mb': _safe_float(metrics.get("eval_resources_per_process_ram_peak_mb", 0.0)),
-            'eval_ram_avg_mb': _safe_float(metrics.get("eval_resources_per_process_ram_avg_mb", 0.0)),
-            'eval_ram_peak_pct': _safe_float(metrics.get("eval_resources_per_process_ram_peak_pct", 0.0)),
-            'eval_ram_avg_pct': _safe_float(metrics.get("eval_resources_per_process_ram_avg_pct", 0.0)),
-            # ✅ Evaluation phase resource metrics (system-wide)
-            'eval_sys_cpu_peak': _safe_float(metrics.get("eval_resources_system_cpu_peak", 0.0)),
-            'eval_sys_cpu_avg': _safe_float(metrics.get("eval_resources_system_cpu_avg", 0.0)),
-            'eval_sys_ram_peak_mb': _safe_float(metrics.get("eval_resources_system_ram_peak_mb", 0.0)),
-            'eval_sys_ram_avg_mb': _safe_float(metrics.get("eval_resources_system_ram_avg_mb", 0.0)),
-            'eval_sys_ram_peak_pct': _safe_float(metrics.get("eval_resources_system_ram_peak_pct", 0.0)),
-            'eval_sys_ram_avg_pct': _safe_float(metrics.get("eval_resources_system_ram_avg_pct", 0.0)),
+            # COMMENTED: Resource monitoring disabled
+            # Evaluation phase resource metrics (per-process)
+            # 'eval_cpu_peak': _safe_float(metrics.get("eval_resources_per_process_cpu_peak", 0.0)),
+            # 'eval_cpu_avg': _safe_float(metrics.get("eval_resources_per_process_cpu_avg", 0.0)),
+            # 'eval_ram_peak_mb': _safe_float(metrics.get("eval_resources_per_process_ram_peak_mb", 0.0)),
+            # 'eval_ram_avg_mb': _safe_float(metrics.get("eval_resources_per_process_ram_avg_mb", 0.0)),
+            # 'eval_ram_peak_pct': _safe_float(metrics.get("eval_resources_per_process_ram_peak_pct", 0.0)),
+            # 'eval_ram_avg_pct': _safe_float(metrics.get("eval_resources_per_process_ram_avg_pct", 0.0)),
+            # Evaluation phase resource metrics (system-wide)
+            # 'eval_sys_cpu_peak': _safe_float(metrics.get("eval_resources_system_cpu_peak", 0.0)),
+            # 'eval_sys_cpu_avg': _safe_float(metrics.get("eval_resources_system_cpu_avg", 0.0)),
+            # 'eval_sys_ram_peak_mb': _safe_float(metrics.get("eval_resources_system_ram_peak_mb", 0.0)),
+            # 'eval_sys_ram_avg_mb': _safe_float(metrics.get("eval_resources_system_ram_avg_mb", 0.0)),
+            # 'eval_sys_ram_peak_pct': _safe_float(metrics.get("eval_resources_system_ram_peak_pct", 0.0)),
+            # 'eval_sys_ram_avg_pct': _safe_float(metrics.get("eval_resources_system_ram_avg_pct", 0.0)),
         }
         eval_data.append(client_eval)
         
         # Print per-client evaluation results
         print(f"[SERVER] ✅ [CLIENT {client_id}] EVAL COMPLETE - Loss: {client_eval['loss']:.4f}, mAP@0.5: {client_eval['mAP50']:.4f}, mAP: {client_eval['mAP']:.4f}, Time: {client_eval['eval_time']:.2f}s")
-        print(f"[SERVER]    Resources -     CPU: {client_eval['eval_cpu_peak']:.1f}% peak / {client_eval['eval_cpu_avg']:.1f}% avg, RAM: {client_eval['eval_ram_peak_mb']:.1f} MB peak / {client_eval['eval_ram_avg_mb']:.1f} MB avg")
+        # COMMENTED: Resource monitoring disabled
+        # print(f"[SERVER]    Resources -     CPU: {client_eval['eval_cpu_peak']:.1f}% peak / {client_eval['eval_cpu_avg']:.1f}% avg, RAM: {client_eval['eval_ram_peak_mb']:.1f} MB peak / {client_eval['eval_ram_avg_mb']:.1f} MB avg")
     
     if not eval_data:
         print("[SERVER] No valid evaluation data extracted")
@@ -402,20 +410,21 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
                                   round_eval_acc_mAP50 + round_eval_acc_mAP) / 4.0
     max_eval_time = max(c['eval_time'] for c in eval_data)
     
-    # ✅ AGGREGATE CLIENT EVALUATION RESOURCE METRICS
-    avg_eval_cpu_peak = sum(c['eval_cpu_peak'] for c in eval_data) / len(eval_data)
-    avg_eval_cpu_avg = sum(c['eval_cpu_avg'] for c in eval_data) / len(eval_data)
-    max_eval_ram_peak_mb = max(c['eval_ram_peak_mb'] for c in eval_data)
-    avg_eval_ram_avg_mb = sum(c['eval_ram_avg_mb'] for c in eval_data) / len(eval_data)
-    max_eval_ram_peak_pct = max(c['eval_ram_peak_pct'] for c in eval_data)
-    avg_eval_ram_avg_pct = sum(c['eval_ram_avg_pct'] for c in eval_data) / len(eval_data)
-    
-    avg_eval_sys_cpu_peak = sum(c['eval_sys_cpu_peak'] for c in eval_data) / len(eval_data)
-    avg_eval_sys_cpu_avg = sum(c['eval_sys_cpu_avg'] for c in eval_data) / len(eval_data)
-    max_eval_sys_ram_peak_mb = max(c['eval_sys_ram_peak_mb'] for c in eval_data)
-    avg_eval_sys_ram_avg_mb = sum(c['eval_sys_ram_avg_mb'] for c in eval_data) / len(eval_data)
-    max_eval_sys_ram_peak_pct = max(c['eval_sys_ram_peak_pct'] for c in eval_data)
-    avg_eval_sys_ram_avg_pct = sum(c['eval_sys_ram_avg_pct'] for c in eval_data) / len(eval_data)
+    # COMMENTED: Resource monitoring disabled
+    # AGGREGATE CLIENT EVALUATION RESOURCE METRICS
+    # avg_eval_cpu_peak = sum(c['eval_cpu_peak'] for c in eval_data) / len(eval_data)
+    # avg_eval_cpu_avg = sum(c['eval_cpu_avg'] for c in eval_data) / len(eval_data)
+    # max_eval_ram_peak_mb = max(c['eval_ram_peak_mb'] for c in eval_data)
+    # avg_eval_ram_avg_mb = sum(c['eval_ram_avg_mb'] for c in eval_data) / len(eval_data)
+    # max_eval_ram_peak_pct = max(c['eval_ram_peak_pct'] for c in eval_data)
+    # avg_eval_ram_avg_pct = sum(c['eval_ram_avg_pct'] for c in eval_data) / len(eval_data)
+    # 
+    # avg_eval_sys_cpu_peak = sum(c['eval_sys_cpu_peak'] for c in eval_data) / len(eval_data)
+    # avg_eval_sys_cpu_avg = sum(c['eval_sys_cpu_avg'] for c in eval_data) / len(eval_data)
+    # max_eval_sys_ram_peak_mb = max(c['eval_sys_ram_peak_mb'] for c in eval_data)
+    # avg_eval_sys_ram_avg_mb = sum(c['eval_sys_ram_avg_mb'] for c in eval_data) / len(eval_data)
+    # max_eval_sys_ram_peak_pct = max(c['eval_sys_ram_peak_pct'] for c in eval_data)
+    # avg_eval_sys_ram_avg_pct = sum(c['eval_sys_ram_avg_pct'] for c in eval_data) / len(eval_data)
     
     # Update current round with evaluation metrics
     current_round = ALL_ROUND_LOGS[-1]
@@ -445,69 +454,72 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
             client_logs_map[c['id']]["client_eval_loss"] = c['loss']
             client_logs_map[c['id']]["client_eval_time"] = c['eval_time']
             client_logs_map[c['id']]["client_eval_num_examples"] = int(c['examples'])
-            # ✅ Per-client evaluation resource metrics
-            client_logs_map[c['id']]["client_eval_resources"] = {
-                "per_process": {
-                    "cpu_percent_peak": c['eval_cpu_peak'],
-                    "cpu_percent_avg": c['eval_cpu_avg'],
-                    "ram_mb_peak": c['eval_ram_peak_mb'],
-                    "ram_mb_avg": c['eval_ram_avg_mb'],
-                    "ram_percent_peak": c['eval_ram_peak_pct'],
-                    "ram_percent_avg": c['eval_ram_avg_pct'],
-                },
-                "system_wide": {
-                    "cpu_percent_peak": c['eval_sys_cpu_peak'],
-                    "cpu_percent_avg": c['eval_sys_cpu_avg'],
-                    "ram_mb_peak": c['eval_sys_ram_peak_mb'],
-                    "ram_mb_avg": c['eval_sys_ram_avg_mb'],
-                    "ram_percent_peak": c['eval_sys_ram_peak_pct'],
-                    "ram_percent_avg": c['eval_sys_ram_avg_pct'],
-                }
-            }
+            # COMMENTED: Resource monitoring disabled
+            # Per-client evaluation resource metrics
+            # client_logs_map[c['id']]["client_eval_resources"] = {
+            #     "per_process": {
+            #         "cpu_percent_peak": c['eval_cpu_peak'],
+            #         "cpu_percent_avg": c['eval_cpu_avg'],
+            #         "ram_mb_peak": c['eval_ram_peak_mb'],
+            #         "ram_mb_avg": c['eval_ram_avg_mb'],
+            #         "ram_percent_peak": c['eval_ram_peak_pct'],
+            #         "ram_percent_avg": c['eval_ram_avg_pct'],
+            #     },
+            #     "system_wide": {
+            #         "cpu_percent_peak": c['eval_sys_cpu_peak'],
+            #         "cpu_percent_avg": c['eval_sys_cpu_avg'],
+            #         "ram_mb_peak": c['eval_sys_ram_peak_mb'],
+            #         "ram_mb_avg": c['eval_sys_ram_avg_mb'],
+            #         "ram_percent_peak": c['eval_sys_ram_peak_pct'],
+            #         "ram_percent_avg": c['eval_sys_ram_avg_pct'],
+            #     }
+            # }
     
-    # ✅ STOP SERVER AGGREGATION MONITORING
-    aggregation_resources = aggregation_monitor.stop()
-    print(f"[SERVER] Eval aggregation resources: CPU peak {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB")
+    # COMMENTED: Resource monitoring disabled
+    # STOP SERVER AGGREGATION MONITORING
+    # aggregation_resources = aggregation_monitor.stop()  # COMMENTED: Resource monitoring disabled
+    # print(f"[SERVER] Eval aggregation resources: CPU peak {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}%, RAM peak {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB")  # COMMENTED: Resource monitoring disabled
     
-    # ✅ ADD AGGREGATED EVALUATION RESOURCES TO ROUND LOG
-    current_round["server_eval_resources"] = {
-        "per_process": {
-            "cpu_percent_peak": aggregation_resources['per_process']['cpu_percent']['peak'],
-            "cpu_percent_avg": aggregation_resources['per_process']['cpu_percent']['avg'],
-            "ram_mb_peak": aggregation_resources['per_process']['memory_mb']['peak'],
-            "ram_mb_avg": aggregation_resources['per_process']['memory_mb']['avg'],
-            "ram_percent_peak": aggregation_resources['per_process']['memory_percent']['peak'],
-            "ram_percent_avg": aggregation_resources['per_process']['memory_percent']['avg'],
-        },
-        "system_wide": {
-            "cpu_percent_peak": aggregation_resources['system_wide']['cpu_percent']['peak'],
-            "cpu_percent_avg": aggregation_resources['system_wide']['cpu_percent']['avg'],
-            "ram_mb_peak": aggregation_resources['system_wide']['memory_mb']['peak'],
-            "ram_mb_avg": aggregation_resources['system_wide']['memory_mb']['avg'],
-            "ram_percent_peak": aggregation_resources['system_wide']['memory_percent']['peak'],
-            "ram_percent_avg": aggregation_resources['system_wide']['memory_percent']['avg'],
-        }
-    }
+    # ADD AGGREGATED EVALUATION RESOURCES TO ROUND LOG
+    # current_round["server_eval_resources"] = {
+    #     "per_process": {
+    #         "cpu_percent_peak": aggregation_resources['per_process']['cpu_percent']['peak'],
+    #         "cpu_percent_avg": aggregation_resources['per_process']['cpu_percent']['avg'],
+    #         "ram_mb_peak": aggregation_resources['per_process']['memory_mb']['peak'],
+    #         "ram_mb_avg": aggregation_resources['per_process']['memory_mb']['avg'],
+    #         "ram_percent_peak": aggregation_resources['per_process']['memory_percent']['peak'],
+    #         "ram_percent_avg": aggregation_resources['per_process']['memory_percent']['avg'],
+    #     },
+    #     "system_wide": {
+    #         "cpu_percent_peak": aggregation_resources['system_wide']['cpu_percent']['peak'],
+    #         "cpu_percent_avg": aggregation_resources['system_wide']['cpu_percent']['avg'],
+    #         "ram_mb_peak": aggregation_resources['system_wide']['memory_mb']['peak'],
+    #         "ram_mb_avg": aggregation_resources['system_wide']['memory_mb']['avg'],
+    #         "ram_percent_peak": aggregation_resources['system_wide']['memory_percent']['peak'],
+    #         "ram_percent_avg": aggregation_resources['system_wide']['memory_percent']['avg'],
+    #     }
+    # }
     
-    # ✅ ADD AGGREGATED CLIENT EVALUATION RESOURCES TO ROUND LOG
-    current_round["aggregated_client_eval_resources"] = {
-        "per_process": {
-            "cpu_percent_peak_avg": avg_eval_cpu_peak,
-            "cpu_percent_avg": avg_eval_cpu_avg,
-            "ram_mb_peak_max": max_eval_ram_peak_mb,
-            "ram_mb_avg": avg_eval_ram_avg_mb,
-            "ram_percent_peak_max": max_eval_ram_peak_pct,
-            "ram_percent_avg": avg_eval_ram_avg_pct,
-        },
-        "system_wide": {
-            "cpu_percent_peak_avg": avg_eval_sys_cpu_peak,
-            "cpu_percent_avg": avg_eval_sys_cpu_avg,
-            "ram_mb_peak_max": max_eval_sys_ram_peak_mb,
-            "ram_mb_avg": avg_eval_sys_ram_avg_mb,
-            "ram_percent_peak_max": max_eval_sys_ram_peak_pct,
-            "ram_percent_avg": avg_eval_sys_ram_avg_pct,
-        }
-    }
+    # COMMENTED: Resource monitoring disabled
+    # ADD AGGREGATED CLIENT EVALUATION RESOURCES TO ROUND LOG
+    # current_round["aggregated_client_eval_resources"] = {
+    #     "per_process": {
+    #         "cpu_percent_peak_avg": avg_eval_cpu_peak,
+    #         "cpu_percent_avg": avg_eval_cpu_avg,
+    #         "ram_mb_peak_max": max_eval_ram_peak_mb,
+    #         "ram_mb_avg": avg_eval_ram_avg_mb,
+    #         "ram_percent_peak_max": max_eval_ram_peak_pct,
+    #         "ram_percent_avg": avg_eval_ram_avg_pct,
+    #     },
+    #     "system_wide": {
+    #         "cpu_percent_peak_avg": avg_eval_sys_cpu_peak,
+    #         "cpu_percent_avg": avg_eval_sys_cpu_avg,
+    #         "ram_mb_peak_max": max_eval_sys_ram_peak_mb,
+    #         "ram_mb_avg": avg_eval_sys_ram_avg_mb,
+    #         "ram_percent_peak_max": max_eval_sys_ram_peak_pct,
+    #         "ram_percent_avg": avg_eval_sys_ram_avg_pct,
+    #     }
+    # }
     
     print(f"[SERVER] {'='*80}")
     print(f"[SERVER] ROUND {(CURRENT_ROUND+1)} EVALUATION SUMMARY")
@@ -518,8 +530,9 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
     print(f"[SERVER] Validation mAP:    {round_eval_acc_mAP:.4f}")
     print(f"[SERVER] Aggregated Score:  {round_eval_acc_aggregated:.4f}")
     print(f"[SERVER] Eval Duration:     {max_eval_time:.2f}s")
-    print(f"[SERVER] Avg Client CPU: {avg_eval_cpu_peak:.1f}% (peak), RAM: {max_eval_ram_peak_mb:.1f} MB (peak)")
-    print(f"[SERVER] Server CPU: {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}% (peak), RAM: {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB (peak)")
+    # COMMENTED: Resource monitoring disabled
+    # print(f"[SERVER] Avg Client CPU: {avg_eval_cpu_peak:.1f}% (peak), RAM: {max_eval_ram_peak_mb:.1f} MB (peak)")
+    # print(f"[SERVER] Server CPU: {aggregation_resources['per_process']['cpu_percent']['peak']:.1f}% (peak), RAM: {aggregation_resources['per_process']['memory_mb']['peak']:.1f} MB (peak)")
     print(f"[SERVER] {'='*80}\n")
     
     # FIX 4: Report intermediate result to Optuna after every eval round so

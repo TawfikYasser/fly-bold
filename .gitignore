@@ -15,3 +15,6 @@ vm-stoper.sh
 /flower/yolov5/run_detect.py
 /flower/100101001.txt
 53101003.txt
+103101004.txt
+/flower/EXP_YOLOv5_s_detection_103101004_hpo.db
+trial_results_103101004.html
