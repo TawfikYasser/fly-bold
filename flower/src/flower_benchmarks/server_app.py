@@ -544,7 +544,7 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
         step = len(ALL_ROUND_LOGS) - 1  # 0-indexed: just appended above
         CURRENT_OPTUNA_TRIAL.report(round_eval_acc_mAP50, step=step)
         if CURRENT_OPTUNA_TRIAL.should_prune():
-            print(f"[OPTUNA] Pruning trial at step {step} "
+            print(f"[OPTUNA] Pruning trial at step {(step+1)} "
                   f"(mAP@0.5={round_eval_acc_mAP50:.4f})")
             raise _TrialPruneSignal()
 
@@ -982,51 +982,69 @@ def main(grid: Grid, context: Context) -> None:
         study.add_trial(optuna.trial.create_trial(
             params=best_prev_params[1],
             distributions=distributions["fedavg"],
-            value=0.5218,
+            value=0.5309,
             state=optuna.trial.TrialState.COMPLETE,
         ))
         study.add_trial(optuna.trial.create_trial(
             params=best_prev_params[1],
             distributions=distributions["fedavg"],
-            value=0.5181,
+            value=0.5211,
             state=optuna.trial.TrialState.COMPLETE,
         ))
         study.add_trial(optuna.trial.create_trial(
             params=best_prev_params[1],
             distributions=distributions["fedavg"],
-            value=0.5162,
+            value=0.5200,
             state=optuna.trial.TrialState.COMPLETE,
         ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[1],
-            distributions=distributions["fedavg"],
-            value=0.5048,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[2],
-            distributions=distributions["fedadam"],
-            value=0.5001,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[3],
-            distributions=distributions["fedyogi"],
-            value=0.5001,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[4],
-            distributions=distributions["fedyogi"],
-            value=0.4448,
-            state=optuna.trial.TrialState.PRUNED,
-        ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[5],
-            distributions=distributions["fedprox"],
-            value=0.5039,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[1],
+        #     distributions=distributions["fedavg"],
+        #     value=0.5218,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[1],
+        #     distributions=distributions["fedavg"],
+        #     value=0.5181,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[1],
+        #     distributions=distributions["fedavg"],
+        #     value=0.5162,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[1],
+        #     distributions=distributions["fedavg"],
+        #     value=0.5048,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[2],
+        #     distributions=distributions["fedadam"],
+        #     value=0.5001,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[3],
+        #     distributions=distributions["fedyogi"],
+        #     value=0.5001,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[4],
+        #     distributions=distributions["fedyogi"],
+        #     value=0.4448,
+        #     state=optuna.trial.TrialState.PRUNED,
+        # ))
+        # study.add_trial(optuna.trial.create_trial(
+        #     params=best_prev_params[5],
+        #     distributions=distributions["fedprox"],
+        #     value=0.5039,
+        #     state=optuna.trial.TrialState.COMPLETE,
+        # ))
 
         study.optimize(objective, n_trials=n_optuna_trials)
 
