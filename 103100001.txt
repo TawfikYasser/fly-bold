@@ -1,0 +1,2529 @@
+INFO :      Starting logstream for run_id `3629143755634030602`
+INFO :      Start `flwr-serverapp` process
+🎊 Successfully installed flower_benchmarks to /root/.flwr/apps/tawfik.flower_benchmarks.1.0.168.d4ad1d15.
+
+======================================================================
+FEDERATED LEARNING CONFIGURATION
+======================================================================
+Experiment:     EXP_YOLOv5_s_detection
+Run ID:         103100001
+Task:           detection
+Rounds:         10
+Fraction Train: 1.0
+Fraction Eval:  1.0
+Learning Rate:  0.001
+YOLO Size:      s
+======================================================================
+
+Loading YOLO weights: yolov5s.pt
+âœ… Found YOLO weights at: /app/yolov5/yolov5s.pt
+âœ… YOLO initial arrays loaded: 349 layers
+
+======================================================================
+OPTUNA HPO: 10 trials x 3 proxy rounds each
+======================================================================
+
+
+[OPTUNA-OBJECTIVE] Starting trial 1 with lr=0.001000, strategy=1, local_epochs=3, batch_size=16
+Using strategy: FedAvg
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_1]
+  lr=0.001000  rounds=3 strategy=1 local_epochs=3 batch_size=16
+======================================================================
+
+INFO :      Starting FedAvg strategy:
+Starting FedAvg strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.001, 'num_rounds': 3, 'local-epochs': 3, 'batch_size': 16, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.001, 'num_rounds': 3, 'local-epochs': 3, 'batch_size': 16, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1333, mAP@0.5: 0.5082, mAP: 0.3378, Time: 225.44s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1294, mAP@0.5: 0.6763, mAP: 0.4899, Time: 396.96s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1289, mAP@0.5: 0.6430, mAP: 0.4284, Time: 686.72s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1259, mAP@0.5: 0.5673, mAP: 0.3832, Time: 840.29s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1286, mAP@0.5: 0.5386, mAP: 0.3599, Time: 1512.72s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1276, mAP@0.5: 0.5018, mAP: 0.3312, Time: 1587.22s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1298, mAP@0.5: 0.5618, mAP: 0.3817, Time: 1884.94s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1286, mAP@0.5: 0.5308, mAP: 0.3516, Time: 1952.57s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1275, mAP@0.5: 0.5336, mAP: 0.3549, Time: 2795.52s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1277, mAP@0.5: 0.5704, mAP: 0.3800, Time: 2889.76s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1283
+[SERVER] Training mAP@0.5:  0.5507
+[SERVER] Training mAP:      0.3687
+[SERVER] Aggregated Score:  0.5215
+[SERVER] Round Duration:    2889.75s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12828119597057883, 'train_accuracy': 0.5215250127918133, 'train_mAP50': 0.5507139993604093}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12828119597057883, 'train_accuracy': 0.5215250127918133, 'train_mAP50': 0.5507139993604093}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1123, mAP@0.5: 0.5083, mAP: 0.3379, Time: 8.66s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0634, mAP@0.5: 0.6914, mAP: 0.5065, Time: 9.61s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5700, mAP: 0.3875, Time: 15.71s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1051, mAP@0.5: 0.6149, mAP: 0.4116, Time: 16.98s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1063, mAP@0.5: 0.5136, mAP: 0.3368, Time: 23.40s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.4995, mAP: 0.3479, Time: 23.10s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1049, mAP@0.5: 0.5452, mAP: 0.3628, Time: 32.04s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1045, mAP@0.5: 0.5218, mAP: 0.3500, Time: 34.73s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.4953, mAP: 0.3265, Time: 48.26s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1022, mAP@0.5: 0.5089, mAP: 0.3395, Time: 50.43s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1037
+[SERVER] Validation mAP@0.5: 0.5225
+[SERVER] Validation mAP:    0.3496
+[SERVER] Aggregated Score:  0.5020
+[SERVER] Eval Duration:     50.43s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.1036818958093041, 'eval_accuracy': 0.5020251124630863, 'eval_mAP50': 0.5225293403737471}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.1036818958093041, 'eval_accuracy': 0.5020251124630863, 'eval_mAP50': 0.5225293403737471}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1304, mAP@0.5: 0.5123, mAP: 0.3387, Time: 246.36s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1286, mAP@0.5: 0.6833, mAP: 0.4894, Time: 378.14s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1285, mAP@0.5: 0.6474, mAP: 0.4301, Time: 694.17s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1248, mAP@0.5: 0.5680, mAP: 0.3849, Time: 838.69s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1279, mAP@0.5: 0.5414, mAP: 0.3609, Time: 1511.06s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.5007, mAP: 0.3315, Time: 1549.69s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1293, mAP@0.5: 0.5642, mAP: 0.3818, Time: 1817.70s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1282, mAP@0.5: 0.5306, mAP: 0.3521, Time: 1912.59s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.5351, mAP: 0.3539, Time: 2711.24s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1274, mAP@0.5: 0.5707, mAP: 0.3811, Time: 2801.47s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1278
+[SERVER] Training mAP@0.5:  0.5521
+[SERVER] Training mAP:      0.3691
+[SERVER] Aggregated Score:  0.5213
+[SERVER] Round Duration:    2801.47s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12778341589382794, 'train_accuracy': 0.5213456966741287, 'train_mAP50': 0.5520600818676048}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12778341589382794, 'train_accuracy': 0.5213456966741287, 'train_mAP50': 0.5520600818676048}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1115, mAP@0.5: 0.5123, mAP: 0.3390, Time: 8.64s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1031, mAP@0.5: 0.5753, mAP: 0.3938, Time: 15.44s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0628, mAP@0.5: 0.6833, mAP: 0.4895, Time: 9.34s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1063, mAP@0.5: 0.5150, mAP: 0.3376, Time: 24.42s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1052, mAP@0.5: 0.6190, mAP: 0.4133, Time: 16.57s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1027, mAP@0.5: 0.5266, mAP: 0.3669, Time: 23.23s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1049, mAP@0.5: 0.5308, mAP: 0.3577, Time: 32.50s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1044, mAP@0.5: 0.5057, mAP: 0.3390, Time: 34.61s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.4861, mAP: 0.3208, Time: 51.13s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1022, mAP@0.5: 0.5135, mAP: 0.3419, Time: 52.72s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1037
+[SERVER] Validation mAP@0.5: 0.5191
+[SERVER] Validation mAP:    0.3481
+[SERVER] Aggregated Score:  0.5015
+[SERVER] Eval Duration:     52.72s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.1036521322568243, 'eval_accuracy': 0.5014725662872954, 'eval_mAP50': 0.5191308260989507}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.1036521322568243, 'eval_accuracy': 0.5014725662872954, 'eval_mAP50': 0.5191308260989507}
+INFO :      
+
+INFO :      [ROUND 3/3]
+[ROUND 3/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1301, mAP@0.5: 0.5158, mAP: 0.3383, Time: 238.76s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1273, mAP@0.5: 0.6805, mAP: 0.4869, Time: 398.69s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1276, mAP@0.5: 0.6547, mAP: 0.4301, Time: 671.52s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1246, mAP@0.5: 0.5686, mAP: 0.3842, Time: 837.42s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1279, mAP@0.5: 0.5399, mAP: 0.3603, Time: 1508.27s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5026, mAP: 0.3334, Time: 1531.26s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1292, mAP@0.5: 0.5616, mAP: 0.3836, Time: 1805.73s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1280, mAP@0.5: 0.5326, mAP: 0.3541, Time: 1938.10s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1270, mAP@0.5: 0.5356, mAP: 0.3545, Time: 2577.90s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.5714, mAP: 0.3809, Time: 2755.98s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1276
+[SERVER] Training mAP@0.5:  0.5526
+[SERVER] Training mAP:      0.3698
+[SERVER] Aggregated Score:  0.5218
+[SERVER] Round Duration:    2755.97s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.127551084042213, 'train_accuracy': 0.5217961528621682, 'train_mAP50': 0.5526455292612727}
+        └──> Aggregated MetricRecord: {'train_loss': 0.127551084042213, 'train_accuracy': 0.5217961528621682, 'train_mAP50': 0.5526455292612727}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1110, mAP@0.5: 0.5152, mAP: 0.3379, Time: 8.80s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0628, mAP@0.5: 0.6773, mAP: 0.4907, Time: 9.72s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1051, mAP@0.5: 0.6557, mAP: 0.4354, Time: 16.53s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5755, mAP: 0.3926, Time: 15.30s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.5315, mAP: 0.3659, Time: 23.62s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1064, mAP@0.5: 0.5149, mAP: 0.3379, Time: 24.14s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1049, mAP@0.5: 0.5386, mAP: 0.3622, Time: 33.61s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1043, mAP@0.5: 0.5208, mAP: 0.3478, Time: 33.34s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.4857, mAP: 0.3220, Time: 47.62s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1022, mAP@0.5: 0.5174, mAP: 0.3476, Time: 49.13s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1037
+[SERVER] Validation mAP@0.5: 0.5253
+[SERVER] Validation mAP:    0.3523
+[SERVER] Aggregated Score:  0.5046
+[SERVER] Eval Duration:     49.13s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.1036628250672818, 'eval_accuracy': 0.504597938104427, 'eval_mAP50': 0.5253169976820776}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.1036628250672818, 'eval_accuracy': 0.504597938104427, 'eval_mAP50': 0.5253169976820776}
+INFO :      
+
+INFO :      Strategy execution finished in 8748.79s
+Strategy execution finished in 8748.79s
+INFO :      
+
+INFO :      Final results:
+Final results:
+INFO :      
+
+INFO :          Global Arrays:
+        Global Arrays:
+INFO :                  ArrayRecord (13.880 MB)
+                ArrayRecord (13.880 MB)
+INFO :      
+
+INFO :          Aggregated ClientApp-side Train Metrics:
+        Aggregated ClientApp-side Train Metrics:
+INFO :          { 1: { 'train_accuracy': '5.2153e-01',
+        { 1: { 'train_accuracy': '5.2153e-01',
+INFO :                 'train_loss': '1.2828e-01',
+               'train_loss': '1.2828e-01',
+INFO :                 'train_mAP50': '5.5071e-01'},
+               'train_mAP50': '5.5071e-01'},
+INFO :            2: { 'train_accuracy': '5.2135e-01',
+          2: { 'train_accuracy': '5.2135e-01',
+INFO :                 'train_loss': '1.2778e-01',
+               'train_loss': '1.2778e-01',
+INFO :                 'train_mAP50': '5.5206e-01'},
+               'train_mAP50': '5.5206e-01'},
+INFO :            3: { 'train_accuracy': '5.2180e-01',
+          3: { 'train_accuracy': '5.2180e-01',
+INFO :                 'train_loss': '1.2755e-01',
+               'train_loss': '1.2755e-01',
+INFO :                 'train_mAP50': '5.5265e-01'}}
+               'train_mAP50': '5.5265e-01'}}
+INFO :      
+
+INFO :          Aggregated ClientApp-side Evaluate Metrics:
+        Aggregated ClientApp-side Evaluate Metrics:
+INFO :          { 1: { 'eval_accuracy': '5.0203e-01',
+        { 1: { 'eval_accuracy': '5.0203e-01',
+INFO :                 'eval_loss': '1.0368e-01',
+               'eval_loss': '1.0368e-01',
+INFO :                 'eval_mAP50': '5.2253e-01'},
+               'eval_mAP50': '5.2253e-01'},
+INFO :            2: { 'eval_accuracy': '5.0147e-01',
+          2: { 'eval_accuracy': '5.0147e-01',
+INFO :                 'eval_loss': '1.0365e-01',
+               'eval_loss': '1.0365e-01',
+INFO :                 'eval_mAP50': '5.1913e-01'},
+               'eval_mAP50': '5.1913e-01'},
+INFO :            3: { 'eval_accuracy': '5.0460e-01',
+          3: { 'eval_accuracy': '5.0460e-01',
+INFO :                 'eval_loss': '1.0366e-01',
+               'eval_loss': '1.0366e-01',
+INFO :                 'eval_mAP50': '5.2532e-01'}}
+               'eval_mAP50': '5.2532e-01'}}
+INFO :      
+
+INFO :          ServerApp-side Evaluate Metrics:
+        ServerApp-side Evaluate Metrics:
+INFO :          {}
+        {}
+INFO :      
+
+[OPTUNA] Trial   1 -> mAP@0.5=0.5253  (lr=0.00100, strategy=1, epochs=3, batch=16)
+
+[OPTUNA-OBJECTIVE] Starting trial 5 with lr=0.000561, strategy=3, local_epochs=5, batch_size=8
+Using strategy: FedAdam
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_5]
+  lr=0.000561  rounds=3 strategy=3 local_epochs=5 batch_size=8
+======================================================================
+
+INFO :      Starting FedAdam strategy:
+Starting FedAdam strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.0005611516415334506, 'num_rounds': 3, 'local-epochs': 5, 'batch_size': 8, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.0005611516415334506, 'num_rounds': 3, 'local-epochs': 5, 'batch_size': 8, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedOpt settings:
+        ├──> FedOpt settings:
+INFO :          │       ├── eta (0.0814829) | eta_l (0.00113647)
+        │       ├── eta (0.0814829) | eta_l (0.00113647)
+INFO :          │       ├── beta_1 (0.984283) | beta_2 (0.982412)
+        │       ├── beta_1 (0.984283) | beta_2 (0.982412)
+INFO :          │       └── tau (0.000265875)
+        │       └── tau (0.000265875)
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1336, mAP@0.5: 0.4848, mAP: 0.3313, Time: 402.10s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1329, mAP@0.5: 0.7038, mAP: 0.4948, Time: 609.16s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1330, mAP@0.5: 0.6447, mAP: 0.4239, Time: 1139.39s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1329, mAP@0.5: 0.5601, mAP: 0.3788, Time: 1311.80s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1312, mAP@0.5: 0.5379, mAP: 0.3625, Time: 2428.34s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1298, mAP@0.5: 0.4992, mAP: 0.3297, Time: 2448.38s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1296, mAP@0.5: 0.5506, mAP: 0.3791, Time: 3107.51s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1288, mAP@0.5: 0.5246, mAP: 0.3492, Time: 3114.18s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1292, mAP@0.5: 0.5322, mAP: 0.3530, Time: 4058.00s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1291, mAP@0.5: 0.5708, mAP: 0.3757, Time: 4483.77s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1302
+[SERVER] Training mAP@0.5:  0.5478
+[SERVER] Training mAP:      0.3667
+[SERVER] Aggregated Score:  0.5169
+[SERVER] Round Duration:    4483.77s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.13018559453149983, 'train_accuracy': 0.5168825715542053, 'train_mAP50': 0.5477912424048609}
+        └──> Aggregated MetricRecord: {'train_loss': 0.13018559453149983, 'train_accuracy': 0.5168825715542053, 'train_mAP50': 0.5477912424048609}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0760, mAP@0.5: 0.6901, mAP: 0.4939, Time: 9.21s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1094, mAP@0.5: 0.5118, mAP: 0.3370, Time: 9.63s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1055, mAP@0.5: 0.5690, mAP: 0.3870, Time: 15.14s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1074, mAP@0.5: 0.5396, mAP: 0.3605, Time: 16.06s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1085, mAP@0.5: 0.5089, mAP: 0.3351, Time: 23.46s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1036, mAP@0.5: 0.5258, mAP: 0.3641, Time: 23.71s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.5000, mAP: 0.3369, Time: 35.54s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1066, mAP@0.5: 0.5197, mAP: 0.3509, Time: 34.96s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1045, mAP@0.5: 0.5050, mAP: 0.3376, Time: 51.35s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1056, mAP@0.5: 0.4835, mAP: 0.3192, Time: 51.89s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1052
+[SERVER] Validation mAP@0.5: 0.5109
+[SERVER] Validation mAP:    0.3431
+[SERVER] Aggregated Score:  0.4918
+[SERVER] Eval Duration:     51.89s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10520960861207228, 'eval_accuracy': 0.4918132819063484, 'eval_mAP50': 0.5108643169304976}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10520960861207228, 'eval_accuracy': 0.4918132819063484, 'eval_mAP50': 0.5108643169304976}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.2325, mAP@0.5: 0.0673, mAP: 0.0263, Time: 430.91s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.2195, mAP@0.5: 0.1158, mAP: 0.0423, Time: 567.20s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1943, mAP@0.5: 0.2049, mAP: 0.0868, Time: 1106.07s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1924, mAP@0.5: 0.2035, mAP: 0.0878, Time: 1361.53s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1683, mAP@0.5: 0.3041, mAP: 0.1585, Time: 2466.37s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1612, mAP@0.5: 0.3267, mAP: 0.1764, Time: 2657.73s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1662, mAP@0.5: 0.3114, mAP: 0.1612, Time: 3242.82s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1670, mAP@0.5: 0.2813, mAP: 0.1428, Time: 3254.74s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1663, mAP@0.5: 0.2789, mAP: 0.1442, Time: 4176.97s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1636, mAP@0.5: 0.3311, mAP: 0.1703, Time: 4518.65s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1712
+[SERVER] Training mAP@0.5:  0.2851
+[SERVER] Training mAP:      0.1454
+[SERVER] Aggregated Score:  0.2820
+[SERVER] Round Duration:    4518.65s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.1712284805884234, 'train_accuracy': 0.2819527966101695, 'train_mAP50': 0.2851028402622322}
+        └──> Aggregated MetricRecord: {'train_loss': 0.1712284805884234, 'train_accuracy': 0.2819527966101695, 'train_mAP50': 0.2851028402622322}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.1759, mAP@0.5: 0.1355, mAP: 0.0485, Time: 11.81s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.2013, mAP@0.5: 0.0892, mAP: 0.0288, Time: 10.27s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1618, mAP@0.5: 0.2005, mAP: 0.0873, Time: 19.91s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1656, mAP@0.5: 0.2119, mAP: 0.0867, Time: 19.07s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1404, mAP@0.5: 0.3009, mAP: 0.1562, Time: 28.29s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1367, mAP@0.5: 0.2449, mAP: 0.1264, Time: 28.74s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1373, mAP@0.5: 0.2570, mAP: 0.1324, Time: 39.70s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1355, mAP@0.5: 0.3176, mAP: 0.1697, Time: 40.38s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1365, mAP@0.5: 0.2851, mAP: 0.1484, Time: 66.15s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1393, mAP@0.5: 0.2533, mAP: 0.1269, Time: 68.66s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1400
+[SERVER] Validation mAP@0.5: 0.2702
+[SERVER] Validation mAP:    0.1385
+[SERVER] Aggregated Score:  0.2717
+[SERVER] Eval Duration:     68.66s
+[SERVER] ================================================================================
+
+[OPTUNA] Pruning trial at step 1 (mAP@0.5=0.2702)
+
+[OPTUNA-OBJECTIVE] Starting trial 6 with lr=0.000231, strategy=2, local_epochs=1, batch_size=16
+Using strategy: FedYogi
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_6]
+  lr=0.000231  rounds=3 strategy=2 local_epochs=1 batch_size=16
+======================================================================
+
+INFO :      Starting FedYogi strategy:
+Starting FedYogi strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.0002310201887845295, 'num_rounds': 3, 'local-epochs': 1, 'batch_size': 16, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.0002310201887845295, 'num_rounds': 3, 'local-epochs': 1, 'batch_size': 16, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedOpt settings:
+        ├──> FedOpt settings:
+INFO :          │       ├── eta (0.00125628) | eta_l (0.00816846)
+        │       ├── eta (0.00125628) | eta_l (0.00816846)
+INFO :          │       ├── beta_1 (0.949183) | beta_2 (0.919768)
+        │       ├── beta_1 (0.949183) | beta_2 (0.919768)
+INFO :          │       └── tau (0.00106775)
+        │       └── tau (0.00106775)
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1376, mAP@0.5: 0.4982, mAP: 0.3144, Time: 92.08s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1346, mAP@0.5: 0.6950, mAP: 0.5101, Time: 142.98s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1360, mAP@0.5: 0.6430, mAP: 0.4324, Time: 247.78s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1347, mAP@0.5: 0.5664, mAP: 0.3860, Time: 290.11s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1312, mAP@0.5: 0.5145, mAP: 0.3381, Time: 519.41s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1316, mAP@0.5: 0.5406, mAP: 0.3631, Time: 542.21s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1324, mAP@0.5: 0.5635, mAP: 0.3921, Time: 660.89s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1304, mAP@0.5: 0.5285, mAP: 0.3530, Time: 666.22s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1321, mAP@0.5: 0.5368, mAP: 0.3544, Time: 886.26s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1330, mAP@0.5: 0.5703, mAP: 0.3777, Time: 940.27s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1324
+[SERVER] Training mAP@0.5:  0.5534
+[SERVER] Training mAP:      0.3719
+[SERVER] Aggregated Score:  0.5219
+[SERVER] Round Duration:    940.26s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.13238817304125358, 'train_accuracy': 0.5219003113207548, 'train_mAP50': 0.5533921704509114}
+        └──> Aggregated MetricRecord: {'train_loss': 0.13238817304125358, 'train_accuracy': 0.5219003113207548, 'train_mAP50': 0.5533921704509114}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1133, mAP@0.5: 0.4991, mAP: 0.3145, Time: 8.55s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0645, mAP@0.5: 0.6952, mAP: 0.5102, Time: 9.49s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1060, mAP@0.5: 0.5923, mAP: 0.3987, Time: 16.56s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.5665, mAP: 0.3860, Time: 15.66s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1025, mAP@0.5: 0.5427, mAP: 0.3784, Time: 24.82s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1064, mAP@0.5: 0.5083, mAP: 0.3356, Time: 24.66s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1048, mAP@0.5: 0.5284, mAP: 0.3562, Time: 31.85s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.4944, mAP: 0.3315, Time: 34.24s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1020, mAP@0.5: 0.5101, mAP: 0.3392, Time: 60.84s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1046, mAP@0.5: 0.4849, mAP: 0.3179, Time: 57.50s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1037
+[SERVER] Validation mAP@0.5: 0.5157
+[SERVER] Validation mAP:    0.3458
+[SERVER] Aggregated Score:  0.4961
+[SERVER] Eval Duration:     60.84s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10367911264898116, 'eval_accuracy': 0.4961061106971876, 'eval_mAP50': 0.5156970352862187}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10367911264898116, 'eval_accuracy': 0.4961061106971876, 'eval_mAP50': 0.5156970352862187}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1374, mAP@0.5: 0.5001, mAP: 0.3149, Time: 89.05s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1351, mAP@0.5: 0.6904, mAP: 0.5065, Time: 133.20s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1362, mAP@0.5: 0.6449, mAP: 0.4333, Time: 249.40s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1345, mAP@0.5: 0.5690, mAP: 0.3880, Time: 298.10s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1316, mAP@0.5: 0.5404, mAP: 0.3633, Time: 517.91s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1312, mAP@0.5: 0.5147, mAP: 0.3364, Time: 540.48s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1322, mAP@0.5: 0.5651, mAP: 0.3913, Time: 677.60s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1303, mAP@0.5: 0.5284, mAP: 0.3531, Time: 682.14s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1319, mAP@0.5: 0.5368, mAP: 0.3553, Time: 871.89s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1332, mAP@0.5: 0.5697, mAP: 0.3777, Time: 937.28s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1324
+[SERVER] Training mAP@0.5:  0.5537
+[SERVER] Training mAP:      0.3718
+[SERVER] Aggregated Score:  0.5222
+[SERVER] Round Duration:    937.28s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.13236091506236008, 'train_accuracy': 0.522156756236009, 'train_mAP50': 0.5536751064918451}
+        └──> Aggregated MetricRecord: {'train_loss': 0.13236091506236008, 'train_accuracy': 0.522156756236009, 'train_mAP50': 0.5536751064918451}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0646, mAP@0.5: 0.6906, mAP: 0.5067, Time: 9.27s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1132, mAP@0.5: 0.4999, mAP: 0.3152, Time: 8.85s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1060, mAP@0.5: 0.6383, mAP: 0.4291, Time: 16.61s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5688, mAP: 0.3878, Time: 15.62s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1064, mAP@0.5: 0.5147, mAP: 0.3363, Time: 24.05s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1025, mAP@0.5: 0.5347, mAP: 0.3710, Time: 22.14s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.4964, mAP: 0.3329, Time: 34.15s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1048, mAP@0.5: 0.5322, mAP: 0.3598, Time: 33.66s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1020, mAP@0.5: 0.5133, mAP: 0.3423, Time: 49.46s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1046, mAP@0.5: 0.4888, mAP: 0.3223, Time: 48.72s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1037
+[SERVER] Validation mAP@0.5: 0.5193
+[SERVER] Validation mAP:    0.3484
+[SERVER] Aggregated Score:  0.4994
+[SERVER] Eval Duration:     49.46s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10367193310265284, 'eval_accuracy': 0.499373765700956, 'eval_mAP50': 0.5193341901809706}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10367193310265284, 'eval_accuracy': 0.499373765700956, 'eval_mAP50': 0.5193341901809706}
+INFO :      
+
+INFO :      [ROUND 3/3]
+[ROUND 3/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1378, mAP@0.5: 0.5009, mAP: 0.3155, Time: 93.82s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1348, mAP@0.5: 0.6932, mAP: 0.5089, Time: 144.98s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1363, mAP@0.5: 0.6464, mAP: 0.4353, Time: 255.13s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1347, mAP@0.5: 0.5689, mAP: 0.3859, Time: 285.18s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1313, mAP@0.5: 0.5160, mAP: 0.3383, Time: 523.29s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1319, mAP@0.5: 0.5398, mAP: 0.3639, Time: 550.28s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1326, mAP@0.5: 0.5633, mAP: 0.3918, Time: 639.74s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1304, mAP@0.5: 0.5288, mAP: 0.3530, Time: 668.78s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1319, mAP@0.5: 0.5362, mAP: 0.3548, Time: 890.32s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1331, mAP@0.5: 0.5700, mAP: 0.3784, Time: 946.35s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1325
+[SERVER] Training mAP@0.5:  0.5537
+[SERVER] Training mAP:      0.3723
+[SERVER] Aggregated Score:  0.5225
+[SERVER] Round Duration:    946.35s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.13248454832107454, 'train_accuracy': 0.5224751885193476, 'train_mAP50': 0.5537084707387272}
+        └──> Aggregated MetricRecord: {'train_loss': 0.13248454832107454, 'train_accuracy': 0.5224751885193476, 'train_mAP50': 0.5537084707387272}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0647, mAP@0.5: 0.6949, mAP: 0.5095, Time: 8.95s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1132, mAP@0.5: 0.5008, mAP: 0.3157, Time: 8.55s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.5692, mAP: 0.3861, Time: 15.54s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1059, mAP@0.5: 0.5360, mAP: 0.3672, Time: 16.13s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1026, mAP@0.5: 0.5417, mAP: 0.3780, Time: 23.85s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1064, mAP@0.5: 0.5093, mAP: 0.3351, Time: 23.41s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1048, mAP@0.5: 0.5190, mAP: 0.3512, Time: 32.38s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.5079, mAP: 0.3418, Time: 33.86s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1046, mAP@0.5: 0.4851, mAP: 0.3191, Time: 48.36s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1020, mAP@0.5: 0.5177, mAP: 0.3458, Time: 48.45s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1037
+[SERVER] Validation mAP@0.5: 0.5161
+[SERVER] Validation mAP:    0.3470
+[SERVER] Aggregated Score:  0.4968
+[SERVER] Eval Duration:     48.45s
+[SERVER] ================================================================================
+
+[OPTUNA] Pruning trial at step 2 (mAP@0.5=0.5161)
+
+[OPTUNA-OBJECTIVE] Starting trial 7 with lr=0.001530, strategy=2, local_epochs=1, batch_size=8
+Using strategy: FedYogi
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_7]
+  lr=0.001530  rounds=3 strategy=2 local_epochs=1 batch_size=8
+======================================================================
+
+INFO :      Starting FedYogi strategy:
+Starting FedYogi strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.0015304852121831463, 'num_rounds': 3, 'local-epochs': 1, 'batch_size': 8, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.0015304852121831463, 'num_rounds': 3, 'local-epochs': 1, 'batch_size': 8, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedOpt settings:
+        ├──> FedOpt settings:
+INFO :          │       ├── eta (0.000196343) | eta_l (0.0233596)
+        │       ├── eta (0.000196343) | eta_l (0.0233596)
+INFO :          │       ├── beta_1 (0.883629) | beta_2 (0.912082)
+        │       ├── beta_1 (0.883629) | beta_2 (0.912082)
+INFO :          │       └── tau (0.000978034)
+        │       └── tau (0.000978034)
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1421, mAP@0.5: 0.4730, mAP: 0.3078, Time: 98.76s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1401, mAP@0.5: 0.7007, mAP: 0.4992, Time: 134.36s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1410, mAP@0.5: 0.6491, mAP: 0.4261, Time: 249.20s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1389, mAP@0.5: 0.5632, mAP: 0.3806, Time: 295.49s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1354, mAP@0.5: 0.5075, mAP: 0.3367, Time: 522.07s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1358, mAP@0.5: 0.5384, mAP: 0.3608, Time: 522.90s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1370, mAP@0.5: 0.5591, mAP: 0.3861, Time: 646.95s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1344, mAP@0.5: 0.5276, mAP: 0.3513, Time: 671.84s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1366, mAP@0.5: 0.5312, mAP: 0.3530, Time: 851.95s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1376, mAP@0.5: 0.5678, mAP: 0.3745, Time: 949.60s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1368
+[SERVER] Training mAP@0.5:  0.5502
+[SERVER] Training mAP:      0.3685
+[SERVER] Aggregated Score:  0.5197
+[SERVER] Round Duration:    949.59s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.13679345529261272, 'train_accuracy': 0.5196960776303166, 'train_mAP50': 0.5501955142308922}
+        └──> Aggregated MetricRecord: {'train_loss': 0.13679345529261272, 'train_accuracy': 0.5196960776303166, 'train_mAP50': 0.5501955142308922}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1101, mAP@0.5: 0.4935, mAP: 0.3131, Time: 8.35s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0764, mAP@0.5: 0.6968, mAP: 0.4922, Time: 9.36s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1076, mAP@0.5: 0.5684, mAP: 0.3810, Time: 16.63s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1053, mAP@0.5: 0.5294, mAP: 0.3551, Time: 15.68s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1081, mAP@0.5: 0.5032, mAP: 0.3323, Time: 23.44s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.5335, mAP: 0.3707, Time: 22.09s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1065, mAP@0.5: 0.5232, mAP: 0.3497, Time: 32.75s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1045, mAP@0.5: 0.5042, mAP: 0.3371, Time: 33.84s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1039, mAP@0.5: 0.5108, mAP: 0.3394, Time: 50.71s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1056, mAP@0.5: 0.4818, mAP: 0.3192, Time: 49.58s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1050
+[SERVER] Validation mAP@0.5: 0.5127
+[SERVER] Validation mAP:    0.3430
+[SERVER] Aggregated Score:  0.4954
+[SERVER] Eval Duration:     50.71s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10495267166474433, 'eval_accuracy': 0.4953786894675014, 'eval_mAP50': 0.5127221135651895}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10495267166474433, 'eval_accuracy': 0.4953786894675014, 'eval_mAP50': 0.5127221135651895}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1425, mAP@0.5: 0.4734, mAP: 0.3084, Time: 93.78s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1408, mAP@0.5: 0.6985, mAP: 0.4981, Time: 145.24s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1410, mAP@0.5: 0.6462, mAP: 0.4257, Time: 234.60s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1393, mAP@0.5: 0.5618, mAP: 0.3792, Time: 270.64s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1356, mAP@0.5: 0.5070, mAP: 0.3344, Time: 525.56s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1355, mAP@0.5: 0.5375, mAP: 0.3603, Time: 527.57s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1370, mAP@0.5: 0.5571, mAP: 0.3855, Time: 643.52s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1342, mAP@0.5: 0.5281, mAP: 0.3514, Time: 685.84s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1365, mAP@0.5: 0.5313, mAP: 0.3515, Time: 900.49s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1374, mAP@0.5: 0.5691, mAP: 0.3754, Time: 967.26s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1368
+[SERVER] Training mAP@0.5:  0.5497
+[SERVER] Training mAP:      0.3679
+[SERVER] Aggregated Score:  0.5190
+[SERVER] Round Duration:    967.25s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.1367705686920371, 'train_accuracy': 0.5190215126319155, 'train_mAP50': 0.5496795494083787}
+        └──> Aggregated MetricRecord: {'train_loss': 0.1367705686920371, 'train_accuracy': 0.5190215126319155, 'train_mAP50': 0.5496795494083787}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0764, mAP@0.5: 0.6944, mAP: 0.4902, Time: 8.94s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1099, mAP@0.5: 0.4852, mAP: 0.3088, Time: 8.84s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1054, mAP@0.5: 0.5619, mAP: 0.3782, Time: 15.51s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1075, mAP@0.5: 0.6459, mAP: 0.4262, Time: 16.59s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1081, mAP@0.5: 0.5077, mAP: 0.3340, Time: 24.02s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5384, mAP: 0.3736, Time: 23.39s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1065, mAP@0.5: 0.5364, mAP: 0.3584, Time: 32.68s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1045, mAP@0.5: 0.5012, mAP: 0.3363, Time: 35.64s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1038, mAP@0.5: 0.5378, mAP: 0.3552, Time: 50.57s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1056, mAP@0.5: 0.4926, mAP: 0.3263, Time: 51.87s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1049
+[SERVER] Validation mAP@0.5: 0.5258
+[SERVER] Validation mAP:    0.3512
+[SERVER] Aggregated Score:  0.5032
+[SERVER] Eval Duration:     51.87s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10492991349480969, 'eval_accuracy': 0.5031510203114654, 'eval_mAP50': 0.5257828566911836}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10492991349480969, 'eval_accuracy': 0.5031510203114654, 'eval_mAP50': 0.5257828566911836}
+INFO :      
+
+INFO :      [ROUND 3/3]
+[ROUND 3/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1424, mAP@0.5: 0.4754, mAP: 0.3092, Time: 96.85s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1403, mAP@0.5: 0.6988, mAP: 0.4988, Time: 154.28s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1408, mAP@0.5: 0.6560, mAP: 0.4288, Time: 238.99s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1391, mAP@0.5: 0.5635, mAP: 0.3786, Time: 304.56s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1356, mAP@0.5: 0.5067, mAP: 0.3350, Time: 529.09s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1357, mAP@0.5: 0.5375, mAP: 0.3606, Time: 538.34s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1370, mAP@0.5: 0.5564, mAP: 0.3857, Time: 676.46s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1339, mAP@0.5: 0.5268, mAP: 0.3514, Time: 694.13s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1364, mAP@0.5: 0.5316, mAP: 0.3497, Time: 887.70s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1376, mAP@0.5: 0.5682, mAP: 0.3748, Time: 971.36s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1367
+[SERVER] Training mAP@0.5:  0.5500
+[SERVER] Training mAP:      0.3679
+[SERVER] Aggregated Score:  0.5183
+[SERVER] Round Duration:    971.35s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.13670830767508796, 'train_accuracy': 0.51828214246882, 'train_mAP50': 0.5500004486728494}
+        └──> Aggregated MetricRecord: {'train_loss': 0.13670830767508796, 'train_accuracy': 0.51828214246882, 'train_mAP50': 0.5500004486728494}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1101, mAP@0.5: 0.4957, mAP: 0.3131, Time: 8.37s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0765, mAP@0.5: 0.6837, mAP: 0.4807, Time: 9.41s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1053, mAP@0.5: 0.5308, mAP: 0.3535, Time: 15.23s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1076, mAP@0.5: 0.5756, mAP: 0.3861, Time: 16.43s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.4953, mAP: 0.3459, Time: 24.73s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1081, mAP@0.5: 0.5069, mAP: 0.3339, Time: 23.57s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1065, mAP@0.5: 0.5198, mAP: 0.3476, Time: 32.10s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1045, mAP@0.5: 0.4989, mAP: 0.3347, Time: 36.38s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1039, mAP@0.5: 0.5131, mAP: 0.3402, Time: 49.70s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1057, mAP@0.5: 0.4838, mAP: 0.3180, Time: 47.19s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1050
+[SERVER] Validation mAP@0.5: 0.5089
+[SERVER] Validation mAP:    0.3400
+[SERVER] Aggregated Score:  0.4923
+[SERVER] Eval Duration:     49.70s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.1049964767397155, 'eval_accuracy': 0.49234475754224694, 'eval_mAP50': 0.5089468835039764}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.1049964767397155, 'eval_accuracy': 0.49234475754224694, 'eval_mAP50': 0.5089468835039764}
+INFO :      
+
+INFO :      Strategy execution finished in 3147.48s
+Strategy execution finished in 3147.48s
+INFO :      
+
+INFO :      Final results:
+Final results:
+INFO :      
+
+INFO :          Global Arrays:
+        Global Arrays:
+INFO :                  ArrayRecord (13.880 MB)
+                ArrayRecord (13.880 MB)
+INFO :      
+
+INFO :          Aggregated ClientApp-side Train Metrics:
+        Aggregated ClientApp-side Train Metrics:
+INFO :          { 1: { 'train_accuracy': '5.1970e-01',
+        { 1: { 'train_accuracy': '5.1970e-01',
+INFO :                 'train_loss': '1.3679e-01',
+               'train_loss': '1.3679e-01',
+INFO :                 'train_mAP50': '5.5020e-01'},
+               'train_mAP50': '5.5020e-01'},
+INFO :            2: { 'train_accuracy': '5.1902e-01',
+          2: { 'train_accuracy': '5.1902e-01',
+INFO :                 'train_loss': '1.3677e-01',
+               'train_loss': '1.3677e-01',
+INFO :                 'train_mAP50': '5.4968e-01'},
+               'train_mAP50': '5.4968e-01'},
+INFO :            3: { 'train_accuracy': '5.1828e-01',
+          3: { 'train_accuracy': '5.1828e-01',
+INFO :                 'train_loss': '1.3671e-01',
+               'train_loss': '1.3671e-01',
+INFO :                 'train_mAP50': '5.5000e-01'}}
+               'train_mAP50': '5.5000e-01'}}
+INFO :      
+
+INFO :          Aggregated ClientApp-side Evaluate Metrics:
+        Aggregated ClientApp-side Evaluate Metrics:
+INFO :          { 1: { 'eval_accuracy': '4.9538e-01',
+        { 1: { 'eval_accuracy': '4.9538e-01',
+INFO :                 'eval_loss': '1.0495e-01',
+               'eval_loss': '1.0495e-01',
+INFO :                 'eval_mAP50': '5.1272e-01'},
+               'eval_mAP50': '5.1272e-01'},
+INFO :            2: { 'eval_accuracy': '5.0315e-01',
+          2: { 'eval_accuracy': '5.0315e-01',
+INFO :                 'eval_loss': '1.0493e-01',
+               'eval_loss': '1.0493e-01',
+INFO :                 'eval_mAP50': '5.2578e-01'},
+               'eval_mAP50': '5.2578e-01'},
+INFO :            3: { 'eval_accuracy': '4.9234e-01',
+          3: { 'eval_accuracy': '4.9234e-01',
+INFO :                 'eval_loss': '1.0500e-01',
+               'eval_loss': '1.0500e-01',
+INFO :                 'eval_mAP50': '5.0895e-01'}}
+               'eval_mAP50': '5.0895e-01'}}
+INFO :      
+
+INFO :          ServerApp-side Evaluate Metrics:
+        ServerApp-side Evaluate Metrics:
+INFO :          {}
+        {}
+INFO :      
+
+[OPTUNA] Trial   7 -> mAP@0.5=0.5258  (lr=0.00153, strategy=2, epochs=1, batch=8)
+
+[OPTUNA-OBJECTIVE] Starting trial 8 with lr=0.000117, strategy=4, local_epochs=5, batch_size=16
+Using strategy: FedProx
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_8]
+  lr=0.000117  rounds=3 strategy=4 local_epochs=5 batch_size=16
+======================================================================
+
+INFO :      Starting FedProx strategy:
+Starting FedProx strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.00011715937392307068, 'num_rounds': 3, 'local-epochs': 5, 'batch_size': 16, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.00011715937392307068, 'num_rounds': 3, 'local-epochs': 5, 'batch_size': 16, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedProx settings:
+        ├──> FedProx settings:
+INFO :          │       └── Proximal mu: 1.2604664585649468
+        │       └── Proximal mu: 1.2604664585649468
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1314, mAP@0.5: 0.4854, mAP: 0.3205, Time: 403.38s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1293, mAP@0.5: 0.6731, mAP: 0.4866, Time: 634.01s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1313, mAP@0.5: 0.6582, mAP: 0.4362, Time: 1099.73s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1294, mAP@0.5: 0.5666, mAP: 0.3845, Time: 1347.21s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1296, mAP@0.5: 0.5412, mAP: 0.3642, Time: 2429.29s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1287, mAP@0.5: 0.5012, mAP: 0.3356, Time: 2535.99s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1282, mAP@0.5: 0.5645, mAP: 0.3890, Time: 3207.38s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1270, mAP@0.5: 0.5290, mAP: 0.3524, Time: 3387.02s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1269, mAP@0.5: 0.5336, mAP: 0.3535, Time: 4222.92s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1270, mAP@0.5: 0.5704, mAP: 0.3796, Time: 4407.29s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1283
+[SERVER] Training mAP@0.5:  0.5516
+[SERVER] Training mAP:      0.3709
+[SERVER] Aggregated Score:  0.5214
+[SERVER] Round Duration:    4407.28s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12829157236968342, 'train_accuracy': 0.5214127992484809, 'train_mAP50': 0.551558145826671}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12829157236968342, 'train_accuracy': 0.5214127992484809, 'train_mAP50': 0.551558145826671}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0645, mAP@0.5: 0.6968, mAP: 0.5098, Time: 9.62s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1126, mAP@0.5: 0.4910, mAP: 0.3256, Time: 8.49s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.5689, mAP: 0.3878, Time: 16.23s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1051, mAP@0.5: 0.5768, mAP: 0.3949, Time: 15.94s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1023, mAP@0.5: 0.5401, mAP: 0.3760, Time: 23.35s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1060, mAP@0.5: 0.5049, mAP: 0.3378, Time: 23.87s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1042, mAP@0.5: 0.5246, mAP: 0.3545, Time: 32.97s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1044, mAP@0.5: 0.4955, mAP: 0.3307, Time: 35.10s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1042, mAP@0.5: 0.4881, mAP: 0.3226, Time: 47.65s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1016, mAP@0.5: 0.5414, mAP: 0.3621, Time: 50.43s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1033
+[SERVER] Validation mAP@0.5: 0.5206
+[SERVER] Validation mAP:    0.3505
+[SERVER] Aggregated Score:  0.5010
+[SERVER] Eval Duration:     50.43s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10328024798154557, 'eval_accuracy': 0.5009525111059449, 'eval_mAP50': 0.5205766651657524}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10328024798154557, 'eval_accuracy': 0.5009525111059449, 'eval_mAP50': 0.5205766651657524}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1283, mAP@0.5: 0.5015, mAP: 0.3260, Time: 381.43s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1280, mAP@0.5: 0.6817, mAP: 0.4887, Time: 618.09s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1301, mAP@0.5: 0.6577, mAP: 0.4364, Time: 1090.50s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1285, mAP@0.5: 0.5726, mAP: 0.3891, Time: 1311.27s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1292, mAP@0.5: 0.5415, mAP: 0.3636, Time: 2576.49s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1279, mAP@0.5: 0.5015, mAP: 0.3358, Time: 2657.64s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1273, mAP@0.5: 0.5650, mAP: 0.3891, Time: 3118.28s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1267, mAP@0.5: 0.5323, mAP: 0.3561, Time: 3139.32s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1262, mAP@0.5: 0.5329, mAP: 0.3550, Time: 4124.04s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1267, mAP@0.5: 0.5721, mAP: 0.3815, Time: 4269.27s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1276
+[SERVER] Training mAP@0.5:  0.5531
+[SERVER] Training mAP:      0.3723
+[SERVER] Aggregated Score:  0.5229
+[SERVER] Round Duration:    4269.27s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12763125257435243, 'train_accuracy': 0.5228617366485449, 'train_mAP50': 0.5531408445794691}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12763125257435243, 'train_accuracy': 0.5228617366485449, 'train_mAP50': 0.5531408445794691}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1114, mAP@0.5: 0.5123, mAP: 0.3358, Time: 8.63s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0636, mAP@0.5: 0.6828, mAP: 0.4887, Time: 9.61s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1048, mAP@0.5: 0.6067, mAP: 0.4049, Time: 16.65s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1025, mAP@0.5: 0.5806, mAP: 0.3902, Time: 15.64s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1022, mAP@0.5: 0.5501, mAP: 0.3828, Time: 22.78s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1060, mAP@0.5: 0.4976, mAP: 0.3323, Time: 24.27s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.5385, mAP: 0.3622, Time: 33.43s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1042, mAP@0.5: 0.5302, mAP: 0.3554, Time: 35.03s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1042, mAP@0.5: 0.4891, mAP: 0.3225, Time: 49.54s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1016, mAP@0.5: 0.5244, mAP: 0.3518, Time: 50.75s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1032
+[SERVER] Validation mAP@0.5: 0.5275
+[SERVER] Validation mAP:    0.3544
+[SERVER] Aggregated Score:  0.5050
+[SERVER] Eval Duration:     50.75s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10317077354863516, 'eval_accuracy': 0.5049742592553728, 'eval_mAP50': 0.5275239812399218}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10317077354863516, 'eval_accuracy': 0.5049742592553728, 'eval_mAP50': 0.5275239812399218}
+INFO :      
+
+INFO :      [ROUND 3/3]
+[ROUND 3/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1283, mAP@0.5: 0.5129, mAP: 0.3353, Time: 346.12s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1269, mAP@0.5: 0.6777, mAP: 0.4870, Time: 568.11s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1293, mAP@0.5: 0.6498, mAP: 0.4325, Time: 1116.88s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1283, mAP@0.5: 0.5727, mAP: 0.3892, Time: 1355.23s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1287, mAP@0.5: 0.5428, mAP: 0.3642, Time: 2448.95s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1275, mAP@0.5: 0.5030, mAP: 0.3363, Time: 2649.41s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1259, mAP@0.5: 0.5320, mAP: 0.3553, Time: 3106.26s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5642, mAP: 0.3890, Time: 3103.37s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1259, mAP@0.5: 0.5340, mAP: 0.3557, Time: 4166.26s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1264, mAP@0.5: 0.5727, mAP: 0.3817, Time: 4318.73s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1272
+[SERVER] Training mAP@0.5:  0.5532
+[SERVER] Training mAP:      0.3723
+[SERVER] Aggregated Score:  0.5220
+[SERVER] Round Duration:    4318.72s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12717802990086344, 'train_accuracy': 0.5220440991365527, 'train_mAP50': 0.5532204454748962}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12717802990086344, 'train_accuracy': 0.5220440991365527, 'train_mAP50': 0.5532204454748962}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1109, mAP@0.5: 0.5130, mAP: 0.3348, Time: 9.01s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0636, mAP@0.5: 0.6895, mAP: 0.4928, Time: 9.56s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1047, mAP@0.5: 0.5459, mAP: 0.3670, Time: 16.58s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1025, mAP@0.5: 0.5568, mAP: 0.3726, Time: 15.75s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1061, mAP@0.5: 0.4958, mAP: 0.3343, Time: 23.43s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1022, mAP@0.5: 0.5065, mAP: 0.3546, Time: 23.99s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.5438, mAP: 0.3657, Time: 32.62s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.5058, mAP: 0.3402, Time: 34.85s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.4919, mAP: 0.3260, Time: 49.58s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1017, mAP@0.5: 0.5185, mAP: 0.3483, Time: 51.73s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1031
+[SERVER] Validation mAP@0.5: 0.5171
+[SERVER] Validation mAP:    0.3484
+[SERVER] Aggregated Score:  0.4982
+[SERVER] Eval Duration:     51.73s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10314009073433296, 'eval_accuracy': 0.49816143430144877, 'eval_mAP50': 0.5170704418419182}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10314009073433296, 'eval_accuracy': 0.49816143430144877, 'eval_mAP50': 0.5170704418419182}
+INFO :      
+
+INFO :      Strategy execution finished in 13246.59s
+Strategy execution finished in 13246.59s
+INFO :      
+
+INFO :      Final results:
+Final results:
+INFO :      
+
+INFO :          Global Arrays:
+        Global Arrays:
+INFO :                  ArrayRecord (13.880 MB)
+                ArrayRecord (13.880 MB)
+INFO :      
+
+INFO :          Aggregated ClientApp-side Train Metrics:
+        Aggregated ClientApp-side Train Metrics:
+INFO :          { 1: { 'train_accuracy': '5.2141e-01',
+        { 1: { 'train_accuracy': '5.2141e-01',
+INFO :                 'train_loss': '1.2829e-01',
+               'train_loss': '1.2829e-01',
+INFO :                 'train_mAP50': '5.5156e-01'},
+               'train_mAP50': '5.5156e-01'},
+INFO :            2: { 'train_accuracy': '5.2286e-01',
+          2: { 'train_accuracy': '5.2286e-01',
+INFO :                 'train_loss': '1.2763e-01',
+               'train_loss': '1.2763e-01',
+INFO :                 'train_mAP50': '5.5314e-01'},
+               'train_mAP50': '5.5314e-01'},
+INFO :            3: { 'train_accuracy': '5.2204e-01',
+          3: { 'train_accuracy': '5.2204e-01',
+INFO :                 'train_loss': '1.2718e-01',
+               'train_loss': '1.2718e-01',
+INFO :                 'train_mAP50': '5.5322e-01'}}
+               'train_mAP50': '5.5322e-01'}}
+INFO :      
+
+INFO :          Aggregated ClientApp-side Evaluate Metrics:
+        Aggregated ClientApp-side Evaluate Metrics:
+INFO :          { 1: { 'eval_accuracy': '5.0095e-01',
+        { 1: { 'eval_accuracy': '5.0095e-01',
+INFO :                 'eval_loss': '1.0328e-01',
+               'eval_loss': '1.0328e-01',
+INFO :                 'eval_mAP50': '5.2058e-01'},
+               'eval_mAP50': '5.2058e-01'},
+INFO :            2: { 'eval_accuracy': '5.0497e-01',
+          2: { 'eval_accuracy': '5.0497e-01',
+INFO :                 'eval_loss': '1.0317e-01',
+               'eval_loss': '1.0317e-01',
+INFO :                 'eval_mAP50': '5.2752e-01'},
+               'eval_mAP50': '5.2752e-01'},
+INFO :            3: { 'eval_accuracy': '4.9816e-01',
+          3: { 'eval_accuracy': '4.9816e-01',
+INFO :                 'eval_loss': '1.0314e-01',
+               'eval_loss': '1.0314e-01',
+INFO :                 'eval_mAP50': '5.1707e-01'}}
+               'eval_mAP50': '5.1707e-01'}}
+INFO :      
+
+INFO :          ServerApp-side Evaluate Metrics:
+        ServerApp-side Evaluate Metrics:
+INFO :          {}
+        {}
+INFO :      
+
+[OPTUNA] Trial   8 -> mAP@0.5=0.5275  (lr=0.00012, strategy=4, epochs=5, batch=16)
+
+[OPTUNA-OBJECTIVE] Starting trial 9 with lr=0.007568, strategy=4, local_epochs=5, batch_size=16
+Using strategy: FedProx
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_9]
+  lr=0.007568  rounds=3 strategy=4 local_epochs=5 batch_size=16
+======================================================================
+
+INFO :      Starting FedProx strategy:
+Starting FedProx strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.007568292060167618, 'num_rounds': 3, 'local-epochs': 5, 'batch_size': 16, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.007568292060167618, 'num_rounds': 3, 'local-epochs': 5, 'batch_size': 16, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedProx settings:
+        ├──> FedProx settings:
+INFO :          │       └── Proximal mu: 0.01217295809836997
+        │       └── Proximal mu: 0.01217295809836997
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1227, mAP@0.5: 0.5070, mAP: 0.3152, Time: 411.93s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1228, mAP@0.5: 0.6343, mAP: 0.4212, Time: 619.02s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1281, mAP@0.5: 0.6164, mAP: 0.3714, Time: 1137.14s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1268, mAP@0.5: 0.4983, mAP: 0.3237, Time: 1363.56s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1296, mAP@0.5: 0.4728, mAP: 0.2900, Time: 2468.04s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1313, mAP@0.5: 0.4911, mAP: 0.3134, Time: 2558.65s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1285, mAP@0.5: 0.4830, mAP: 0.3080, Time: 3099.92s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1288, mAP@0.5: 0.4776, mAP: 0.2928, Time: 3250.91s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1280, mAP@0.5: 0.4650, mAP: 0.2824, Time: 4147.14s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1289, mAP@0.5: 0.5086, mAP: 0.3121, Time: 4287.99s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1287
+[SERVER] Training mAP@0.5:  0.4966
+[SERVER] Training mAP:      0.3092
+[SERVER] Aggregated Score:  0.4677
+[SERVER] Round Duration:    4287.98s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12871327668692037, 'train_accuracy': 0.467705209865686, 'train_mAP50': 0.49663231180044765}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12871327668692037, 'train_accuracy': 0.467705209865686, 'train_mAP50': 0.49663231180044765}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1151, mAP@0.5: 0.5155, mAP: 0.3370, Time: 9.13s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0706, mAP@0.5: 0.6690, mAP: 0.4609, Time: 9.16s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1129, mAP@0.5: 0.6272, mAP: 0.3800, Time: 16.98s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1155, mAP@0.5: 0.5352, mAP: 0.3533, Time: 16.33s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1131, mAP@0.5: 0.5080, mAP: 0.3389, Time: 23.24s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1130, mAP@0.5: 0.4933, mAP: 0.3212, Time: 25.11s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1148, mAP@0.5: 0.5220, mAP: 0.3451, Time: 32.69s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1141, mAP@0.5: 0.4901, mAP: 0.3118, Time: 35.11s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1159, mAP@0.5: 0.4735, mAP: 0.3021, Time: 49.93s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1141, mAP@0.5: 0.5119, mAP: 0.3300, Time: 52.19s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1138
+[SERVER] Validation mAP@0.5: 0.5072
+[SERVER] Validation mAP:    0.3286
+[SERVER] Aggregated Score:  0.4865
+[SERVER] Eval Duration:     52.19s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.11377746443675511, 'eval_accuracy': 0.4864673204075617, 'eval_mAP50': 0.507177453436658}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.11377746443675511, 'eval_accuracy': 0.4864673204075617, 'eval_mAP50': 0.507177453436658}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1211, mAP@0.5: 0.4827, mAP: 0.3054, Time: 386.74s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1221, mAP@0.5: 0.6228, mAP: 0.4132, Time: 620.73s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1278, mAP@0.5: 0.5991, mAP: 0.3674, Time: 1117.37s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1264, mAP@0.5: 0.5151, mAP: 0.3309, Time: 1346.03s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1296, mAP@0.5: 0.4545, mAP: 0.2836, Time: 2535.58s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1301, mAP@0.5: 0.4918, mAP: 0.3140, Time: 2615.04s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1284, mAP@0.5: 0.4957, mAP: 0.3198, Time: 3162.90s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1285, mAP@0.5: 0.4709, mAP: 0.2975, Time: 3201.25s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1280, mAP@0.5: 0.4526, mAP: 0.2726, Time: 4073.03s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1283, mAP@0.5: 0.4953, mAP: 0.3073, Time: 4350.76s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1283
+[SERVER] Training mAP@0.5:  0.4907
+[SERVER] Training mAP:      0.3085
+[SERVER] Aggregated Score:  0.4672
+[SERVER] Round Duration:    4350.76s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12830716280780302, 'train_accuracy': 0.4671619027022706, 'train_mAP50': 0.4907102615925808}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12830716280780302, 'train_accuracy': 0.4671619027022706, 'train_mAP50': 0.4907102615925808}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1150, mAP@0.5: 0.5308, mAP: 0.3539, Time: 9.07s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0706, mAP@0.5: 0.6846, mAP: 0.4598, Time: 11.37s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1150, mAP@0.5: 0.5313, mAP: 0.3488, Time: 15.79s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1136, mAP@0.5: 0.6476, mAP: 0.4001, Time: 18.93s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1123, mAP@0.5: 0.4821, mAP: 0.3261, Time: 22.76s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1137, mAP@0.5: 0.4935, mAP: 0.3184, Time: 24.09s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1138, mAP@0.5: 0.4896, mAP: 0.3122, Time: 34.11s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1155, mAP@0.5: 0.5185, mAP: 0.3427, Time: 32.18s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1139, mAP@0.5: 0.5011, mAP: 0.3249, Time: 51.41s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1168, mAP@0.5: 0.4687, mAP: 0.2978, Time: 49.64s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1140
+[SERVER] Validation mAP@0.5: 0.5020
+[SERVER] Validation mAP:    0.3256
+[SERVER] Aggregated Score:  0.4824
+[SERVER] Eval Duration:     51.41s
+[SERVER] ================================================================================
+
+[OPTUNA] Pruning trial at step 1 (mAP@0.5=0.5020)
+
+[OPTUNA-OBJECTIVE] Starting trial 10 with lr=0.004544, strategy=3, local_epochs=2, batch_size=16
+Using strategy: FedAdam
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_10]
+  lr=0.004544  rounds=3 strategy=3 local_epochs=2 batch_size=16
+======================================================================
+
+INFO :      Starting FedAdam strategy:
+Starting FedAdam strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.004544383960336014, 'num_rounds': 3, 'local-epochs': 2, 'batch_size': 16, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.004544383960336014, 'num_rounds': 3, 'local-epochs': 2, 'batch_size': 16, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedOpt settings:
+        ├──> FedOpt settings:
+INFO :          │       ├── eta (0.00343817) | eta_l (0.00103491)
+        │       ├── eta (0.00343817) | eta_l (0.00103491)
+INFO :          │       ├── beta_1 (0.954938) | beta_2 (0.969979)
+        │       ├── beta_1 (0.954938) | beta_2 (0.969979)
+INFO :          │       └── tau (0.00287088)
+        │       └── tau (0.00287088)
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5248, mAP: 0.3374, Time: 159.75s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1288, mAP@0.5: 0.6791, mAP: 0.4738, Time: 340.14s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1289, mAP@0.5: 0.5534, mAP: 0.3755, Time: 525.75s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1290, mAP@0.5: 0.6526, mAP: 0.4251, Time: 565.05s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1281, mAP@0.5: 0.4964, mAP: 0.3221, Time: 1029.34s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1292, mAP@0.5: 0.5391, mAP: 0.3515, Time: 1036.04s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1285, mAP@0.5: 0.5502, mAP: 0.3628, Time: 1250.98s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5229, mAP: 0.3393, Time: 1317.12s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1277, mAP@0.5: 0.5220, mAP: 0.3408, Time: 1719.17s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1281, mAP@0.5: 0.5607, mAP: 0.3659, Time: 1751.62s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1282
+[SERVER] Training mAP@0.5:  0.5445
+[SERVER] Training mAP:      0.3568
+[SERVER] Aggregated Score:  0.5133
+[SERVER] Round Duration:    1751.62s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12822890668372242, 'train_accuracy': 0.5133191164854494, 'train_mAP50': 0.5444847988487369}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12822890668372242, 'train_accuracy': 0.5133191164854494, 'train_mAP50': 0.5444847988487369}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0639, mAP@0.5: 0.6789, mAP: 0.4779, Time: 10.35s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1129, mAP@0.5: 0.5248, mAP: 0.3374, Time: 9.62s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1065, mAP@0.5: 0.6012, mAP: 0.3927, Time: 16.50s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1052, mAP@0.5: 0.5533, mAP: 0.3741, Time: 15.48s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1084, mAP@0.5: 0.5095, mAP: 0.3308, Time: 23.70s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1043, mAP@0.5: 0.5167, mAP: 0.3531, Time: 22.68s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1062, mAP@0.5: 0.4978, mAP: 0.3266, Time: 35.40s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1071, mAP@0.5: 0.5159, mAP: 0.3448, Time: 35.12s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1043, mAP@0.5: 0.5082, mAP: 0.3368, Time: 48.46s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1060, mAP@0.5: 0.4908, mAP: 0.3211, Time: 48.09s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1055
+[SERVER] Validation mAP@0.5: 0.5122
+[SERVER] Validation mAP:    0.3393
+[SERVER] Aggregated Score:  0.4921
+[SERVER] Eval Duration:     48.46s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10548693464052288, 'eval_accuracy': 0.49206333865962104, 'eval_mAP50': 0.512225361539765}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10548693464052288, 'eval_accuracy': 0.49206333865962104, 'eval_mAP50': 0.512225361539765}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1269, mAP@0.5: 0.5178, mAP: 0.3238, Time: 176.06s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1284, mAP@0.5: 0.6794, mAP: 0.4780, Time: 261.75s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1290, mAP@0.5: 0.6360, mAP: 0.4194, Time: 468.45s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1280, mAP@0.5: 0.5567, mAP: 0.3750, Time: 570.54s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1292, mAP@0.5: 0.5362, mAP: 0.3491, Time: 1018.79s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1276, mAP@0.5: 0.4998, mAP: 0.3230, Time: 1071.10s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1288, mAP@0.5: 0.5467, mAP: 0.3589, Time: 1275.88s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5253, mAP: 0.3408, Time: 1335.56s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1279, mAP@0.5: 0.5217, mAP: 0.3396, Time: 1725.54s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1278, mAP@0.5: 0.5655, mAP: 0.3693, Time: 1749.34s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1281
+[SERVER] Training mAP@0.5:  0.5442
+[SERVER] Training mAP:      0.3562
+[SERVER] Aggregated Score:  0.5143
+[SERVER] Round Duration:    1749.34s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12811483891909178, 'train_accuracy': 0.5143350026383114, 'train_mAP50': 0.5441708989446753}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12811483891909178, 'train_accuracy': 0.5143350026383114, 'train_mAP50': 0.5441708989446753}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1123, mAP@0.5: 0.5067, mAP: 0.3290, Time: 8.67s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0636, mAP@0.5: 0.6788, mAP: 0.4794, Time: 9.61s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1050, mAP@0.5: 0.5274, mAP: 0.3517, Time: 15.77s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1065, mAP@0.5: 0.5796, mAP: 0.3843, Time: 16.84s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1084, mAP@0.5: 0.4985, mAP: 0.3296, Time: 23.52s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1046, mAP@0.5: 0.5160, mAP: 0.3511, Time: 23.38s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1060, mAP@0.5: 0.4901, mAP: 0.3192, Time: 35.74s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1073, mAP@0.5: 0.5333, mAP: 0.3541, Time: 33.26s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.5144, mAP: 0.3413, Time: 50.91s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1064, mAP@0.5: 0.4835, mAP: 0.3140, Time: 48.37s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1055
+[SERVER] Validation mAP@0.5: 0.5112
+[SERVER] Validation mAP:    0.3380
+[SERVER] Aggregated Score:  0.4914
+[SERVER] Eval Duration:     50.91s
+[SERVER] ================================================================================
+
+[OPTUNA] Pruning trial at step 1 (mAP@0.5=0.5112)
+
+[OPTUNA-OBJECTIVE] Starting trial 11 with lr=0.003585, strategy=1, local_epochs=4, batch_size=32
+Using strategy: FedAvg
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_11]
+  lr=0.003585  rounds=3 strategy=1 local_epochs=4 batch_size=32
+======================================================================
+
+INFO :      Starting FedAvg strategy:
+Starting FedAvg strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.0035848769372239945, 'num_rounds': 3, 'local-epochs': 4, 'batch_size': 32, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.0035848769372239945, 'num_rounds': 3, 'local-epochs': 4, 'batch_size': 32, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1256, mAP@0.5: 0.5463, mAP: 0.3514, Time: 332.89s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1238, mAP@0.5: 0.6832, mAP: 0.4714, Time: 514.21s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1238, mAP@0.5: 0.6644, mAP: 0.4251, Time: 907.37s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1240, mAP@0.5: 0.5517, mAP: 0.3570, Time: 1052.15s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1253, mAP@0.5: 0.5285, mAP: 0.3495, Time: 1998.32s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1243, mAP@0.5: 0.4941, mAP: 0.3210, Time: 1995.41s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1222, mAP@0.5: 0.5112, mAP: 0.3338, Time: 2608.49s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1261, mAP@0.5: 0.5422, mAP: 0.3643, Time: 2622.51s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1231, mAP@0.5: 0.5176, mAP: 0.3329, Time: 3480.58s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1243, mAP@0.5: 0.5516, mAP: 0.3585, Time: 3608.97s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1242
+[SERVER] Training mAP@0.5:  0.5390
+[SERVER] Training mAP:      0.3527
+[SERVER] Aggregated Score:  0.5115
+[SERVER] Round Duration:    3608.97s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12419155900223856, 'train_accuracy': 0.5115314305244644, 'train_mAP50': 0.5390318404221298}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12419155900223856, 'train_accuracy': 0.5115314305244644, 'train_mAP50': 0.5390318404221298}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1116, mAP@0.5: 0.5593, mAP: 0.3552, Time: 11.33s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0869, mAP@0.5: 0.6906, mAP: 0.5037, Time: 11.37s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1034, mAP@0.5: 0.5690, mAP: 0.3748, Time: 16.93s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1037, mAP@0.5: 0.6581, mAP: 0.4288, Time: 17.82s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1039, mAP@0.5: 0.5622, mAP: 0.3745, Time: 24.37s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1053, mAP@0.5: 0.5145, mAP: 0.3311, Time: 26.86s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1074, mAP@0.5: 0.5092, mAP: 0.3362, Time: 36.23s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1078, mAP@0.5: 0.5231, mAP: 0.3510, Time: 38.32s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1077, mAP@0.5: 0.4741, mAP: 0.3102, Time: 49.31s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1073, mAP@0.5: 0.5091, mAP: 0.3332, Time: 47.56s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1065
+[SERVER] Validation mAP@0.5: 0.5200
+[SERVER] Validation mAP:    0.3431
+[SERVER] Aggregated Score:  0.4986
+[SERVER] Eval Duration:     49.31s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10652823490965012, 'eval_accuracy': 0.4985814534683516, 'eval_mAP50': 0.519955192405744}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10652823490965012, 'eval_accuracy': 0.4985814534683516, 'eval_mAP50': 0.519955192405744}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1236, mAP@0.5: 0.5416, mAP: 0.3535, Time: 358.94s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1228, mAP@0.5: 0.6904, mAP: 0.4742, Time: 500.66s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1224, mAP@0.5: 0.6610, mAP: 0.4270, Time: 928.93s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1237, mAP@0.5: 0.5515, mAP: 0.3715, Time: 1110.39s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1241, mAP@0.5: 0.4945, mAP: 0.3221, Time: 2041.98s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1254, mAP@0.5: 0.5305, mAP: 0.3501, Time: 2243.99s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1261, mAP@0.5: 0.5399, mAP: 0.3683, Time: 2506.60s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1217, mAP@0.5: 0.5116, mAP: 0.3346, Time: 2607.35s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1230, mAP@0.5: 0.5243, mAP: 0.3372, Time: 3480.72s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1244, mAP@0.5: 0.5533, mAP: 0.3599, Time: 3775.41s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1240
+[SERVER] Training mAP@0.5:  0.5402
+[SERVER] Training mAP:      0.3555
+[SERVER] Aggregated Score:  0.5122
+[SERVER] Round Duration:    3775.41s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12396196853213941, 'train_accuracy': 0.5121927208186761, 'train_mAP50': 0.540176092740646}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12396196853213941, 'train_accuracy': 0.5121927208186761, 'train_mAP50': 0.540176092740646}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0870, mAP@0.5: 0.6915, mAP: 0.4931, Time: 10.96s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1102, mAP@0.5: 0.5547, mAP: 0.3596, Time: 9.99s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1039, mAP@0.5: 0.6609, mAP: 0.4259, Time: 17.96s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.1035, mAP@0.5: 0.5654, mAP: 0.3749, Time: 15.90s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1055, mAP@0.5: 0.5043, mAP: 0.3270, Time: 25.65s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.1037, mAP@0.5: 0.5360, mAP: 0.3647, Time: 26.20s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1072, mAP@0.5: 0.5006, mAP: 0.3303, Time: 38.28s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1075, mAP@0.5: 0.5363, mAP: 0.3589, Time: 36.42s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1075, mAP@0.5: 0.4830, mAP: 0.3153, Time: 48.82s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1071, mAP@0.5: 0.5413, mAP: 0.3556, Time: 48.68s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1063
+[SERVER] Validation mAP@0.5: 0.5251
+[SERVER] Validation mAP:    0.3471
+[SERVER] Aggregated Score:  0.5032
+[SERVER] Eval Duration:     48.82s
+[SERVER] ================================================================================
+
+[OPTUNA] Pruning trial at step 1 (mAP@0.5=0.5251)
+
+[OPTUNA-OBJECTIVE] Starting trial 12 with lr=0.000117, strategy=4, local_epochs=4, batch_size=32
+Using strategy: FedProx
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_12]
+  lr=0.000117  rounds=3 strategy=4 local_epochs=4 batch_size=32
+======================================================================
+
+INFO :      Starting FedProx strategy:
+Starting FedProx strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.00011739361738518632, 'num_rounds': 3, 'local-epochs': 4, 'batch_size': 32, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.00011739361738518632, 'num_rounds': 3, 'local-epochs': 4, 'batch_size': 32, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedProx settings:
+        ├──> FedProx settings:
+INFO :          │       └── Proximal mu: 7.0861157231256895
+        │       └── Proximal mu: 7.0861157231256895
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1302, mAP@0.5: 0.5205, mAP: 0.3332, Time: 358.88s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1291, mAP@0.5: 0.6765, mAP: 0.4841, Time: 520.50s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1279, mAP@0.5: 0.6381, mAP: 0.4371, Time: 961.51s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1281, mAP@0.5: 0.5626, mAP: 0.3854, Time: 1096.64s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1268, mAP@0.5: 0.5129, mAP: 0.3404, Time: 2011.76s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1283, mAP@0.5: 0.5437, mAP: 0.3671, Time: 2261.15s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1290, mAP@0.5: 0.5682, mAP: 0.3926, Time: 2682.09s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1249, mAP@0.5: 0.5321, mAP: 0.3539, Time: 2777.23s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1260, mAP@0.5: 0.5400, mAP: 0.3564, Time: 3319.98s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1270, mAP@0.5: 0.5745, mAP: 0.3825, Time: 3736.17s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1272
+[SERVER] Training mAP@0.5:  0.5551
+[SERVER] Training mAP:      0.3737
+[SERVER] Aggregated Score:  0.5244
+[SERVER] Round Duration:    3736.17s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.1272471975055964, 'train_accuracy': 0.5244081327150624, 'train_mAP50': 0.555118039654621}
+        └──> Aggregated MetricRecord: {'train_loss': 0.1272471975055964, 'train_accuracy': 0.5244081327150624, 'train_mAP50': 0.555118039654621}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0851, mAP@0.5: 0.6996, mAP: 0.5128, Time: 12.05s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1128, mAP@0.5: 0.5250, mAP: 0.3341, Time: 10.26s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1029, mAP@0.5: 0.6472, mAP: 0.4417, Time: 17.99s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.0992, mAP@0.5: 0.5744, mAP: 0.3930, Time: 16.63s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0995, mAP@0.5: 0.5663, mAP: 0.3895, Time: 25.49s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5143, mAP: 0.3387, Time: 26.39s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1046, mAP@0.5: 0.5128, mAP: 0.3425, Time: 37.77s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.5391, mAP: 0.3633, Time: 37.90s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1032, mAP@0.5: 0.5427, mAP: 0.3618, Time: 49.55s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1042, mAP@0.5: 0.4904, mAP: 0.3232, Time: 47.71s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1031
+[SERVER] Validation mAP@0.5: 0.5328
+[SERVER] Validation mAP:    0.3572
+[SERVER] Aggregated Score:  0.5081
+[SERVER] Eval Duration:     49.55s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10310936524413687, 'eval_accuracy': 0.5080776758504623, 'eval_mAP50': 0.5328246407167944}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10310936524413687, 'eval_accuracy': 0.5080776758504623, 'eval_mAP50': 0.5328246407167944}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1275, mAP@0.5: 0.5250, mAP: 0.3443, Time: 359.54s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.6815, mAP: 0.4854, Time: 532.97s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1265, mAP@0.5: 0.6479, mAP: 0.4341, Time: 979.90s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.5663, mAP: 0.3876, Time: 1084.24s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1265, mAP@0.5: 0.5125, mAP: 0.3367, Time: 2020.09s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1275, mAP@0.5: 0.5451, mAP: 0.3688, Time: 2188.43s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1243, mAP@0.5: 0.5324, mAP: 0.3546, Time: 2573.75s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1283, mAP@0.5: 0.5691, mAP: 0.3921, Time: 2769.19s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1255, mAP@0.5: 0.5388, mAP: 0.3568, Time: 3457.47s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1265, mAP@0.5: 0.5730, mAP: 0.3815, Time: 3585.33s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1265
+[SERVER] Training mAP@0.5:  0.5561
+[SERVER] Training mAP:      0.3736
+[SERVER] Aggregated Score:  0.5243
+[SERVER] Round Duration:    3585.32s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12653216440677967, 'train_accuracy': 0.5242566264790535, 'train_mAP50': 0.556062139110969}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12653216440677967, 'train_accuracy': 0.5242566264790535, 'train_mAP50': 0.556062139110969}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0851, mAP@0.5: 0.6885, mAP: 0.4971, Time: 11.19s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1112, mAP@0.5: 0.5444, mAP: 0.3507, Time: 10.44s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1025, mAP@0.5: 0.6503, mAP: 0.4375, Time: 17.97s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.0990, mAP@0.5: 0.5757, mAP: 0.3929, Time: 17.74s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.4962, mAP: 0.3310, Time: 25.70s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0995, mAP@0.5: 0.5678, mAP: 0.3910, Time: 26.16s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1038, mAP@0.5: 0.5422, mAP: 0.3668, Time: 33.87s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.4881, mAP: 0.3234, Time: 45.87s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1044, mAP@0.5: 0.5298, mAP: 0.3534, Time: 36.98s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1033, mAP@0.5: 0.5154, mAP: 0.3469, Time: 48.68s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1030
+[SERVER] Validation mAP@0.5: 0.5293
+[SERVER] Validation mAP:    0.3561
+[SERVER] Aggregated Score:  0.5069
+[SERVER] Eval Duration:     48.68s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10298451249519415, 'eval_accuracy': 0.506863109750057, 'eval_mAP50': 0.5292640889874689}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10298451249519415, 'eval_accuracy': 0.506863109750057, 'eval_mAP50': 0.5292640889874689}
+INFO :      
+
+INFO :      [ROUND 3/3]
+[ROUND 3/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5175, mAP: 0.3407, Time: 308.50s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1268, mAP@0.5: 0.6774, mAP: 0.4870, Time: 529.72s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1261, mAP@0.5: 0.6495, mAP: 0.4306, Time: 953.26s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1268, mAP@0.5: 0.5660, mAP: 0.3895, Time: 1129.88s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1274, mAP@0.5: 0.5460, mAP: 0.3673, Time: 2040.15s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1261, mAP@0.5: 0.5109, mAP: 0.3374, Time: 2066.02s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1281, mAP@0.5: 0.5684, mAP: 0.3918, Time: 2663.00s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1238, mAP@0.5: 0.5324, mAP: 0.3552, Time: 2664.62s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1253, mAP@0.5: 0.5389, mAP: 0.3560, Time: 3317.84s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1261, mAP@0.5: 0.5736, mAP: 0.3815, Time: 3583.69s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1262
+[SERVER] Training mAP@0.5:  0.5558
+[SERVER] Training mAP:      0.3733
+[SERVER] Aggregated Score:  0.5255
+[SERVER] Round Duration:    3583.69s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12621515804285255, 'train_accuracy': 0.5255124274064599, 'train_mAP50': 0.5558191317556764}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12621515804285255, 'train_accuracy': 0.5255124274064599, 'train_mAP50': 0.5558191317556764}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0851, mAP@0.5: 0.6861, mAP: 0.4941, Time: 10.62s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1110, mAP@0.5: 0.5504, mAP: 0.3464, Time: 10.15s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.0990, mAP@0.5: 0.5759, mAP: 0.3923, Time: 17.41s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1024, mAP@0.5: 0.5960, mAP: 0.4032, Time: 17.75s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5090, mAP: 0.3394, Time: 25.40s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0995, mAP@0.5: 0.5494, mAP: 0.3774, Time: 26.20s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1038, mAP@0.5: 0.5379, mAP: 0.3642, Time: 35.56s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1042, mAP@0.5: 0.5001, mAP: 0.3336, Time: 36.79s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1032, mAP@0.5: 0.5424, mAP: 0.3628, Time: 50.85s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.4887, mAP: 0.3229, Time: 49.28s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1029
+[SERVER] Validation mAP@0.5: 0.5265
+[SERVER] Validation mAP:    0.3536
+[SERVER] Aggregated Score:  0.5058
+[SERVER] Eval Duration:     50.85s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10294483237216455, 'eval_accuracy': 0.5058228815356715, 'eval_mAP50': 0.5265041716712051}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10294483237216455, 'eval_accuracy': 0.5058228815356715, 'eval_mAP50': 0.5265041716712051}
+INFO :      
+
+INFO :      Strategy execution finished in 11165.47s
+Strategy execution finished in 11165.47s
+INFO :      
+
+INFO :      Final results:
+Final results:
+INFO :      
+
+INFO :          Global Arrays:
+        Global Arrays:
+INFO :                  ArrayRecord (13.880 MB)
+                ArrayRecord (13.880 MB)
+INFO :      
+
+INFO :          Aggregated ClientApp-side Train Metrics:
+        Aggregated ClientApp-side Train Metrics:
+INFO :          { 1: { 'train_accuracy': '5.2441e-01',
+        { 1: { 'train_accuracy': '5.2441e-01',
+INFO :                 'train_loss': '1.2725e-01',
+               'train_loss': '1.2725e-01',
+INFO :                 'train_mAP50': '5.5512e-01'},
+               'train_mAP50': '5.5512e-01'},
+INFO :            2: { 'train_accuracy': '5.2426e-01',
+          2: { 'train_accuracy': '5.2426e-01',
+INFO :                 'train_loss': '1.2653e-01',
+               'train_loss': '1.2653e-01',
+INFO :                 'train_mAP50': '5.5606e-01'},
+               'train_mAP50': '5.5606e-01'},
+INFO :            3: { 'train_accuracy': '5.2551e-01',
+          3: { 'train_accuracy': '5.2551e-01',
+INFO :                 'train_loss': '1.2622e-01',
+               'train_loss': '1.2622e-01',
+INFO :                 'train_mAP50': '5.5582e-01'}}
+               'train_mAP50': '5.5582e-01'}}
+INFO :      
+
+INFO :          Aggregated ClientApp-side Evaluate Metrics:
+        Aggregated ClientApp-side Evaluate Metrics:
+INFO :          { 1: { 'eval_accuracy': '5.0808e-01',
+        { 1: { 'eval_accuracy': '5.0808e-01',
+INFO :                 'eval_loss': '1.0311e-01',
+               'eval_loss': '1.0311e-01',
+INFO :                 'eval_mAP50': '5.3282e-01'},
+               'eval_mAP50': '5.3282e-01'},
+INFO :            2: { 'eval_accuracy': '5.0686e-01',
+          2: { 'eval_accuracy': '5.0686e-01',
+INFO :                 'eval_loss': '1.0298e-01',
+               'eval_loss': '1.0298e-01',
+INFO :                 'eval_mAP50': '5.2926e-01'},
+               'eval_mAP50': '5.2926e-01'},
+INFO :            3: { 'eval_accuracy': '5.0582e-01',
+          3: { 'eval_accuracy': '5.0582e-01',
+INFO :                 'eval_loss': '1.0294e-01',
+               'eval_loss': '1.0294e-01',
+INFO :                 'eval_mAP50': '5.2650e-01'}}
+               'eval_mAP50': '5.2650e-01'}}
+INFO :      
+
+INFO :          ServerApp-side Evaluate Metrics:
+        ServerApp-side Evaluate Metrics:
+INFO :          {}
+        {}
+INFO :      
+
+[OPTUNA] Trial  12 -> mAP@0.5=0.5328  (lr=0.00012, strategy=4, epochs=4, batch=32)
+
+[OPTUNA-OBJECTIVE] Starting trial 13 with lr=0.000290, strategy=4, local_epochs=4, batch_size=32
+Using strategy: FedProx
+
+======================================================================
+STARTING FL TRIAL  [optuna_trial_13]
+  lr=0.000290  rounds=3 strategy=4 local_epochs=4 batch_size=32
+======================================================================
+
+INFO :      Starting FedProx strategy:
+Starting FedProx strategy:
+INFO :          ├── Number of rounds: 3
+        ├── Number of rounds: 3
+INFO :          ├── ArrayRecord (13.88 MB)
+        ├── ArrayRecord (13.88 MB)
+INFO :          ├── ConfigRecord (train): {'lr': 0.0002904047691849972, 'num_rounds': 3, 'local-epochs': 4, 'batch_size': 32, 'yolo_size': s}
+        ├── ConfigRecord (train): {'lr': 0.0002904047691849972, 'num_rounds': 3, 'local-epochs': 4, 'batch_size': 32, 'yolo_size': s}
+INFO :          ├── ConfigRecord (evaluate): (empty!)
+        ├── ConfigRecord (evaluate): (empty!)
+INFO :          ├──> FedProx settings:
+        ├──> FedProx settings:
+INFO :          │       └── Proximal mu: 9.285364560030931
+        │       └── Proximal mu: 9.285364560030931
+INFO :          ├──> Sampling:
+        ├──> Sampling:
+INFO :          │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+        │       ├──Fraction: train (1.00) | evaluate ( 1.00)
+INFO :          │       ├──Minimum nodes: train (2) | evaluate (2)
+        │       ├──Minimum nodes: train (2) | evaluate (2)
+INFO :          │       └──Minimum available nodes: 2
+        │       └──Minimum available nodes: 2
+INFO :          └──> Keys in records:
+        └──> Keys in records:
+INFO :                  ├── Weighted by: 'num-examples'
+                ├── Weighted by: 'num-examples'
+INFO :                  ├── ArrayRecord key: 'arrays'
+                ├── ArrayRecord key: 'arrays'
+INFO :                  └── ConfigRecord key: 'config'
+                └── ConfigRecord key: 'config'
+INFO :      
+
+INFO :      
+
+INFO :      [ROUND 1/3]
+[ROUND 1/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1299, mAP@0.5: 0.5326, mAP: 0.3453, Time: 357.02s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1285, mAP@0.5: 0.6885, mAP: 0.4973, Time: 508.47s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1270, mAP@0.5: 0.6502, mAP: 0.4346, Time: 950.09s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1273, mAP@0.5: 0.5643, mAP: 0.3838, Time: 1112.03s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1274, mAP@0.5: 0.5437, mAP: 0.3680, Time: 2053.21s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1260, mAP@0.5: 0.5100, mAP: 0.3367, Time: 2071.71s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1284, mAP@0.5: 0.5704, mAP: 0.3936, Time: 2673.06s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1241, mAP@0.5: 0.5325, mAP: 0.3547, Time: 2678.32s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1254, mAP@0.5: 0.5363, mAP: 0.3551, Time: 3481.04s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1263, mAP@0.5: 0.5730, mAP: 0.3822, Time: 3693.41s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1265
+[SERVER] Training mAP@0.5:  0.5557
+[SERVER] Training mAP:      0.3737
+[SERVER] Aggregated Score:  0.5253
+[SERVER] Round Duration:    3693.40s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12651035884234088, 'train_accuracy': 0.5252886822833387, 'train_mAP50': 0.5556906568596098}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12651035884234088, 'train_accuracy': 0.5252886822833387, 'train_mAP50': 0.5556906568596098}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1128, mAP@0.5: 0.5323, mAP: 0.3428, Time: 9.99s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0851, mAP@0.5: 0.6997, mAP: 0.5107, Time: 12.07s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.0989, mAP@0.5: 0.5717, mAP: 0.3911, Time: 16.98s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5179, mAP: 0.3419, Time: 25.40s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1024, mAP@0.5: 0.5020, mAP: 0.3431, Time: 17.03s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0994, mAP@0.5: 0.5389, mAP: 0.3704, Time: 25.99s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.5442, mAP: 0.3674, Time: 35.26s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1045, mAP@0.5: 0.5134, mAP: 0.3437, Time: 36.61s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.4900, mAP: 0.3252, Time: 47.69s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1033, mAP@0.5: 0.5170, mAP: 0.3471, Time: 46.46s
+[SERVER] ================================================================================
+[SERVER] ROUND 1 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1031
+[SERVER] Validation mAP@0.5: 0.5225
+[SERVER] Validation mAP:    0.3514
+[SERVER] Aggregated Score:  0.5027
+[SERVER] Eval Duration:     47.69s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10306846635909266, 'eval_accuracy': 0.502687990813792, 'eval_mAP50': 0.5224697775070066}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10306846635909266, 'eval_accuracy': 0.502687990813792, 'eval_mAP50': 0.5224697775070066}
+INFO :      
+
+INFO :      [ROUND 2/3]
+[ROUND 2/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1271, mAP@0.5: 0.5349, mAP: 0.3447, Time: 307.08s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.6831, mAP: 0.4895, Time: 555.13s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1261, mAP@0.5: 0.6497, mAP: 0.4325, Time: 970.86s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1266, mAP@0.5: 0.5657, mAP: 0.3887, Time: 1087.11s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1273, mAP@0.5: 0.5466, mAP: 0.3681, Time: 2023.96s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1255, mAP@0.5: 0.5099, mAP: 0.3361, Time: 2037.28s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1275, mAP@0.5: 0.5688, mAP: 0.3938, Time: 2684.78s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1233, mAP@0.5: 0.5330, mAP: 0.3545, Time: 2706.28s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1249, mAP@0.5: 0.5368, mAP: 0.3552, Time: 3466.81s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1257, mAP@0.5: 0.5735, mAP: 0.3830, Time: 3659.77s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1259
+[SERVER] Training mAP@0.5:  0.5560
+[SERVER] Training mAP:      0.3737
+[SERVER] Aggregated Score:  0.5247
+[SERVER] Round Duration:    3659.77s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.1258573455068756, 'train_accuracy': 0.5246561901183243, 'train_mAP50': 0.5560364822513592}
+        └──> Aggregated MetricRecord: {'train_loss': 0.1258573455068756, 'train_accuracy': 0.5246561901183243, 'train_mAP50': 0.5560364822513592}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0851, mAP@0.5: 0.6813, mAP: 0.4926, Time: 11.67s
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1112, mAP@0.5: 0.5445, mAP: 0.3512, Time: 10.95s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.0990, mAP@0.5: 0.5708, mAP: 0.3907, Time: 17.55s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1023, mAP@0.5: 0.6498, mAP: 0.4355, Time: 18.28s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5143, mAP: 0.3406, Time: 25.65s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0995, mAP@0.5: 0.5679, mAP: 0.3917, Time: 25.59s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.5473, mAP: 0.3680, Time: 35.58s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1043, mAP@0.5: 0.5270, mAP: 0.3526, Time: 38.51s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.4892, mAP: 0.3239, Time: 46.98s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1033, mAP@0.5: 0.5171, mAP: 0.3483, Time: 49.53s
+[SERVER] ================================================================================
+[SERVER] ROUND 2 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1030
+[SERVER] Validation mAP@0.5: 0.5318
+[SERVER] Validation mAP:    0.3574
+[SERVER] Aggregated Score:  0.5076
+[SERVER] Eval Duration:     49.53s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10301039407920032, 'eval_accuracy': 0.5076194156921683, 'eval_mAP50': 0.5318114373522509}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10301039407920032, 'eval_accuracy': 0.5076194156921683, 'eval_mAP50': 0.5318114373522509}
+INFO :      
+
+INFO :      [ROUND 3/3]
+[ROUND 3/3]
+INFO :      configure_train: Sampled 10 nodes (out of 10)
+configure_train: Sampled 10 nodes (out of 10)
+INFO :      aggregate_train: Received 10 results and 0 failures
+aggregate_train: Received 10 results and 0 failures
+[SERVER] Aggregating training metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] TRAINING PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1263, mAP@0.5: 0.5373, mAP: 0.3468, Time: 344.03s
+[SERVER] ✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1260, mAP@0.5: 0.6812, mAP: 0.4899, Time: 555.09s
+[SERVER] ✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1254, mAP@0.5: 0.6501, mAP: 0.4343, Time: 994.56s
+[SERVER] ✅ [CLIENT 6] TRAIN COMPLETE - Loss: 0.1264, mAP@0.5: 0.5668, mAP: 0.3901, Time: 1109.41s
+[SERVER] ✅ [CLIENT 3] TRAIN COMPLETE - Loss: 0.1263, mAP@0.5: 0.5467, mAP: 0.3679, Time: 2056.05s
+[SERVER] ✅ [CLIENT 7] TRAIN COMPLETE - Loss: 0.1253, mAP@0.5: 0.5094, mAP: 0.3363, Time: 2141.55s
+[SERVER] ✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1272, mAP@0.5: 0.5679, mAP: 0.3912, Time: 2491.60s
+[SERVER] ✅ [CLIENT 4] TRAIN COMPLETE - Loss: 0.1229, mAP@0.5: 0.5334, mAP: 0.3568, Time: 2743.24s
+[SERVER] ✅ [CLIENT 0] TRAIN COMPLETE - Loss: 0.1244, mAP@0.5: 0.5359, mAP: 0.3535, Time: 3414.07s
+[SERVER] ✅ [CLIENT 1] TRAIN COMPLETE - Loss: 0.1253, mAP@0.5: 0.5723, mAP: 0.3817, Time: 3628.68s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 TRAINING SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Training Loss:     0.1254
+[SERVER] Training mAP@0.5:  0.5557
+[SERVER] Training mAP:      0.3735
+[SERVER] Aggregated Score:  0.5253
+[SERVER] Round Duration:    3628.67s
+[SERVER] Data Transferred:  138.53 MB
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'train_loss': 0.12536685548448992, 'train_accuracy': 0.525303914934442, 'train_mAP50': 0.5556934704189319}
+        └──> Aggregated MetricRecord: {'train_loss': 0.12536685548448992, 'train_accuracy': 0.525303914934442, 'train_mAP50': 0.5556934704189319}
+INFO :      configure_evaluate: Sampled 10 nodes (out of 10)
+configure_evaluate: Sampled 10 nodes (out of 10)
+INFO :      aggregate_evaluate: Received 10 results and 0 failures
+aggregate_evaluate: Received 10 results and 0 failures
+[SERVER] Aggregating evaluation metrics from 10 clients
+[SERVER] ================================================================================
+[SERVER] EVALUATION PHASE - CLIENT RESULTS
+[SERVER] ================================================================================
+[SERVER] ✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1107, mAP@0.5: 0.5389, mAP: 0.3506, Time: 10.35s
+[SERVER] ✅ [CLIENT 9] EVAL COMPLETE - Loss: 0.0849, mAP@0.5: 0.6947, mAP: 0.5003, Time: 12.18s
+[SERVER] ✅ [CLIENT 6] EVAL COMPLETE - Loss: 0.0988, mAP@0.5: 0.5756, mAP: 0.3927, Time: 16.76s
+[SERVER] ✅ [CLIENT 8] EVAL COMPLETE - Loss: 0.1024, mAP@0.5: 0.6436, mAP: 0.4344, Time: 18.63s
+[SERVER] ✅ [CLIENT 7] EVAL COMPLETE - Loss: 0.1030, mAP@0.5: 0.5172, mAP: 0.3409, Time: 24.89s
+[SERVER] ✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0995, mAP@0.5: 0.5441, mAP: 0.3774, Time: 25.27s
+[SERVER] ✅ [CLIENT 4] EVAL COMPLETE - Loss: 0.1041, mAP@0.5: 0.5123, mAP: 0.3446, Time: 36.82s
+[SERVER] ✅ [CLIENT 3] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.5235, mAP: 0.3528, Time: 37.23s
+[SERVER] ✅ [CLIENT 1] EVAL COMPLETE - Loss: 0.1034, mAP@0.5: 0.5326, mAP: 0.3559, Time: 49.24s
+[SERVER] ✅ [CLIENT 0] EVAL COMPLETE - Loss: 0.1040, mAP@0.5: 0.4923, mAP: 0.3248, Time: 47.95s
+[SERVER] ================================================================================
+[SERVER] ROUND 3 EVALUATION SUMMARY
+[SERVER] ================================================================================
+[SERVER] Participating Clients: 10 | Success: 10
+[SERVER] Validation Loss:   0.1030
+[SERVER] Validation mAP@0.5: 0.5265
+[SERVER] Validation mAP:    0.3536
+[SERVER] Aggregated Score:  0.5055
+[SERVER] Eval Duration:     49.24s
+[SERVER] ================================================================================
+
+INFO :          └──> Aggregated MetricRecord: {'eval_loss': 0.10298110495963092, 'eval_accuracy': 0.5054814483815857, 'eval_mAP50': 0.5265315278781144}
+        └──> Aggregated MetricRecord: {'eval_loss': 0.10298110495963092, 'eval_accuracy': 0.5054814483815857, 'eval_mAP50': 0.5265315278781144}
+INFO :      
+
+INFO :      Strategy execution finished in 11233.20s
+Strategy execution finished in 11233.20s
+INFO :      
+
+INFO :      Final results:
+Final results:
+INFO :      
+
+INFO :          Global Arrays:
+        Global Arrays:
+INFO :                  ArrayRecord (13.880 MB)
+                ArrayRecord (13.880 MB)
+INFO :      
+
+INFO :          Aggregated ClientApp-side Train Metrics:
+        Aggregated ClientApp-side Train Metrics:
+INFO :          { 1: { 'train_accuracy': '5.2529e-01',
+        { 1: { 'train_accuracy': '5.2529e-01',
+INFO :                 'train_loss': '1.2651e-01',
+               'train_loss': '1.2651e-01',
+INFO :                 'train_mAP50': '5.5569e-01'},
+               'train_mAP50': '5.5569e-01'},
+INFO :            2: { 'train_accuracy': '5.2466e-01',
+          2: { 'train_accuracy': '5.2466e-01',
+INFO :                 'train_loss': '1.2586e-01',
+               'train_loss': '1.2586e-01',
+INFO :                 'train_mAP50': '5.5604e-01'},
+               'train_mAP50': '5.5604e-01'},
+INFO :            3: { 'train_accuracy': '5.2530e-01',
+          3: { 'train_accuracy': '5.2530e-01',
+INFO :                 'train_loss': '1.2537e-01',
+               'train_loss': '1.2537e-01',
+INFO :                 'train_mAP50': '5.5569e-01'}}
+               'train_mAP50': '5.5569e-01'}}
+INFO :      
+
+INFO :          Aggregated ClientApp-side Evaluate Metrics:
+        Aggregated ClientApp-side Evaluate Metrics:
+INFO :          { 1: { 'eval_accuracy': '5.0269e-01',
+        { 1: { 'eval_accuracy': '5.0269e-01',
+INFO :                 'eval_loss': '1.0307e-01',
+               'eval_loss': '1.0307e-01',
+INFO :                 'eval_mAP50': '5.2247e-01'},
+               'eval_mAP50': '5.2247e-01'},
+INFO :            2: { 'eval_accuracy': '5.0762e-01',
+          2: { 'eval_accuracy': '5.0762e-01',
+INFO :                 'eval_loss': '1.0301e-01',
+               'eval_loss': '1.0301e-01',
+INFO :                 'eval_mAP50': '5.3181e-01'},
+               'eval_mAP50': '5.3181e-01'},
+INFO :            3: { 'eval_accuracy': '5.0548e-01',
+          3: { 'eval_accuracy': '5.0548e-01',
+INFO :                 'eval_loss': '1.0298e-01',
+               'eval_loss': '1.0298e-01',
+INFO :                 'eval_mAP50': '5.2653e-01'}}
+               'eval_mAP50': '5.2653e-01'}}
+INFO :      
+
+INFO :          ServerApp-side Evaluate Metrics:
+        ServerApp-side Evaluate Metrics:
+INFO :          {}
+        {}
+INFO :      
+
+[OPTUNA] Trial  13 -> mAP@0.5=0.5318  (lr=0.00029, strategy=4, epochs=4, batch=32)
+
+======================================================================
+OPTUNA COMPLETE -- Best trial #12
+  mAP@0.5  = 0.5328
+  lr       = 0.000117
+  epochs   = 4
+  batch    = 32
+  strategy = 4 (FedProx)
+======================================================================
+
+[WARN] HPO consumed all 10 rounds (10 trials x 3 hpo_rounds). No rounds left for the final run. Increase num-server-rounds or reduce n_optuna_trials/hpo_rounds.
+INFO :      
+
+root@7c44782c3724:/app# 

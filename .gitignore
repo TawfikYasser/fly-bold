@@ -6,15 +6,12 @@
 /flower/command.txt
 /flower/__pycache__/
 /flower/run_history.txt
-/flower/terminal_logs.txt
+terminal_logs.txt
 /yolov5_src/
 /yolov5_env/
 setup_env.sh
 requirements.txt
 vm-stoper.sh
 /flower/yolov5/run_detect.py
-/flower/100101001.txt
+100101001.txt
 53101003.txt
-103101004.txt
-/flower/EXP_YOLOv5_s_detection_103101004_hpo.db
-trial_results_103101004.html

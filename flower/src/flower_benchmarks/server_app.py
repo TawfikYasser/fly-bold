@@ -584,6 +584,7 @@ def main(grid: Grid, context: Context) -> None:
     num_rounds = get_config("num-server-rounds", context, default=5, type_converter=int)
     lr = get_config("lr", context, default=0.01, type_converter=float)
     task_type = get_config("task", context, default="classification")
+    dataset_number = get_config("dataset", context, default=100, type_converter=int)
 
     if task_type == "detection":
         yolo_size = get_config("yolo_size", context, default="n")
@@ -786,7 +787,7 @@ def main(grid: Grid, context: Context) -> None:
         print(f"OPTUNA HPO: {n_optuna_trials} trials x {hpo_rounds} proxy rounds each")
         print(f"{'='*70}\n")
 
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        optuna.logging.set_verbosity(optuna.logging.INFO)
 
         # SQLite storage: completed trials survive VM preemption / crashes.
         # load_if_exists=True means a restarted run resumes from where it stopped.
@@ -796,11 +797,17 @@ def main(grid: Grid, context: Context) -> None:
             storage=f"sqlite:///{experiment_name}_{run_id}_hpo.db",
             load_if_exists=True,
             sampler=optuna.samplers.TPESampler(seed=42),
+
             # FIX 4: MedianPruner kills a trial at step S if its reported mAP
             # is below the median of all completed trials at the same step.
             # n_startup_trials=3: don't prune before we have enough baseline data.
             # n_warmup_steps=1: never prune on the very first round (too noisy).
-            pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=1),
+            # pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=1),
+
+            # Using HyperbandPruner instead of MedianPruner to leverage early stopping
+            # with aggressive pruning of bad configs, which is beneficial given the high
+            # variance in FL training and the cost of each trial.
+            pruner=optuna.pruners.HyperbandPruner(min_resource=1, max_resource=hpo_rounds, reduction_factor=3),
         )
 
         def objective(trial):
@@ -979,72 +986,74 @@ def main(grid: Grid, context: Context) -> None:
             "strategy": 4,
             "proximal_mu": 1.2604664585649468,},
         }
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[1],
-            distributions=distributions["fedavg"],
-            value=0.5309,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[1],
-            distributions=distributions["fedavg"],
-            value=0.5211,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
-        study.add_trial(optuna.trial.create_trial(
-            params=best_prev_params[1],
-            distributions=distributions["fedavg"],
-            value=0.5200,
-            state=optuna.trial.TrialState.COMPLETE,
-        ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[1],
-        #     distributions=distributions["fedavg"],
-        #     value=0.5218,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[1],
-        #     distributions=distributions["fedavg"],
-        #     value=0.5181,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[1],
-        #     distributions=distributions["fedavg"],
-        #     value=0.5162,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[1],
-        #     distributions=distributions["fedavg"],
-        #     value=0.5048,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[2],
-        #     distributions=distributions["fedadam"],
-        #     value=0.5001,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[3],
-        #     distributions=distributions["fedyogi"],
-        #     value=0.5001,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[4],
-        #     distributions=distributions["fedyogi"],
-        #     value=0.4448,
-        #     state=optuna.trial.TrialState.PRUNED,
-        # ))
-        # study.add_trial(optuna.trial.create_trial(
-        #     params=best_prev_params[5],
-        #     distributions=distributions["fedprox"],
-        #     value=0.5039,
-        #     state=optuna.trial.TrialState.COMPLETE,
-        # ))
+        if dataset_number == 100:
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5218,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5181,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5162,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5048,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[2],
+                distributions=distributions["fedadam"],
+                value=0.5001,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[3],
+                distributions=distributions["fedyogi"],
+                value=0.5001,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[4],
+                distributions=distributions["fedyogi"],
+                value=0.4448,
+                state=optuna.trial.TrialState.PRUNED,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[5],
+                distributions=distributions["fedprox"],
+                value=0.5039,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+        else:
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5309,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5211,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
+            study.add_trial(optuna.trial.create_trial(
+                params=best_prev_params[1],
+                distributions=distributions["fedavg"],
+                value=0.5200,
+                state=optuna.trial.TrialState.COMPLETE,
+            ))
 
         study.optimize(objective, n_trials=n_optuna_trials)
 

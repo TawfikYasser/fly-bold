@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HPO Trial Results — Run 103101004</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111418;
+    --surface2: #181c22;
+    --border: #1e252e;
+    --border-bright: #2a3340;
+    --text: #c8d0dc;
+    --text-dim: #5a6472;
+    --text-bright: #e8edf4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+
+    --fedavg: #3b82f6;
+    --fedadam: #f59e0b;
+    --fedyogi: #a78bfa;
+    --fedprox: #34d399;
+
+    --live: #22c55e;
+    --synthetic: #64748b;
+    --complete: #1d4ed8;
+    --pruned: #dc2626;
+    --winner: #f59e0b;
+    --diverged: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 32px 24px 64px;
+  }
+
+  header {
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border-bright);
+    padding-bottom: 20px;
+  }
+
+  .run-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+
+  .meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .meta-item span {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .legend-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .legend-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 2px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .pill-live      { background: rgba(34,197,94,0.12);  color: var(--live);      border: 1px solid rgba(34,197,94,0.25); }
+  .pill-synthetic { background: rgba(100,116,139,0.12); color: var(--synthetic); border: 1px solid rgba(100,116,139,0.25); }
+  .pill-complete  { background: rgba(29,78,216,0.12);  color: #60a5fa;          border: 1px solid rgba(29,78,216,0.3); }
+  .pill-pruned    { background: rgba(220,38,38,0.12);  color: #f87171;          border: 1px solid rgba(220,38,38,0.3); }
+  .pill-winner    { background: rgba(245,158,11,0.15); color: var(--winner);    border: 1px solid rgba(245,158,11,0.35); }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 10px 12px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-bright);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  thead th:first-child { border-radius: 8px 0 0 0; }
+  thead th:last-child  { border-radius: 0 8px 0 0; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.is-winner { background: rgba(245,158,11,0.04); }
+  tbody tr.is-winner:hover { background: rgba(245,158,11,0.08); }
+  tbody tr.is-diverged { background: rgba(239,68,68,0.04); }
+  tbody tr.is-synthetic { opacity: 0.72; }
+
+  td {
+    padding: 9px 12px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .td-center { text-align: center; }
+
+  .trial-num {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-bright);
+    min-width: 28px;
+    display: inline-block;
+    text-align: right;
+  }
+
+  .optuna-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .strategy-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .s-fedavg  { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+  .s-fedadam { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+  .s-fedyogi { background: rgba(167,139,250,0.15); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.3); }
+  .s-fedprox { background: rgba(52,211,153,0.15); color: #6ee7b7; border: 1px solid rgba(52,211,153,0.3); }
+
+  .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .num-dim {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .mAP-val {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .mAP-high { color: #4ade80; }
+  .mAP-mid  { color: #86efac; }
+  .mAP-low  { color: #fbbf24; }
+  .mAP-bad  { color: #f87171; }
+  .mAP-pruned { color: var(--text-dim); font-style: italic; font-size: 11px; font-weight: 400; }
+
+  .bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 120px;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--border-bright);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .notes {
+    font-size: 11px;
+    color: var(--text-dim);
+    max-width: 220px;
+    white-space: normal;
+    line-height: 1.4;
+  }
+
+  .notes em {
+    color: #f87171;
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .notes strong {
+    color: var(--winner);
+  }
+
+  .extra-params {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    max-width: 200px;
+    white-space: normal;
+    line-height: 1.6;
+  }
+
+  .extra-params span { color: var(--text); }
+
+  .winner-star {
+    color: var(--winner);
+    font-size: 14px;
+    margin-right: 4px;
+  }
+
+  .section-row td {
+    background: var(--surface2);
+    border-top: 2px solid var(--border-bright);
+    border-bottom: 2px solid var(--border-bright);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    padding: 6px 12px;
+  }
+
+  footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  footer strong { color: var(--text); }
+
+  .warn-box {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: rgba(245,158,11,0.07);
+    border: 1px solid rgba(245,158,11,0.25);
+    border-left: 3px solid var(--winner);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .warn-box strong { color: var(--winner); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="run-id">Run ID 103101004 &nbsp;·&nbsp; Experiment EXP_YOLOv5_s_detection</div>
+  <h1>Optuna HPO — Full Trial Registry</h1>
+  <div class="meta">
+    <div class="meta-item">Total trials in study <span>18</span></div>
+    <div class="meta-item">Live runs <span>10</span></div>
+    <div class="meta-item">Synthetic (add_trial) <span>8</span></div>
+    <div class="meta-item">Proxy rounds per trial <span>3</span></div>
+    <div class="meta-item">num_rounds config <span>10</span></div>
+    <div class="meta-item">Final run <span style="color:#f87171">SKIPPED — budget exhausted</span></div>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="legend-group">
+    <span class="legend-label">Type</span>
+    <span class="pill pill-live"><span class="dot" style="background:var(--live)"></span>Live</span>
+    <span class="pill pill-synthetic"><span class="dot" style="background:var(--synthetic)"></span>Synthetic</span>
+  </div>
+  <div class="legend-group">
+    <span class="legend-label">State</span>
+    <span class="pill pill-complete">Complete</span>
+    <span class="pill pill-pruned">Pruned</span>
+    <span class="pill pill-winner">⭐ Winner</span>
+  </div>
+  <div class="legend-group">
+    <span class="legend-label">Strategy</span>
+    <span class="strategy-badge s-fedavg">FedAvg</span>
+    <span class="strategy-badge s-fedadam">FedAdam</span>
+    <span class="strategy-badge s-fedyogi">FedYogi</span>
+    <span class="strategy-badge s-fedprox">FedProx</span>
+  </div>
+</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+  <tr>
+    <th>#</th>
+    <th>Optuna #</th>
+    <th>Type</th>
+    <th>State</th>
+    <th>Strategy</th>
+    <th>lr</th>
+    <th>Epochs</th>
+    <th>Batch</th>
+    <th>Strategy Params</th>
+    <th>Eval mAP@0.5</th>
+    <th>mAP bar</th>
+    <th>Notes</th>
+  </tr>
+</thead>
+<tbody>
+
+<!-- SYNTHETIC BLOCK -->
+<tr class="section-row"><td colspan="12">── Synthetic Trials (pre-loaded via study.add_trial) ─ not executed in this run ──</td></tr>
+
+<!-- Trial 2 -->
+<tr class="is-winner is-synthetic">
+  <td><span class="winner-star">⭐</span><span class="trial-num">2</span></td>
+  <td><span class="optuna-num">trial.number = 1</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-winner">Winner</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-high">0.5218</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:100%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes"><strong>Study winner — best_prev_params[1]. Historical result, not re-validated here.</strong></span></td>
+</tr>
+
+<!-- Trial 3 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">3</span></td>
+  <td><span class="optuna-num">trial.number = 2</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-high">0.5181</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:99.3%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes">best_prev_params[1]</span></td>
+</tr>
+
+<!-- Trial 4 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">4</span></td>
+  <td><span class="optuna-num">trial.number = 3</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-high">0.5162</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:98.9%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes">best_prev_params[1]</span></td>
+</tr>
+
+<!-- Trial 5 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">5</span></td>
+  <td><span class="optuna-num">trial.number = 4</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.5048</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.7%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[1]</span></td>
+</tr>
+
+<!-- Trial 6 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">6</span></td>
+  <td><span class="optuna-num">trial.number = 5</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.000561</span></td>
+  <td class="td-center"><span class="num">5</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.08148</span> η_l=<span>0.001136</span><br>
+      β₁=<span>0.9843</span> β₂=<span>0.9824</span> τ=<span>2.66e-4</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5001</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.8%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[2] — same params as live Trial 10 (which diverged!)</span></td>
+</tr>
+
+<!-- Trial 7 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">7</span></td>
+  <td><span class="optuna-num">trial.number = 6</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.000231</span></td>
+  <td class="td-center"><span class="num">1</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.001256</span> η_l=<span>0.008168</span><br>
+      β₁=<span>0.9492</span> β₂=<span>0.9198</span> τ=<span>1.07e-3</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5001</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.8%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[3]</span></td>
+</tr>
+
+<!-- Trial 8 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">8</span></td>
+  <td><span class="optuna-num">trial.number = 7</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-pruned">Pruned</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.001530</span></td>
+  <td class="td-center"><span class="num">1</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.000196</span> η_l=<span>0.02336</span><br>
+      β₁=<span>0.8836</span> β₂=<span>0.9121</span> τ=<span>9.78e-4</span>
+    </span>
+  </td>
+  <td><span class="mAP-pruned">0.4448 (pruned)</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:85.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">best_prev_params[4] — low η, beta_2 &lt; 0.92 → poor Yogi variance estimate</span></td>
+</tr>
+
+<!-- Trial 9 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">9</span></td>
+  <td><span class="optuna-num">trial.number = 8</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.000117</span></td>
+  <td class="td-center"><span class="num">5</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">
+      μ=<span>1.2605</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5039</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.6%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[5] — very low lr, high μ proximal penalty</span></td>
+</tr>
+
+<!-- LIVE BLOCK -->
+<tr class="section-row"><td colspan="12">── Live Trials (executed in this run via study.optimize) ──</td></tr>
+
+<!-- Trial 1 — enqueued seed -->
+<tr>
+  <td><span class="trial-num">1</span></td>
+  <td><span class="optuna-num">trial.number = 0</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-mid">0.5001</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.9%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Enqueued seed baseline. R1 eval: 0.5001 → R2: 0.4574 → R3: 0.4979. Best @ round 1.</span></td>
+</tr>
+
+<!-- Trial 10 — FedAdam divergence -->
+<tr class="is-diverged">
+  <td><span class="trial-num">10</span></td>
+  <td><span class="optuna-num">trial.number = 9</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.000561</span></td>
+  <td class="td-center"><span class="num">5</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.08148</span> η_l=<span>0.001136</span><br>
+      β₁=<span>0.9843</span> β₂=<span>0.9824</span> τ=<span>2.66e-4</span>
+    </span>
+  </td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-low">0.4983</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.5%;background:#fbbf24"></div></div></div></td>
+  <td><span class="notes"><em>CATASTROPHIC DIVERGENCE</em>: R1→0.4983, R2→0.3266, R3→0.0007. Reported max=0.4983. Same params as synthetic Trial 6 which scored 0.5001.</span></td>
+</tr>
+
+<!-- Trial 11 -->
+<tr>
+  <td><span class="trial-num">11</span></td>
+  <td><span class="optuna-num">trial.number = 10</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.007371</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td>
+    <span class="extra-params">μ=<span>0.001274</span></span>
+  </td>
+  <td><span class="mAP-val mAP-low">0.4891</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:93.7%;background:#fbbf24"></div></div></div></td>
+  <td><span class="notes">1 client dropout in R3 train (9/10). R1→0.4863 → R2→0.4891 → R3→0.4293. Heartbeat failure event.</span></td>
+</tr>
+
+<!-- Trial 12 — pruned -->
+<tr>
+  <td><span class="trial-num">12</span></td>
+  <td><span class="optuna-num">trial.number = 11</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 1</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.003808</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4491 @ step 1<br><span style="font-size:10px">(R1: 0.4320)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:86.1%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Pruned — step 1 mAP below median. 1 ghost eval client (CLIENT 4). High lr+epochs combo under-performs within 3-round window.</span></td>
+</tr>
+
+<!-- Trial 13 -->
+<tr>
+  <td><span class="trial-num">13</span></td>
+  <td><span class="optuna-num">trial.number = 12</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.003000</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.5000</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.8%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">R1→0.5000 → R2→0.4917 → R3→0.4502. Near-identical to seed. Ghost: CLIENT 5 R3 eval.</span></td>
+</tr>
+
+<!-- Trial 14 — pruned -->
+<tr>
+  <td><span class="trial-num">14</span></td>
+  <td><span class="optuna-num">trial.number = 13</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 1</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000381</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4534 @ step 1<br><span style="font-size:10px">(R1: 0.4532)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:86.9%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Pruned — lr too low for 3-round window. Trivially different across both rounds (0.4532→0.4534). Ghost: CLIENT 0 R1, CLIENT 7 R2 eval.</span></td>
+</tr>
+
+<!-- Trial 15 -->
+<tr>
+  <td><span class="trial-num">15</span></td>
+  <td><span class="optuna-num">trial.number = 14</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.002087</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.4993</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.7%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Stable across all 3 rounds (0.4977→0.4491→0.4993). Ghost: CLIENT 1 R2 eval.</span></td>
+</tr>
+
+<!-- Trial 16 -->
+<tr>
+  <td><span class="trial-num">16</span></td>
+  <td><span class="optuna-num">trial.number = 15</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.009602</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-low">0.4763</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:91.3%;background:#fbbf24"></div></div></div></td>
+  <td><span class="notes">Worst complete FedAvg. High lr clearly degrades performance. Ghost: CLIENT 9 R3 eval.</span></td>
+</tr>
+
+<!-- Trial 17 -->
+<tr>
+  <td><span class="trial-num">17</span></td>
+  <td><span class="optuna-num">trial.number = 16</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.000300</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">μ=<span>8.7507</span></span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5006</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.0%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Best live result. Very low lr + high μ. R1→0.4948 → R2→0.5006 → R3→0.4404. Ghost: CLIENT 4 R3 eval.</span></td>
+</tr>
+
+<!-- Trial 18 -->
+<tr>
+  <td><span class="trial-num">18</span></td>
+  <td><span class="optuna-num">trial.number = 17</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.001750</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.09429</span> η_l=<span>0.001330</span><br>
+      β₁=<span>0.8025</span> β₂=<span>0.9956</span> τ=<span>9.26e-3</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.4965</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.2%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Most stable live trial (R1→0.4938 → R2→0.4965 → R3→0.4468). Ghost: CLIENT 7 R3 eval.</span></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+
+<div class="warn-box">
+  <strong>⚠ Budget Warning:</strong> With <code>num_rounds=10</code>, <code>n_optuna_trials=10</code>, and <code>hpo_rounds=3</code>, the formula <code>final_rounds = 10 − (10×3) = −20</code> cancelled the final full run entirely. The study winner (Trial 2, mAP=0.5218) was never re-validated — it is a synthetic historical entry. The best <em>actually executed</em> result in this run was Trial 17 at mAP=0.5006 (FedProx, lr=0.0003, μ=8.75).
+</div>
+
+<footer>
+  <div><strong>Best synthetic (study winner):</strong> Trial 2 — FedAvg, lr=0.001, epochs=3, batch=16 → 0.5218</div>
+  <div><strong>Best live result:</strong> Trial 17 — FedProx, lr=0.0003, μ=8.75, epochs=2, batch=16 → 0.5006</div>
+  <div><strong>Ghost eval clients (zeros averaged in):</strong> 11 occurrences across 8 trials</div>
+  <div><strong>Catastrophic divergence:</strong> Trial 10 (FedAdam, η=0.081) → mAP 0.50 → 0.33 → 0.0007</div>
+</footer>
+
+</body>
+</html>

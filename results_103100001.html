@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HPO Results - Run 103100001</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        :root {
+            --font-sans: 'Inter', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+
+        .mono { font-family: var(--font-mono); font-size: 0.85rem; }
+        
+        /* Custom Table Styling */
+        .table-container {
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+            border: 1px solid #e2e8f0;
+        }
+
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        
+        th {
+            background: #f1f5f9;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #64748b;
+            padding: 12px 16px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.875rem;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        
+        .row-best { background-color: #f0fdf4; }
+        .row-best:hover { background-color: #dcfce7; }
+        
+        .row-pruned { color: #94a3b8; }
+        
+        tr:hover td { background-color: #f8fafc; }
+        .row-best:hover td { background-color: #dcfce7; }
+
+        /* Status Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .bg-fedavg { background: #e0f2fe; color: #0369a1; }
+        .bg-fedadam { background: #fee2e2; color: #b91c1c; }
+        .bg-fedyogi { background: #fef3c7; color: #92400e; }
+        .bg-fedprox { background: #f0fdf4; color: #15803d; }
+
+        .status-pill {
+            padding: 2px 10px;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Metric Highlights */
+        .metric-up { color: #16a34a; font-weight: 600; }
+        .metric-down { color: #dc2626; font-weight: 600; }
+        .metric-star { color: #eab308; margin-right: 4px; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight text-slate-900">Run 103100001 — Optuna Results</h1>
+                    <p class="text-slate-500 mt-1 flex items-center gap-2">
+                        <span class="font-medium text-slate-700">EXP_YOLOv5_s_detection</span>
+                        <span class="text-slate-300">•</span>
+                        <span>YOLOv5s</span>
+                        <span class="text-slate-300">•</span>
+                        <span>10 Clients</span>
+                    </p>
+                </div>
+                <div class="flex gap-2">
+                    <div class="bg-red-50 border border-red-200 px-4 py-2 rounded-lg">
+                        <p class="text-[10px] uppercase font-bold text-red-600 leading-none mb-1">System Status</p>
+                        <p class="text-sm font-semibold text-red-700 leading-none">Budget Overflow (Run Cancelled)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-medium text-slate-500 uppercase">Best mAP@0.5</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span class="text-2xl font-bold text-slate-900">0.5328</span>
+                        <span class="text-xs font-semibold text-green-600 bg-green-50 px-1.5 rounded">Trial 12</span>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-medium text-slate-500 uppercase">HPO Rounds</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span class="text-2xl font-bold text-slate-900">30</span>
+                        <span class="text-xs text-slate-400">/ 10 budget</span>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-medium text-slate-500 uppercase">Success Rate</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span class="text-2xl font-bold text-slate-900">50%</span>
+                        <span class="text-xs text-slate-400">5/10 Complete</span>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-green-500">
+                    <p class="text-xs font-medium text-slate-500 uppercase">Top Strategy</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span class="text-2xl font-bold text-slate-900">FedProx</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="table-container">
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Trial</th>
+                            <th>Strategy</th>
+                            <th>Hyperparams</th>
+                            <th class="text-center" colspan="3">Train mAP@0.5 (R1-R3)</th>
+                            <th class="text-center" colspan="3">Eval mAP@0.5 (R1-R3)</th>
+                            <th class="text-right">Final Score</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Trial 1 -->
+                        <tr>
+                            <td class="mono font-bold text-slate-400">#01</td>
+                            <td><span class="badge bg-fedavg">FedAvg</span></td>
+                            <td><div class="text-xs text-slate-500 leading-tight">LR: 1.0e-3<br>E: 3, B: 16</div></td>
+                            <td class="mono text-center">0.551</td>
+                            <td class="mono text-center">0.552</td>
+                            <td class="mono text-center">0.553</td>
+                            <td class="mono text-center">0.523</td>
+                            <td class="mono text-center">0.519</td>
+                            <td class="mono text-center">0.525</td>
+                            <td class="mono font-bold text-right">0.5253</td>
+                            <td><span class="status-pill bg-slate-100 text-slate-600 border border-slate-200">Complete</span></td>
+                        </tr>
+
+                        <!-- Trial 5 -->
+                        <tr class="row-pruned">
+                            <td class="mono font-bold text-slate-400">#05</td>
+                            <td><span class="badge bg-fedadam">FedAdam</span></td>
+                            <td><div class="text-xs text-slate-500 leading-tight">LR: 5.6e-4<br>E: 5, B: 8</div></td>
+                            <td class="mono text-center">0.548</td>
+                            <td class="mono text-center metric-down">0.285 ↓</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center">0.511</td>
+                            <td class="mono text-center metric-down">0.270 ↓</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono font-bold text-right text-red-400">0.2702</td>
+                            <td><span class="status-pill bg-red-50 text-red-600 border border-red-200">Diverged</span></td>
+                        </tr>
+
+                        <!-- Trial 6 -->
+                        <tr class="row-pruned text-slate-400">
+                            <td class="mono font-bold">#06</td>
+                            <td><span class="badge bg-fedyogi opacity-60">FedYogi</span></td>
+                            <td><div class="text-xs leading-tight">LR: 2.3e-4<br>E: 1, B: 16</div></td>
+                            <td class="mono text-center">0.553</td>
+                            <td class="mono text-center">0.554</td>
+                            <td class="mono text-center">0.554</td>
+                            <td class="mono text-center">0.516</td>
+                            <td class="mono text-center">0.519</td>
+                            <td class="mono text-center">0.516</td>
+                            <td class="mono font-bold text-right">0.5193</td>
+                            <td><span class="status-pill bg-slate-50 text-slate-400 border border-slate-100">Pruned @R3</span></td>
+                        </tr>
+
+                        <!-- Trial 7 -->
+                        <tr>
+                            <td class="mono font-bold text-slate-400">#07</td>
+                            <td><span class="badge bg-fedyogi">FedYogi</span></td>
+                            <td><div class="text-xs text-slate-500 leading-tight">LR: 1.5e-3<br>E: 1, B: 8</div></td>
+                            <td class="mono text-center">0.550</td>
+                            <td class="mono text-center">0.550</td>
+                            <td class="mono text-center">0.550</td>
+                            <td class="mono text-center">0.513</td>
+                            <td class="mono text-center">0.526</td>
+                            <td class="mono text-center">0.509</td>
+                            <td class="mono font-bold text-right">0.5258</td>
+                            <td><span class="status-pill bg-slate-100 text-slate-600 border border-slate-200">Complete</span></td>
+                        </tr>
+
+                        <!-- Trial 8 -->
+                        <tr>
+                            <td class="mono font-bold text-slate-400">#08</td>
+                            <td><span class="badge bg-fedprox">FedProx</span></td>
+                            <td><div class="text-xs text-slate-500 leading-tight">LR: 1.2e-4<br>E: 5, B: 16</div></td>
+                            <td class="mono text-center">0.552</td>
+                            <td class="mono text-center">0.553</td>
+                            <td class="mono text-center">0.553</td>
+                            <td class="mono text-center">0.521</td>
+                            <td class="mono text-center">0.528</td>
+                            <td class="mono text-center">0.517</td>
+                            <td class="mono font-bold text-right">0.5275</td>
+                            <td><span class="status-pill bg-slate-100 text-slate-600 border border-slate-200">Complete</span></td>
+                        </tr>
+
+                        <!-- Trial 9 -->
+                        <tr class="row-pruned text-slate-400">
+                            <td class="mono font-bold">#09</td>
+                            <td><span class="badge bg-fedprox opacity-60">FedProx</span></td>
+                            <td><div class="text-xs leading-tight">LR: 7.6e-3<br>E: 5, B: 16</div></td>
+                            <td class="mono text-center metric-down">0.497 ↓</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center">0.507</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono font-bold text-right">0.5020</td>
+                            <td><span class="status-pill bg-slate-50 text-slate-400 border border-slate-100">Pruned @R2</span></td>
+                        </tr>
+
+                        <!-- Trial 10 -->
+                        <tr class="row-pruned text-slate-400">
+                            <td class="mono font-bold">#10</td>
+                            <td><span class="badge bg-fedadam opacity-60">FedAdam</span></td>
+                            <td><div class="text-xs leading-tight">LR: 4.5e-3<br>E: 2, B: 16</div></td>
+                            <td class="mono text-center">0.545</td>
+                            <td class="mono text-center">0.544</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center">0.512</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono font-bold text-right">0.5112</td>
+                            <td><span class="status-pill bg-slate-50 text-slate-400 border border-slate-100">Pruned @R2</span></td>
+                        </tr>
+
+                        <!-- Trial 11 -->
+                        <tr class="row-pruned text-slate-400">
+                            <td class="mono font-bold">#11</td>
+                            <td><span class="badge bg-fedavg opacity-60">FedAvg</span></td>
+                            <td><div class="text-xs leading-tight">LR: 3.6e-3<br>E: 4, B: 32</div></td>
+                            <td class="mono text-center">0.539</td>
+                            <td class="mono text-center">0.540</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center">0.520</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono text-center text-slate-300">—</td>
+                            <td class="mono font-bold text-right">0.5251</td>
+                            <td><span class="status-pill bg-slate-50 text-slate-400 border border-slate-100">Pruned @R2</span></td>
+                        </tr>
+
+                        <!-- Trial 12 (Best) -->
+                        <tr class="row-best">
+                            <td class="mono font-bold text-green-600">#12</td>
+                            <td><span class="badge bg-fedprox">FedProx</span></td>
+                            <td><div class="text-xs text-slate-500 leading-tight">LR: 1.1e-4<br>E: 4, B: 32</div></td>
+                            <td class="mono text-center">0.555</td>
+                            <td class="mono text-center">0.556</td>
+                            <td class="mono text-center">0.556</td>
+                            <td class="mono text-center metric-up">0.533</td>
+                            <td class="mono text-center">0.529</td>
+                            <td class="mono text-center">0.527</td>
+                            <td class="mono font-bold text-right text-green-700"><span class="metric-star">★</span>0.5328</td>
+                            <td><span class="status-pill bg-green-500 text-white shadow-sm">Winner</span></td>
+                        </tr>
+
+                        <!-- Trial 13 -->
+                        <tr>
+                            <td class="mono font-bold text-slate-400">#13</td>
+                            <td><span class="badge bg-fedprox">FedProx</span></td>
+                            <td><div class="text-xs text-slate-500 leading-tight">LR: 2.9e-4<br>E: 4, B: 32</div></td>
+                            <td class="mono text-center">0.556</td>
+                            <td class="mono text-center">0.556</td>
+                            <td class="mono text-center">0.556</td>
+                            <td class="mono text-center">0.523</td>
+                            <td class="mono text-center font-semibold">0.532</td>
+                            <td class="mono text-center">0.527</td>
+                            <td class="mono font-bold text-right">0.5318</td>
+                            <td><span class="status-pill bg-slate-100 text-slate-600 border border-slate-200">Complete</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- System Alerts & Notes -->
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-amber-50 border border-amber-200 p-5 rounded-xl">
+                <h3 class="text-amber-800 font-bold flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    Critical Logs
+                </h3>
+                <ul class="text-sm text-amber-700 space-y-2 list-disc list-inside opacity-90">
+                    <li><strong>Budget Exhausted:</strong> Total consumption (30 rounds) exceeded server limit (10).</li>
+                    <li><strong>Trial 5 Catastrophe:</strong> FedAdam (eta=0.081) diverged significantly at Round 2.</li>
+                    <li><strong>High LR Impact:</strong> Trial 9 (LR 0.007) showed 10% lower mAP vs. baseline on R1.</li>
+                </ul>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 p-5 rounded-xl">
+                <h3 class="text-blue-800 font-bold flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Recommendation
+                </h3>
+                <p class="text-sm text-blue-700 leading-relaxed">
+                    To finalize a model, increase <code>num-server-rounds</code> to at least 40 or reduce the <code>n_optuna_trials</code>. The current best parameters (<strong>Trial 12</strong>) should be used as the starting point for the final full-budget run.
+                </p>
+                <div class="mt-4 flex gap-3">
+                    <code class="bg-white px-2 py-1 rounded border border-blue-100 text-xs text-blue-600 font-mono">--strategy=fedprox</code>
+                    <code class="bg-white px-2 py-1 rounded border border-blue-100 text-xs text-blue-600 font-mono">--lr=0.000117</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
