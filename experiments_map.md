@@ -8,6 +8,9 @@ The current robust experiments map:
 
 => BHOB pruner configs: min = 1, max = hop_rounds, and rf = 3
 
+<img src="results_plot.png" alt="Results Plot" style="display:block; margin-left:auto; margin-right:auto;" />
+
+
 ---
 
 ### FILES
