@@ -18,7 +18,3 @@ The current robust experiments map:
 * [103100001 Run Logs](https://github.com/TawfikYasser/fly-bold/blob/main/103100001.txt)
 * [103101004 HPO DB File](https://github.com/TawfikYasser/fly-bold/blob/main/EXP_YOLOv5_s_detection_103101004_hpo.db)
 * [103100001 HPO DB File](https://github.com/TawfikYasser/fly-bold/blob/main/EXP_YOLOv5_s_detection_103100001_hpo.db)
-
-For more details on the pruner configs, see [BOHB documentation](https://github.com/automl/HpBandSter).
-
-
