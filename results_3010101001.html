@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HPO Trial Results — Run 3010101001</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111418;
+    --surface2: #181c22;
+    --border: #1e252e;
+    --border-bright: #2a3340;
+    --text: #c8d0dc;
+    --text-dim: #5a6472;
+    --text-bright: #e8edf4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+
+    --fedavg:  #3b82f6;
+    --fedadam: #f59e0b;
+    --fedyogi: #a78bfa;
+    --fedprox: #34d399;
+
+    --live:      #22c55e;
+    --synthetic: #64748b;
+    --complete:  #1d4ed8;
+    --pruned:    #dc2626;
+    --winner:    #f59e0b;
+    --diverged:  #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 32px 24px 64px;
+  }
+
+  header {
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border-bright);
+    padding-bottom: 20px;
+  }
+
+  .run-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+
+  .meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .meta-item span { color: var(--text); font-weight: 600; }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .legend-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .legend-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 2px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  .pill-live      { background: rgba(34,197,94,0.12);  color: var(--live);      border: 1px solid rgba(34,197,94,0.25); }
+  .pill-synthetic { background: rgba(100,116,139,0.12); color: var(--synthetic); border: 1px solid rgba(100,116,139,0.25); }
+  .pill-complete  { background: rgba(29,78,216,0.12);  color: #60a5fa;          border: 1px solid rgba(29,78,216,0.3); }
+  .pill-pruned    { background: rgba(220,38,38,0.12);  color: #f87171;          border: 1px solid rgba(220,38,38,0.3); }
+  .pill-winner    { background: rgba(245,158,11,0.15); color: var(--winner);    border: 1px solid rgba(245,158,11,0.35); }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+
+  thead th {
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 10px 12px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-bright);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  thead th:first-child { border-radius: 8px 0 0 0; }
+  thead th:last-child  { border-radius: 0 8px 0 0; }
+
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.is-winner { background: rgba(245,158,11,0.04); }
+  tbody tr.is-winner:hover { background: rgba(245,158,11,0.08); }
+  tbody tr.is-diverged { background: rgba(239,68,68,0.04); }
+  tbody tr.is-synthetic { opacity: 0.72; }
+
+  td { padding: 9px 12px; vertical-align: middle; white-space: nowrap; }
+  .td-center { text-align: center; }
+
+  .trial-num {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-bright);
+    min-width: 28px;
+    display: inline-block;
+    text-align: right;
+  }
+
+  .optuna-num { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+
+  .strategy-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .s-fedavg  { background: rgba(59,130,246,0.15);  color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+  .s-fedadam { background: rgba(245,158,11,0.15);  color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+  .s-fedyogi { background: rgba(167,139,250,0.15); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.3); }
+  .s-fedprox { background: rgba(52,211,153,0.15);  color: #6ee7b7; border: 1px solid rgba(52,211,153,0.3); }
+
+  .num      { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .num-dim  { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+  .mAP-val    { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .mAP-high   { color: #4ade80; }
+  .mAP-mid    { color: #86efac; }
+  .mAP-low    { color: #fbbf24; }
+  .mAP-bad    { color: #f87171; }
+  .mAP-pruned { color: var(--text-dim); font-style: italic; font-size: 11px; font-weight: 400; }
+
+  .bar-wrap  { display: flex; align-items: center; gap: 7px; min-width: 120px; }
+  .bar-track { flex: 1; height: 4px; background: var(--border-bright); border-radius: 2px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+
+  .notes {
+    font-size: 11px;
+    color: var(--text-dim);
+    max-width: 240px;
+    white-space: normal;
+    line-height: 1.4;
+  }
+
+  .notes em     { color: #f87171; font-style: normal; font-weight: 600; }
+  .notes strong { color: var(--winner); }
+
+  .extra-params {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    max-width: 220px;
+    white-space: normal;
+    line-height: 1.6;
+  }
+
+  .extra-params span { color: var(--text); }
+
+  .winner-star { color: var(--winner); font-size: 14px; margin-right: 4px; }
+
+  .section-row td {
+    background: var(--surface2);
+    border-top: 2px solid var(--border-bright);
+    border-bottom: 2px solid var(--border-bright);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    padding: 6px 12px;
+  }
+
+  footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  footer strong { color: var(--text); }
+
+  .warn-box {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: rgba(245,158,11,0.07);
+    border: 1px solid rgba(245,158,11,0.25);
+    border-left: 3px solid var(--winner);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .warn-box strong { color: var(--winner); }
+
+  .crit-box {
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-left: 3px solid #ef4444;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .crit-box strong { color: #f87171; }
+
+  .info-box {
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: rgba(59,130,246,0.05);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-left: 3px solid #3b82f6;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .info-box strong { color: #93c5fd; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="run-id">Run ID 3010101001 &nbsp;·&nbsp; Experiment EXP_YOLOv5_s_detection</div>
+  <h1>Optuna HPO — Full Trial Registry</h1>
+  <div class="meta">
+    <div class="meta-item">Total trials in study <span>38</span></div>
+    <div class="meta-item">Live runs <span>30</span></div>
+    <div class="meta-item">Synthetic (add_trial) <span>8</span></div>
+    <div class="meta-item">Proxy rounds per trial (hpo_rounds) <span>10</span></div>
+    <div class="meta-item">num_rounds config <span>30</span></div>
+    <div class="meta-item">Pruner <span>HyperbandPruner(min=1, max=10, rf=3)</span></div>
+    <div class="meta-item">Final run <span style="color:#f87171">SKIPPED — budget exhausted (−270 rounds)</span></div>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="legend-group">
+    <span class="legend-label">Type</span>
+    <span class="pill pill-live"><span class="dot" style="background:var(--live)"></span>Live</span>
+    <span class="pill pill-synthetic"><span class="dot" style="background:var(--synthetic)"></span>Synthetic</span>
+  </div>
+  <div class="legend-group">
+    <span class="legend-label">State</span>
+    <span class="pill pill-complete">Complete</span>
+    <span class="pill pill-pruned">Pruned</span>
+    <span class="pill pill-winner">⭐ Winner</span>
+  </div>
+  <div class="legend-group">
+    <span class="legend-label">Strategy</span>
+    <span class="strategy-badge s-fedavg">FedAvg</span>
+    <span class="strategy-badge s-fedadam">FedAdam</span>
+    <span class="strategy-badge s-fedyogi">FedYogi</span>
+    <span class="strategy-badge s-fedprox">FedProx</span>
+  </div>
+</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+  <tr>
+    <th>#</th>
+    <th>Optuna #</th>
+    <th>Type</th>
+    <th>State</th>
+    <th>Strategy</th>
+    <th>lr</th>
+    <th>Epochs</th>
+    <th>Batch</th>
+    <th>Strategy Params</th>
+    <th>Eval @10</th>
+    <th>mAP bar</th>
+    <th>Notes</th>
+  </tr>
+</thead>
+<tbody>
+
+<!-- ── SYNTHETIC BLOCK ── -->
+<tr class="section-row"><td colspan="12">── Synthetic Trials (pre-loaded via study.add_trial) ─ not executed in this run ──</td></tr>
+
+<!-- Synthetic 1 — WINNER -->
+<tr class="is-winner is-synthetic">
+  <td><span class="winner-star">⭐</span><span class="trial-num">1</span></td>
+  <td><span class="optuna-num">trial.number = 1</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-winner">Winner</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-high">0.5218</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:100%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes"><strong>Study winner — best_prev_params[1]. Historical result, not re-validated in this run.</strong></span></td>
+</tr>
+
+<!-- Synthetic 2 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">2</span></td>
+  <td><span class="optuna-num">trial.number = 2</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-high">0.5181</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:99.3%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes">best_prev_params[1]</span></td>
+</tr>
+
+<!-- Synthetic 3 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">3</span></td>
+  <td><span class="optuna-num">trial.number = 3</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-high">0.5162</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:98.9%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes">best_prev_params[1]</span></td>
+</tr>
+
+<!-- Synthetic 4 -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">4</span></td>
+  <td><span class="optuna-num">trial.number = 4</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.5048</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.7%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[1]</span></td>
+</tr>
+
+<!-- Synthetic 5 — FedAdam -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">5</span></td>
+  <td><span class="optuna-num">trial.number = 5</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.000561</span></td>
+  <td class="td-center"><span class="num">5</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.08148</span> η_l=<span>0.001136</span><br>
+      β₁=<span>0.9843</span> β₂=<span>0.9824</span> τ=<span>2.66e-4</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5001</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.8%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[2] — same params as live T10 (which diverged catastrophically!)</span></td>
+</tr>
+
+<!-- Synthetic 6 — FedYogi -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">6</span></td>
+  <td><span class="optuna-num">trial.number = 6</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.000231</span></td>
+  <td class="td-center"><span class="num">1</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>0.001256</span> η_l=<span>0.008168</span><br>
+      β₁=<span>0.9492</span> β₂=<span>0.9198</span> τ=<span>1.07e-3</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5001</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.8%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[3]</span></td>
+</tr>
+
+<!-- Synthetic 7 — FedYogi PRUNED -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">7</span></td>
+  <td><span class="optuna-num">trial.number = 7</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-pruned">Pruned</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.001530</span></td>
+  <td class="td-center"><span class="num">1</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>1.96e-4</span> η_l=<span>0.02336</span><br>
+      β₁=<span>0.8836</span> β₂=<span>0.9121</span> τ=<span>9.78e-4</span>
+    </span>
+  </td>
+  <td><span class="mAP-pruned">0.4448 (pruned)</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:85.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">best_prev_params[4] — low η, β₂ &lt; 0.92 → poor Yogi variance estimate</span></td>
+</tr>
+
+<!-- Synthetic 8 — FedProx -->
+<tr class="is-synthetic">
+  <td><span class="trial-num">8</span></td>
+  <td><span class="optuna-num">trial.number = 8</span></td>
+  <td><span class="pill pill-synthetic">Synthetic</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.000117</span></td>
+  <td class="td-center"><span class="num">5</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">μ=<span>1.2605</span></span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5039</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.6%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">best_prev_params[5] — very low lr, high μ proximal penalty</span></td>
+</tr>
+
+<!-- ── LIVE BLOCK ── -->
+<tr class="section-row"><td colspan="12">── Live Trials (executed in this run via study.optimize, n_trials=30) ──</td></tr>
+
+<!-- T1 — enqueued seed -->
+<tr>
+  <td><span class="trial-num">T1</span></td>
+  <td><span class="optuna-num">trial.number = 0</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001000</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-mid">0.4960</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.1%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Enqueued seed. Stable across 10 rounds (R1→0.4907→…→R10→0.4909). Best @R2: 0.4960. Ghost: CLIENT5 R1 eval.</span></td>
+</tr>
+
+<!-- T10 — FedAdam catastrophic divergence -->
+<tr class="is-diverged">
+  <td><span class="trial-num">T10</span></td>
+  <td><span class="optuna-num">trial.number = 9</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.000561</span></td>
+  <td class="td-center"><span class="num">5</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-bad">0.4394</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:84.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes"><em>CATASTROPHIC DIVERGENCE</em>: R1→0.4394, R2→0.3580. Same params as synthetic T5 (0.5001) — live execution fails to reproduce. Ghost: CLIENT8 R1 eval.</span></td>
+</tr>
+
+<!-- T11 — FedProx high lr -->
+<tr>
+  <td><span class="trial-num">T11</span></td>
+  <td><span class="optuna-num">trial.number = 10</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.007371</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4824 @ step 2<br><span style="font-size:10px">(R1: 0.4812)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:92.5%;background:#fbbf24"></div></div></div></td>
+  <td><span class="notes">High lr FedProx, large batch. Marginal gain R1→R2 before Hyperband prunes.</span></td>
+</tr>
+
+<!-- T12 — FedAvg complete -->
+<tr>
+  <td><span class="trial-num">T12</span></td>
+  <td><span class="optuna-num">trial.number = 11</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.003808</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.4941</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.7%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">High lr, large batch. Slow climb, peaks @R9: 0.4941. Underperforms seed throughout.</span></td>
+</tr>
+
+<!-- T13 — FedAvg complete -->
+<tr>
+  <td><span class="trial-num">T13</span></td>
+  <td><span class="optuna-num">trial.number = 12</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.002998</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.4923</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.3%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Declining from R1 (0.4923→0.4859). High lr with low epochs — no improvement momentum.</span></td>
+</tr>
+
+<!-- T14 — FedAvg pruned @4 -->
+<tr>
+  <td><span class="trial-num">T14</span></td>
+  <td><span class="optuna-num">trial.number = 13</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000381</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4992 @ step 4<br><span style="font-size:10px">(R2: 0.4992, R4: 0.4906)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.9%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Peaked @R2: 0.4992 then declined. Low lr slows convergence — Hyperband prunes in Rung-2 bracket.</span></td>
+</tr>
+
+<!-- T15 — FedAvg pruned @2 -->
+<tr>
+  <td><span class="trial-num">T15</span></td>
+  <td><span class="optuna-num">trial.number = 14</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.002087</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4945 @ step 2<br><span style="font-size:10px">(R1: 0.4928)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.8%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Mid-high lr, large batch. Marginal gain R1→R2. Hyperband Rung-1 prune.</span></td>
+</tr>
+
+<!-- T16 — FedAvg worst complete -->
+<tr>
+  <td><span class="trial-num">T16</span></td>
+  <td><span class="optuna-num">trial.number = 15</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.009602</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4747 @ step 2<br><span style="font-size:10px">(R1: 0.4729)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:91.0%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Highest lr in run — worst FedAvg performance. Confirms lr ≥ 0.009 is destructive. Pruned immediately.</span></td>
+</tr>
+
+<!-- T17 — FedProx pruned @2 -->
+<tr>
+  <td><span class="trial-num">T17</span></td>
+  <td><span class="optuna-num">trial.number = 16</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.000300</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4982 @ step 2<br><span style="font-size:10px">(R1: 0.4982)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.5%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Promising R1 (0.4982) but declined R2 (0.4939) — Hyperband prunes at Rung-1. Could have been competitive with more rounds.</span></td>
+</tr>
+
+<!-- T18 — FedYogi pruned @2 -->
+<tr>
+  <td><span class="trial-num">T18</span></td>
+  <td><span class="optuna-num">trial.number = 17</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.001750</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4902 @ step 2<br><span style="font-size:10px">(R1: 0.4902)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.0%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Declining R1→R2. Hyperband prunes at Rung-1.</span></td>
+</tr>
+
+<!-- T19 — FedAdam pruned @2 -->
+<tr>
+  <td><span class="trial-num">T19</span></td>
+  <td><span class="optuna-num">trial.number = 18</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.000612</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4890 @ step 2<br><span style="font-size:10px">(R1: 0.4890)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:93.7%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Flat FedAdam. Pruned at Rung-1 — marginal R1→R2 delta.</span></td>
+</tr>
+
+<!-- T20 — FedAvg pruned @4 -->
+<tr>
+  <td><span class="trial-num">T20</span></td>
+  <td><span class="optuna-num">trial.number = 19</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.004220</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4918 @ step 4<br><span style="font-size:10px">(R1→0.4918, R4→0.4881)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Declining trend across 4 rounds. High lr + large batch — no gain trajectory. Hyperband Rung-2 prune.</span></td>
+</tr>
+
+<!-- T21 — FedAvg complete -->
+<tr>
+  <td><span class="trial-num">T21</span></td>
+  <td><span class="optuna-num">trial.number = 20</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000192</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.4963</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.1%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Very low lr — slow but steady climb. Best @R5: 0.4963. Below seed at all rounds.</span></td>
+</tr>
+
+<!-- T22 — FedAvg pruned @2 -->
+<tr>
+  <td><span class="trial-num">T22</span></td>
+  <td><span class="optuna-num">trial.number = 21</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000942</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4916 @ step 2<br><span style="font-size:10px">(R1: 0.4916)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Near-standard lr — declining R1→R2. Hyperband Rung-1.</span></td>
+</tr>
+
+<!-- T23 — FedAvg complete -->
+<tr>
+  <td><span class="trial-num">T23</span></td>
+  <td><span class="optuna-num">trial.number = 22</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000837</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.4984</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.5%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Late improver — peaks @R9: 0.4984. High epochs allow continued round-by-round improvement.</span></td>
+</tr>
+
+<!-- T24 — FedAvg pruned @2 -->
+<tr>
+  <td><span class="trial-num">T24</span></td>
+  <td><span class="optuna-num">trial.number = 23</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001378</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4949 @ step 2<br><span style="font-size:10px">(R1: 0.4949)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.8%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Drops R1→R2 (0.4949→0.4890). Hyperband Rung-1.</span></td>
+</tr>
+
+<!-- T25 — BEST LIVE -->
+<tr class="is-winner">
+  <td><span class="winner-star">★</span><span class="trial-num">T25</span></td>
+  <td><span class="optuna-num">trial.number = 24</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000452</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><div class="bar-wrap"><span class="mAP-val mAP-mid">0.5036</span></div></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.5%;background:#4ade80"></div></div></div></td>
+  <td><span class="notes"><strong>Best live result.</strong> Low lr, breaks 0.50 @R3. Peak @R5: 0.5036. Stable decay after (R6→0.4854→recovery). R1→0.4836→R3→0.5005→R5→0.5036.</span></td>
+</tr>
+
+<!-- T26 — FedAvg pruned @2 -->
+<tr>
+  <td><span class="trial-num">T26</span></td>
+  <td><span class="optuna-num">trial.number = 25</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 2</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.002688</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4918 @ step 2<br><span style="font-size:10px">(R1: 0.4918)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">High lr, low epochs. Declining R1→R2. Rung-1 prune.</span></td>
+</tr>
+
+<!-- T27 — FedAdam complete, 2nd best -->
+<tr>
+  <td><span class="trial-num">T27</span></td>
+  <td><span class="optuna-num">trial.number = 26</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.000757</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td>
+    <span class="extra-params">
+      η=<span>1.32e-3</span> η_l=<span>0.4685</span><br>
+      β₁=<span>0.8595</span> β₂=<span>0.9162</span> τ=<span>4.77e-3</span>
+    </span>
+  </td>
+  <td><span class="mAP-val mAP-mid">0.5034</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:96.5%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">2nd best live. Unusual η_l=0.4685 (near upper bound). Stable: R1→0.4959→R2→0.5034→flat. FedAdam succeeds only with low η.</span></td>
+</tr>
+
+<!-- T28 — FedProx pruned @10 -->
+<tr>
+  <td><span class="trial-num">T28</span></td>
+  <td><span class="optuna-num">trial.number = 27</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 10</span></td>
+  <td><span class="strategy-badge s-fedprox">FedProx</span></td>
+  <td><span class="num">0.001262</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4991 @ step 10<br><span style="font-size:10px">(R4: 0.4991, R10: 0.4928)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.7%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Ran all 10 rounds — then Hyperband Rung-3 prune. Flat performance throughout (0.490–0.499). Best @R4: 0.4991.</span></td>
+</tr>
+
+<!-- T29 — FedYogi catastrophic -->
+<tr class="is-diverged">
+  <td><span class="trial-num">T29</span></td>
+  <td><span class="optuna-num">trial.number = 28</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.002143</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">32</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4969 @ step 4<br><span style="font-size:10px">(R3→0.0251, R4→0.0120)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.2%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes"><em>CATASTROPHIC COLLAPSE</em>: R1→0.4969, R2→0.4706, R3→0.0251, R4→0.0120. FedYogi instability with high lr + large batch. Rapid server-side optimizer divergence.</span></td>
+</tr>
+
+<!-- T30 — FedAvg pruned @10 -->
+<tr>
+  <td><span class="trial-num">T30</span></td>
+  <td><span class="optuna-num">trial.number = 29</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 10</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001135</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4964 @ step 10<br><span style="font-size:10px">(R6: 0.4964, R10: 0.4890)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.1%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Full 10-round run, then Hyperband Rung-3 prune. Small batch (8) + 2 epochs. Stable but flat — never breaks 0.497.</span></td>
+</tr>
+
+<!-- T31 — FedAvg pruned @4 -->
+<tr>
+  <td><span class="trial-num">T31</span></td>
+  <td><span class="optuna-num">trial.number = 30</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000724</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4995 @ step 4<br><span style="font-size:10px">(R1: 0.4995, R4: 0.4922)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.7%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Strong R1 (0.4995) but non-monotone — Hyperband Rung-2 cuts it. Could have been competitive at full budget.</span></td>
+</tr>
+
+<!-- T32 — FedAvg pruned @4 -->
+<tr>
+  <td><span class="trial-num">T32</span></td>
+  <td><span class="optuna-num">trial.number = 31</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001077</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4976 @ step 4<br><span style="font-size:10px">(R3: 0.4976, R4: 0.4864)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.4%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">Steady climb R1–R3 then sharp drop R4 (0.4976→0.4864). Hyperband Rung-2 terminates.</span></td>
+</tr>
+
+<!-- T33 — FedAvg complete -->
+<tr>
+  <td><span class="trial-num">T33</span></td>
+  <td><span class="optuna-num">trial.number = 32</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000481</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.5004</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.9%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Breaks 0.50 @R4 (0.5004). Near-optimal lr — similar to T25. R10→0.4970.</span></td>
+</tr>
+
+<!-- T34 — FedAvg complete -->
+<tr>
+  <td><span class="trial-num">T34</span></td>
+  <td><span class="optuna-num">trial.number = 33</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-complete">Complete</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.000800</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-val mAP-mid">0.4995</span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:95.7%;background:#86efac"></div></div></div></td>
+  <td><span class="notes">Most stable live FedAvg trial (R1→0.4941→R10→0.4933). Never breaks 0.50 but never drops below 0.489.</span></td>
+</tr>
+
+<!-- T35 — FedAvg pruned @4 -->
+<tr>
+  <td><span class="trial-num">T35</span></td>
+  <td><span class="optuna-num">trial.number = 34</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001467</span></td>
+  <td class="td-center"><span class="num">1</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4947 @ step 4<br><span style="font-size:10px">(R3: 0.4947, R4: 0.4913)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.8%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">1 local epoch — chronic underfitting. Never breaks 0.495. Hyperband Rung-2 confirms.</span></td>
+</tr>
+
+<!-- T36 — FedYogi catastrophic progressive collapse -->
+<tr class="is-diverged">
+  <td><span class="trial-num">T36</span></td>
+  <td><span class="optuna-num">trial.number = 35</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 10</span></td>
+  <td><span class="strategy-badge s-fedyogi">FedYogi</span></td>
+  <td><span class="num">0.000340</span></td>
+  <td class="td-center"><span class="num">3</span></td>
+  <td class="td-center"><span class="num">8</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4883 @ step 10<br><span style="font-size:10px">(R3→0.3829, R10→0.1447)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:93.6%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes"><em>PROGRESSIVE DIVERGENCE</em>: R1→0.4883, R2→0.4743, R3→0.3829, R4→0.2624, R5→0.1936…R10→0.1447. Slow-burn FedYogi collapse — small batch amplifies server-side optimizer instability.</span></td>
+</tr>
+
+<!-- T37 — FedAdam catastrophic with 9-ghost cascade -->
+<tr class="is-diverged">
+  <td><span class="trial-num">T37</span></td>
+  <td><span class="optuna-num">trial.number = 36</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedadam">FedAdam</span></td>
+  <td><span class="num">0.001007</span></td>
+  <td class="td-center"><span class="num">2</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">params not in log</span></td>
+  <td><span class="mAP-pruned">0.4938 @ step 4<br><span style="font-size:10px">(R2→0.0496, R3→0.0001)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.6%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes"><em>WORST COLLAPSE + GHOST CASCADE</em>: R1→0.4938 then immediate meltdown R2→0.0496→R3→0.0001. Ghost eval: 9/10 clients returned zero metrics in R3–R4 (CLIENTs 0,1,2,3,4,5,6,8,9). Server momentum explosion propagated NaN/zero weights to entire fleet.</span></td>
+</tr>
+
+<!-- T38 — FedAvg pruned @4 -->
+<tr>
+  <td><span class="trial-num">T38</span></td>
+  <td><span class="optuna-num">trial.number = 37</span></td>
+  <td><span class="pill pill-live">Live</span></td>
+  <td><span class="pill pill-pruned">Pruned @ step 4</span></td>
+  <td><span class="strategy-badge s-fedavg">FedAvg</span></td>
+  <td><span class="num">0.001881</span></td>
+  <td class="td-center"><span class="num">4</span></td>
+  <td class="td-center"><span class="num">16</span></td>
+  <td><span class="extra-params">—</span></td>
+  <td><span class="mAP-pruned">0.4939 @ step 4<br><span style="font-size:10px">(R3: 0.4939, R4: 0.4854)</span></span></td>
+  <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:94.7%;background:#dc2626"></div></div></div></td>
+  <td><span class="notes">High lr + high epochs. Climbs R1–R3 then drops at R4. Hyperband Rung-2 terminates.</span></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+
+<!-- Budget Warning -->
+<div class="warn-box">
+  <strong>⚠ Critical Budget Failure:</strong> With <code>num_rounds=30</code>, <code>n_optuna_trials=30</code>, and <code>hpo_rounds=10</code>, the formula <code>final_rounds = 30 − (30×10) = −270</code> cancelled the final full run entirely — a 10× amplification of the prior run's budget problem. The study winner (Trial 1, mAP=0.5218) was never re-validated. The best <em>actually executed</em> result was T25 at mAP=0.5036 (FedAvg, lr=0.000452, epochs=3, batch=16). <strong>172 FL rounds were executed across 30 trials with a total of 23,827 MB data transferred (avg 138.5 MB/round, avg 56.1 min/round).</strong>
+</div>
+
+<!-- Hyperband Pruner Note -->
+<div class="info-box">
+  <strong>ℹ HyperbandPruner Behavior (vs MedianPruner in run 103101004):</strong> This run switched from MedianPruner to <code>HyperbandPruner(min_resource=1, max_resource=10, reduction_factor=3)</code>. Hyperband creates promotion brackets at rungs {1, 3, 9} rounds (approx). Trials are promoted only if they rank in the top 1/3 at each rung. This explains the high 70% pruning rate (21/30 live trials pruned vs 40% in the prior run) and the unusual <strong>Pruned@10</strong> outcomes for T28, T30, T36 — these ran to full budget but were eliminated in the final bracket. Notably, Hyperband pruned T17 (FedProx, 0.4982) and T14 (FedAvg, 0.4992) at early rungs despite competitive R1 values, suggesting the rung thresholds may be too aggressive for FL's high per-round variance.
+</div>
+
+<!-- Catastrophic Divergence Note -->
+<div class="crit-box">
+  <strong>⚠ 4 Catastrophic Divergence Events (vs 1 in run 103101004):</strong>
+  T10 (FedAdam — same params as synthetic T5 which scored 0.5001 in history; live execution diverges to 0.358) ·
+  T29 (FedYogi — rapid collapse R3→0.025 from lr=0.002+batch=32) ·
+  T36 (FedYogi — slow-burn progressive decay over all 10 rounds to 0.1447) ·
+  T37 (FedAdam — hardest failure: immediate meltdown @R2, then 9/10 ghost eval clients in R3–R4 as corrupted global weights propagated zero-gradient states to the entire client fleet).
+  <strong>Root cause:</strong> FedAdam/FedYogi server-side momentum buffers accumulate per-trial (stateful strategy objects), and without sufficient warmup the adaptive learning rate diverges when client updates have high variance. The <code>_NpSafeArray</code> monkey-patch prevents crashes but does not prevent numerical explosion. The η search space for FedAdam (1e-3 to 5e-1) admits values that are catastrophically unstable at scale.
+</div>
+
+<footer>
+  <div><strong>Best synthetic (study winner):</strong> Trial 1 — FedAvg, lr=0.001, epochs=3, batch=16 → 0.5218</div>
+  <div><strong>Best live result:</strong> T25 — FedAvg, lr=0.000452, epochs=3, batch=16 → 0.5036</div>
+  <div><strong>2nd best live:</strong> T27 — FedAdam, lr=0.000757, η=1.32e-3, η_l=0.469, epochs=4, batch=16 → 0.5034</div>
+  <div><strong>Live complete trials:</strong> 9/30 · Pruned: 21/30 (70%)</div>
+  <div><strong>Ghost eval clients (zeros averaged in):</strong> 11 occurrences, 10 in T37 alone</div>
+  <div><strong>Catastrophic divergences:</strong> 4 events (T10, T29, T36, T37)</div>
+  <div><strong>Heartbeat failures:</strong> 4 events across 2 rounds (both in T1)</div>
+  <div><strong>Total FL rounds executed:</strong> 172 · Total data transferred: 23,827 MB</div>
+  <div><strong>Avg round duration:</strong> 56.1 min · Range: 18.3 – 94.3 min</div>
+  <div><strong>Converging lr zone (live FedAvg):</strong> 0.00045 – 0.00085, epochs=3–4, batch=16</div>
+</footer>
+
+</body>
+</html>
