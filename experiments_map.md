@@ -8,9 +8,12 @@ The current robust experiments map:
 
 => BHOB pruner configs: min = 1, max = hop_rounds, and rf = 3
 
-<img src="results_plot.png" alt="Results Plot" style="display:block; margin-left:auto; margin-right:auto;" />
+<img src="Final_Results_1.png" alt="Results Plot 1" style="display:block; margin-left:auto; margin-right:auto;" />
+<img src="Final_Results_2.png" alt="Results Plot 2" style="display:block; margin-left:auto; margin-right:auto;" />
 
----
+--- 
+
+## Check the [Experiment Results Analysis (HTML Page)](https://github.com/TawfikYasser/fly-bold/blob/main/experiments_summary.html) for a comperhinsive analysis of all experiments results, including the ones mentioned in this map and more.
 
 ### FILES
 
