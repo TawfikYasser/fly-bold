@@ -15,6 +15,26 @@ The current robust experiments map:
 
 ## Check the [Experiment Results Analysis (HTML Page)](https://github.com/TawfikYasser/fly-bold/blob/main/experiments_summary.html) for a comperhinsive analysis of all experiments results, including the ones mentioned in this map and more.
 
+---
+
+### Experiments mAP@0.5val Plot Comparison
+
+
+#### First Plot: Optuna vs BOHB for IID Dataset
+The following plot, shows the mAP@0.5val comparision between the 2 experiments (Optuna and BOHB) for the IID Dataset.
+The Blue line represents the Optuna experiment (103101004), while the Orange line represents the BOHB experiment (3010101001).
+Both experiments were run for 10 trials, and the plot shows the mAP@0.5val values for each trial, as well as the average mAP@0.5val across all trials.
+The maximum mAP@0.5val achieved by Optuna and BOHB for both experimetns where using the manual hyperparameters configurations, which are FedAvg, 0.001 LR, 16 local epochs, and 3 local epochs was 52.18%. This means that no improvment by applying either Optuna or BOHB. The golden circles in the plot represent the maximum mAP@0.5val achieved during the optimization process, which is in this case for both experiments less than the maximum mAP@0.5val achieved by the manual hyperparameters configuration.
+
+<img src="all_trials_map_plot_10trials_HO.png" alt="PLOT_10_HO" style="display:block; margin-left:auto; margin-right:auto;" />
+
+#### Second Plot: Optuna vs BOHB for non-IID Dataset
+The following plot, shows the mAP@0.5val comparision between the 2 experiments (Optuna and BOHB) for the non-IID Dataset.
+The Blue line represents the Optuna experiment (103100001), while the Orange line represents the BOHB experiment (3010100002).
+Both experiments were run for 30 trials, each with 10 server rounds, and the plot shows the mAP@0.5val values for each trial, as well as the golden circles representing the maximum mAP@0.5val achieved during the optimization process. The maximum mAP@0.5val achieved by Optuna was 53.28%, while the maximum mAP@0.5val achieved by BOHB was 54.07%. This means that both Optuna and BOHB were able to find hyperparameters configurations that improved the mAP@0.5val compared to the manual hyperparameters configuration, which achieved a maximum mAP@0.5val of 53.09% on the non-IID dataset. The golden circles in the plot represent the maximum mAP@0.5val achieved during the optimization process, which is in this case for both experiments higher than the maximum mAP@0.5val achieved by the manual hyperparameters configuration.
+
+<img src="all_trials_map_plot_30trials_BOHB.png" alt="PLOT_30_BOHB" style="display:block; margin-left:auto; margin-right:auto;" />
+
 ### FILES
 
 * [103101004 Results Analysis](https://github.com/TawfikYasser/fly-bold/blob/main/results_103101004.html)
