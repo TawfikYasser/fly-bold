@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower_benchmarks"
-version = "1.0.171"
+version = "1.0.174"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 
@@ -83,15 +83,15 @@ num-server-rounds = 30
 fraction-train = 1
 fraction_evaluate = 1
 local-epochs = 3
-lr = 0.001
+lr = 0.000259
 use_pretrained = 1
 task = "detection"  # "classification" or "detection"
 yolo_runs_dir = "./yolov5/runs/train"  # Runs dir for YOLO training
 yolo_size = "s"  # n, s, m, l, or x
 img_size = 416
-batch_size = 16
+batch_size = 32
 dataset = 0
-strategy = 1
-n_optuna_trials = 30   # set to 0 to skip HPO entirely
-hpo_rounds = 10         # proxy rounds per trial
-run_id = 3010100002
+strategy = 3
+n_optuna_trials = 0   # set to 0 to skip HPO entirely
+hpo_rounds = 0         # proxy rounds per trial
+run_id = 301033200031

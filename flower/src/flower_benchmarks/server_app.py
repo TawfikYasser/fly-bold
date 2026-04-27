@@ -1103,6 +1103,29 @@ def main(grid: Grid, context: Context) -> None:
         final_batch    = int(get_config("batch_size",   context, default=16, type_converter=int))
         final_strategy = strategy_id  # use whatever was set in config, unchanged
         final_strategy_kwargs = {}    # no HPO-tuned params; _make_strategy uses Flower defaults
+        
+        # Apply strategy-specific parameters if provided in code
+        if final_strategy == 2:  # FedYogi
+            final_strategy_kwargs = dict(
+                eta    = 0.01,        # FedYogi default
+                eta_l  = 0.0316,
+                beta_1 = 0.9,
+                beta_2 = 0.99,
+                tau    = 0.001,
+            )
+        elif final_strategy == 3:  # FedAdam
+            # ✅ CUSTOMIZE FedAdam PARAMETERS HERE
+            final_strategy_kwargs = dict(
+                eta    = 0.00125693,         # FedAdam server-side learning rate
+                eta_l  = 0.0777663,         # FedAdam client-side learning rate
+                beta_1 = 0.829967,         # Exponential decay for 1st moment
+                beta_2 = 0.92004,        # Exponential decay for 2nd moment
+                tau    = 0.000134188,       # Regularization coefficient
+            )
+        elif final_strategy == 4:  # FedProx
+            final_strategy_kwargs = dict(
+                proximal_mu = 0.0,    # FedProx regularization (0.0 == FedAvg)
+            )
 
     # ================================================================
     # FINAL (or sole) FULL RUN
