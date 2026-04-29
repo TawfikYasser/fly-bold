@@ -44,6 +44,10 @@ Both experiments were run for 30 trials, each with 10 server rounds, and the plo
 
 For 30 server rounds, we got 54.10% mAP@0.5val. Check the results here: [non-IID-bohb Results Analysis](https://github.com/TawfikYasser/fly-bold/blob/main/flower/experiments_outputs/analysis_exp_301033200031/00_SUMMARY_REPORT_301033200031.txt)
 
+#### 2. non-IID-optuna (ID: 201033200032)
+
+It is a resume for 301033200031 experiment, with 20 more server rounds, to complete 50 total server rounds, however, we didn't get any improvment in the mAP@0.5val. Check the results here: [non-IID-optuna Results Analysis 20 more rounds](https://github.com/TawfikYasser/fly-bold/blob/main/flower/experiments_outputs/analysis_exp_201033200032/00_SUMMARY_REPORT_201033200032.txt)
+
 ---
 
 ### FILES
