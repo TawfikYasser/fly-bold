@@ -611,44 +611,142 @@ def main(grid: Grid, context: Context) -> None:
     # Load global model
     if task_type == "detection":
         yolo_size = get_config("yolo_size", context, default="n")
-        weight_name = YoloSizeToPretrained.get(yolo_size, "yolov5n.pt")
-
-        candidate_paths = [
-            os.path.join(os.getcwd(), "yolov5", weight_name),
-            os.path.join(os.getcwd(), weight_name),
-            weight_name,
-        ]
-        
-        print(f"Loading YOLO weights: {weight_name}")
-        
-        weight_path = None
-        for p in candidate_paths:
-            if os.path.exists(p):
-                weight_path = p
-                print(f"âœ… Found YOLO weights at: {weight_path}")
-                break
-
-        if weight_path is None:
+        pretrained_checkpoint = get_config("pretrained_checkpoint", context, default="").strip()
+        print(f"Using the pretrained checkpoint path: '{pretrained_checkpoint}'")  # Debug print
+        # =====================================================================
+        # CHECKPOINT RESUME LOGIC
+        # =====================================================================
+        if pretrained_checkpoint and os.path.exists(pretrained_checkpoint):
+            # Load from checkpoint (resume from previous run)
+            print(f"Loading from pretrained checkpoint: {pretrained_checkpoint}")
             try:
-                print(f"Downloading YOLO weights: {weight_name}")
-                attempt_download(weight_name)
-                weight_path = weight_name
-                print(f"âœ… Downloaded to: {weight_path}")
-            except Exception as e:
-                print(f"âš ï¸  Failed to download YOLO weights: {e}")
-                print("Using empty arrays.")
-                weight_path = None
-
-        if weight_path:
-            try:
-                state_dict = load_yolo_checkpoint_as_state_dict(weight_path)
+                state_dict = load_yolo_checkpoint_as_state_dict(pretrained_checkpoint)
                 arrays = ArrayRecord(state_dict)
-                print(f"âœ… YOLO initial arrays loaded: {len(arrays)} layers")
+                print(f"âœ… YOLO checkpoint loaded: {len(arrays)} layers")
             except Exception as e:
-                print(f"âŒ Failed to load YOLO weights: {e}")
+                print(f"âŒ Failed to load checkpoint: {e}")
+                print("Falling back to pretrained weights...")
+                # Fall back to pretrained weights
+                weight_name = YoloSizeToPretrained.get(yolo_size, "yolov5n.pt")
+                
+                candidate_paths = [
+                    os.path.join(os.getcwd(), "yolov5", weight_name),
+                    os.path.join(os.getcwd(), weight_name),
+                    weight_name,
+                ]
+                
+                print(f"Loading YOLO weights: {weight_name}")
+                
+                weight_path = None
+                for p in candidate_paths:
+                    if os.path.exists(p):
+                        weight_path = p
+                        print(f"âœ… Found YOLO weights at: {weight_path}")
+                        break
+
+                if weight_path is None:
+                    try:
+                        print(f"Downloading YOLO weights: {weight_name}")
+                        attempt_download(weight_name)
+                        weight_path = weight_name
+                        print(f"âœ… Downloaded to: {weight_path}")
+                    except Exception as e:
+                        print(f"âš ï¸  Failed to download YOLO weights: {e}")
+                        print("Using empty arrays.")
+                        weight_path = None
+
+                if weight_path:
+                    try:
+                        state_dict = load_yolo_checkpoint_as_state_dict(weight_path)
+                        arrays = ArrayRecord(state_dict)
+                        print(f"âœ… YOLO initial arrays loaded: {len(arrays)} layers")
+                    except Exception as e:
+                        print(f"âŒ Failed to load YOLO weights: {e}")
+                        arrays = ArrayRecord({})
+                else:
+                    arrays = ArrayRecord({})
+        elif pretrained_checkpoint:
+            # Checkpoint path specified but file not found
+            print(f"âš ï¸  Checkpoint path specified but not found: {pretrained_checkpoint}")
+            print("Falling back to pretrained weights...")
+            weight_name = YoloSizeToPretrained.get(yolo_size, "yolov5n.pt")
+            
+            candidate_paths = [
+                os.path.join(os.getcwd(), "yolov5", weight_name),
+                os.path.join(os.getcwd(), weight_name),
+                weight_name,
+            ]
+            
+            print(f"Loading YOLO weights: {weight_name}")
+            
+            weight_path = None
+            for p in candidate_paths:
+                if os.path.exists(p):
+                    weight_path = p
+                    print(f"âœ… Found YOLO weights at: {weight_path}")
+                    break
+
+            if weight_path is None:
+                try:
+                    print(f"Downloading YOLO weights: {weight_name}")
+                    attempt_download(weight_name)
+                    weight_path = weight_name
+                    print(f"âœ… Downloaded to: {weight_path}")
+                except Exception as e:
+                    print(f"âš ï¸  Failed to download YOLO weights: {e}")
+                    print("Using empty arrays.")
+                    weight_path = None
+
+            if weight_path:
+                try:
+                    state_dict = load_yolo_checkpoint_as_state_dict(weight_path)
+                    arrays = ArrayRecord(state_dict)
+                    print(f"âœ… YOLO initial arrays loaded: {len(arrays)} layers")
+                except Exception as e:
+                    print(f"âŒ Failed to load YOLO weights: {e}")
+                    arrays = ArrayRecord({})
+            else:
                 arrays = ArrayRecord({})
         else:
-            arrays = ArrayRecord({})
+            # No checkpoint specified, use standard pretrained weights
+            weight_name = YoloSizeToPretrained.get(yolo_size, "yolov5n.pt")
+
+            candidate_paths = [
+                os.path.join(os.getcwd(), "yolov5", weight_name),
+                os.path.join(os.getcwd(), weight_name),
+                weight_name,
+            ]
+            
+            print(f"Loading YOLO weights: {weight_name}")
+            
+            weight_path = None
+            for p in candidate_paths:
+                if os.path.exists(p):
+                    weight_path = p
+                    print(f"âœ… Found YOLO weights at: {weight_path}")
+                    break
+
+            if weight_path is None:
+                try:
+                    print(f"Downloading YOLO weights: {weight_name}")
+                    attempt_download(weight_name)
+                    weight_path = weight_name
+                    print(f"âœ… Downloaded to: {weight_path}")
+                except Exception as e:
+                    print(f"âš ï¸  Failed to download YOLO weights: {e}")
+                    print("Using empty arrays.")
+                    weight_path = None
+
+            if weight_path:
+                try:
+                    state_dict = load_yolo_checkpoint_as_state_dict(weight_path)
+                    arrays = ArrayRecord(state_dict)
+                    print(f"âœ… YOLO initial arrays loaded: {len(arrays)} layers")
+                except Exception as e:
+                    print(f"âŒ Failed to load YOLO weights: {e}")
+                    arrays = ArrayRecord({})
+            else:
+                arrays = ArrayRecord({})
     else:
         global_model = Net()
         arrays = ArrayRecord(global_model.state_dict())

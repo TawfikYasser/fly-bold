@@ -521,6 +521,9 @@ if [ "$SKIP_PROMPTS" = false ]; then
         USE_PRETRAINED=0
     fi
     
+    read -p "Path to pretrained checkpoint (optional, leave empty for new training): " PRETRAINED_CHECKPOINT
+    PRETRAINED_CHECKPOINT=${PRETRAINED_CHECKPOINT:-}
+    
     read -p "Number of Optuna HPO trials [0]: " OPTUNA_TRIALS
     OPTUNA_TRIALS=${OPTUNA_TRIALS:-0}
     
@@ -560,6 +563,7 @@ cat > /tmp/run_config.json <<EOJSON
   "yolo_size": "$YOLO_SIZE",
   "img_size": $IMG_SIZE,
   "use_pretrained": $USE_PRETRAINED,
+  "pretrained_checkpoint": "$PRETRAINED_CHECKPOINT",
   "min_train": $MIN_TRAIN_IMAGES,
   "max_train": $MAX_TRAIN_IMAGES,
   "min_eval": $MIN_VAL_IMAGES,
@@ -594,6 +598,7 @@ sedi "s/^batch_size[[:space:]]*=[[:space:]]*[0-9]+/batch_size = ${BATCH_SIZE}/" 
 sedi "s/^dataset[[:space:]]*=[[:space:]]*[0-9]+/dataset = ${DATASET}/" pyproject.toml
 sedi "s/^strategy[[:space:]]*=[[:space:]]*[0-9]+/strategy = ${STRATEGY}/" pyproject.toml
 sedi "s/^use_pretrained[[:space:]]*=[[:space:]]*[0-9]+/use_pretrained = ${USE_PRETRAINED}/" pyproject.toml
+sedi "s|^pretrained_checkpoint[[:space:]]*=[[:space:]]*\"[^\"]*\"|pretrained_checkpoint = \"${PRETRAINED_CHECKPOINT}\"|" pyproject.toml
 sedi "s/^n_optuna_trials[[:space:]]*=[[:space:]]*[0-9]+/n_optuna_trials = ${OPTUNA_TRIALS}/" pyproject.toml
 sedi "s/^hpo_rounds[[:space:]]*=[[:space:]]*[0-9]+/hpo_rounds = ${HPO_ROUNDS}/" pyproject.toml
 sedi "s|^gcs_bucket[[:space:]]*=[[:space:]]*\".*\"|gcs_bucket = \"${BUCKET_NAME}\"|" pyproject.toml

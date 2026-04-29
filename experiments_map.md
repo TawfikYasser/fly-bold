@@ -35,6 +35,17 @@ Both experiments were run for 30 trials, each with 10 server rounds, and the plo
 
 <img src="all_trials_map_plot_30trials_BOHB.png" alt="PLOT_30_BOHB" style="display:block; margin-left:auto; margin-right:auto;" />
 
+---
+
+
+### Following Experiments using Optimized Hyperparameters Configurations
+
+#### 1. non-IID-bohb (ID: 301033200031)
+
+For 30 server rounds, we got 54.10% mAP@0.5val. Check the results here: [non-IID-bohb Results Analysis](https://github.com/TawfikYasser/fly-bold/blob/main/flower/experiments_outputs/analysis_exp_301033200031/00_SUMMARY_REPORT_301033200031.txt)
+
+---
+
 ### FILES
 
 * [103101004 Results Analysis](https://github.com/TawfikYasser/fly-bold/blob/main/results_103101004.html)
