@@ -46,8 +46,6 @@ def load_env_file(env_path='.env'):
     return env_vars
 
 
-# Load environment variables
-ENV = load_env_file('.env')
 
 
 def get_env(key, default, type_cast=str):
@@ -68,12 +66,15 @@ def get_env(key, default, type_cast=str):
 
 
 # ==================== CONFIGURATION ====================
-INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/201033200032/EXP_YOLOv5_s_detection_201033200032_logs.json"
+INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/301033200031/EXP_YOLOv5_s_detection_301033200031_logs.json"
 
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
 exp_id = match.group(1) if match else "unknown"
 OUTPUT_DIR = f"/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/analysis_exp_{exp_id}"
+
+# Load .env from the correct location (parent directory of this script)
+ENV = load_env_file('/Users/tawfik/DeFeC3/flybold/flower/.env')
 
 # Experiment configuration loaded from .env
 CONFIG = {
