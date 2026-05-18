@@ -34,6 +34,51 @@ echo_error() {
     echo -e "\n\033[1;31m[ERROR]\033[0m $1\n"
 }
 
+create_additional_client_subnets() {
+    echo_info "Creating additional client subnets (6-10)"
+    for i in $(seq 6 10); do
+        SUBNET_NAME="flybold-subnet-client-${i}"
+        SUBNET_RANGE="10.0.${i}.0/28"
+        
+        echo_info "Creating client subnet ${i}"
+        if gcloud compute networks subnets describe $SUBNET_NAME --region=$REGION &>/dev/null; then
+            echo "Client subnet ${i} exists, skipping..."
+        else
+            gcloud compute networks subnets create $SUBNET_NAME \
+                --network=$NETWORK_NAME \
+                --region=$REGION \
+                --range=$SUBNET_RANGE
+        fi
+    done
+}
+
+create_additional_clients() {
+    echo_info "Creating additional client VMs (6-10)"
+    for i in $(seq 6 10); do
+        CLIENT_VM_NAME="${CLIENT_PREFIX}-${i}"
+        ZONE_INDEX=$(( (i - 1) % ${#ZONES[@]} ))
+        CLIENT_ZONE="${ZONES[$ZONE_INDEX]}"
+        CLIENT_SUBNET="flybold-subnet-client-${i}"
+
+        echo_info "Creating client VM ${i}: $CLIENT_VM_NAME in zone $CLIENT_ZONE"
+
+        if gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE &>/dev/null; then
+            echo "Client VM ${i} exists, skipping..."
+        else
+            gcloud compute instances create $CLIENT_VM_NAME \
+                --zone=$CLIENT_ZONE \
+                --machine-type=$CLIENT_MACHINE_TYPE \
+                --subnet=$CLIENT_SUBNET \
+                --image-family=$IMAGE_FAMILY \
+                --image-project=$IMAGE_PROJECT \
+                --boot-disk-size=$BOOT_DISK_SIZE \
+                --metadata-from-file=startup-script=/tmp/vm-startup.sh \
+                --scopes=storage-rw,compute-rw \
+                --tags=flybold-client
+        fi
+    done
+}
+
 echo_info "Setting up infrastructure for Flybold"
 gcloud config set project $PROJECT_ID
 
@@ -122,25 +167,29 @@ mkdir -p /app
 chown -R $(who am i | awk '{print $1}'):$(who am i | awk '{print $1}') /app
 EOF
 
-# Create server VM
-echo_info "Creating server VM: $SERVER_VM_NAME"
-if gcloud compute instances describe $SERVER_VM_NAME --zone=$SERVER_ZONE &>/dev/null; then
-    echo "Server VM exists, skipping..."
-else
-    gcloud compute instances create $SERVER_VM_NAME \
-        --zone=$SERVER_ZONE \
-        --machine-type=$SERVER_MACHINE_TYPE \
-        --subnet=$SERVER_SUBNET \
-        --image-family=$IMAGE_FAMILY \
-        --image-project=$IMAGE_PROJECT \
-        --boot-disk-size=$BOOT_DISK_SIZE \
-        --metadata-from-file=startup-script=/tmp/vm-startup.sh \
-        --scopes=storage-rw,compute-rw \
-        --tags=flybold-server
-fi
+# Ask user if they want to create initial clients (1-5)
+read -p "Do you want to create initial client VMs (1-5)? (yes/no): " CREATE_INITIAL_CLIENTS
 
-# Create client VMs
-for i in $(seq 1 $CLIENT_COUNT); do
+if [[ "$CREATE_INITIAL_CLIENTS" == "yes" || "$CREATE_INITIAL_CLIENTS" == "y" ]]; then
+    # Create server VM
+    echo_info "Creating server VM: $SERVER_VM_NAME"
+    if gcloud compute instances describe $SERVER_VM_NAME --zone=$SERVER_ZONE &>/dev/null; then
+        echo "Server VM exists, skipping..."
+    else
+        gcloud compute instances create $SERVER_VM_NAME \
+            --zone=$SERVER_ZONE \
+            --machine-type=$SERVER_MACHINE_TYPE \
+            --subnet=$SERVER_SUBNET \
+            --image-family=$IMAGE_FAMILY \
+            --image-project=$IMAGE_PROJECT \
+            --boot-disk-size=$BOOT_DISK_SIZE \
+            --metadata-from-file=startup-script=/tmp/vm-startup.sh \
+            --scopes=storage-rw,compute-rw \
+            --tags=flybold-server
+    fi
+
+    # Create client VMs
+    for i in $(seq 1 $CLIENT_COUNT); do
     CLIENT_VM_NAME="${CLIENT_PREFIX}-${i}"
     ZONE_INDEX=$((i - 1))
     CLIENT_ZONE="${ZONES[$ZONE_INDEX]}"
@@ -163,10 +212,25 @@ for i in $(seq 1 $CLIENT_COUNT); do
             --tags=flybold-client
     fi
 done
+else
+    echo_info "Skipping initial client VMs (1-5) creation"
+fi
 
-# Wait for VMs
-echo_info "Waiting 90 seconds for VMs to initialize..."
-sleep 90
+# Ask user if they want to create additional clients
+echo_info "Infrastructure setup options complete!"
+read -p "Do you want to create additional client VMs (6-10)? (yes/no): " CREATE_ADDITIONAL
+
+if [[ "$CREATE_ADDITIONAL" == "yes" || "$CREATE_ADDITIONAL" == "y" ]]; then
+    create_additional_client_subnets
+    create_additional_clients
+    echo_info "Additional client VMs created successfully!"
+fi
+
+# Wait for VMs only if we created something
+if [[ ("$CREATE_INITIAL_CLIENTS" == "yes" || "$CREATE_INITIAL_CLIENTS" == "y") || ("$CREATE_ADDITIONAL" == "yes" || "$CREATE_ADDITIONAL" == "y") ]]; then
+    echo_info "Waiting 90 seconds for VMs to initialize..."
+    sleep 90
+fi
 
 # Save VM info
 echo_info "Saving VM information"
@@ -175,6 +239,10 @@ PROJECT_ID=$PROJECT_ID
 REGION=$REGION
 NETWORK=$NETWORK_NAME
 
+EOF
+
+if [[ "$CREATE_INITIAL_CLIENTS" == "yes" || "$CREATE_INITIAL_CLIENTS" == "y" ]]; then
+    cat >> vm-info.txt << EOF
 SERVER_VM=$SERVER_VM_NAME
 SERVER_ZONE=$SERVER_ZONE
 SERVER_INTERNAL_IP=$(gcloud compute instances describe $SERVER_VM_NAME --zone=$SERVER_ZONE --format='get(networkInterfaces[0].networkIP)')
@@ -182,21 +250,41 @@ SERVER_EXTERNAL_IP=$(gcloud compute instances describe $SERVER_VM_NAME --zone=$S
 
 EOF
 
-for i in $(seq 1 $CLIENT_COUNT); do
-    CLIENT_VM_NAME="${CLIENT_PREFIX}-${i}"
-    ZONE_INDEX=$((i - 1))
-    CLIENT_ZONE="${ZONES[$ZONE_INDEX]}"
-    INTERNAL_IP=$(gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE --format='get(networkInterfaces[0].networkIP)')
-    EXTERNAL_IP=$(gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-    
-    cat >> vm-info.txt << EOF
+    for i in $(seq 1 $CLIENT_COUNT); do
+        CLIENT_VM_NAME="${CLIENT_PREFIX}-${i}"
+        ZONE_INDEX=$((i - 1))
+        CLIENT_ZONE="${ZONES[$ZONE_INDEX]}"
+        INTERNAL_IP=$(gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE --format='get(networkInterfaces[0].networkIP)')
+        EXTERNAL_IP=$(gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+        
+        cat >> vm-info.txt << EOF
 CLIENT_${i}_VM=$CLIENT_VM_NAME
 CLIENT_${i}_ZONE=$CLIENT_ZONE
 CLIENT_${i}_INTERNAL_IP=$INTERNAL_IP
 CLIENT_${i}_EXTERNAL_IP=$EXTERNAL_IP
 
 EOF
-done
+    done
+fi
+
+# Save info for additional clients if they were created
+if [[ "$CREATE_ADDITIONAL" == "yes" || "$CREATE_ADDITIONAL" == "y" ]]; then
+    for i in $(seq 6 10); do
+        CLIENT_VM_NAME="${CLIENT_PREFIX}-${i}"
+        ZONE_INDEX=$(( (i - 1) % ${#ZONES[@]} ))
+        CLIENT_ZONE="${ZONES[$ZONE_INDEX]}"
+        INTERNAL_IP=$(gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE --format='get(networkInterfaces[0].networkIP)')
+        EXTERNAL_IP=$(gcloud compute instances describe $CLIENT_VM_NAME --zone=$CLIENT_ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+        
+        cat >> vm-info.txt << EOF
+CLIENT_${i}_VM=$CLIENT_VM_NAME
+CLIENT_${i}_ZONE=$CLIENT_ZONE
+CLIENT_${i}_INTERNAL_IP=$INTERNAL_IP
+CLIENT_${i}_EXTERNAL_IP=$EXTERNAL_IP
+
+EOF
+    done
+fi
 
 echo_success "Infrastructure setup complete!"
 echo "VM info saved to vm-info.txt"

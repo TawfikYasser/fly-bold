@@ -1,0 +1,121 @@
+==========================================================================================
+FEDERATED LEARNING EXPERIMENT REPORT
+==========================================================================================
+
+EXPERIMENT CONFIGURATION
+------------------------------------------------------------------------------------------
+  Experiment ID................................ 302033200032
+  Total Clients................................ 20
+  Server Rounds................................ 30
+  Local Epochs................................. 3
+  Batch Size................................... 32
+  Learning Rate................................ 0.000259
+  YOLO Model................................... s
+  Image Size................................... 416
+  Dataset...................................... 0
+  Strategy..................................... 3
+  NUM_CPUS..................................... 5
+  Fraction Train............................... 1.0
+  Fraction Evaluate............................ 1.0
+
+TRAINING PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Training Score:.................... 0.5110
+  Final Training Score:...................... 0.5135
+  Best Training Score:....................... 0.5140 (Round 25)
+  Training Improvement:...................... 0.0025 (+0.48%)
+
+  Best Training mAP@0.5:..................... 0.5428 (Round 4)
+  Best Training mAP:......................... 0.3618 (Round 4)
+  Final Training Loss:....................... 0.1249
+
+VALIDATION PERFORMANCE
+------------------------------------------------------------------------------------------
+  Initial Validation Score:.................. 0.4947
+  Final Validation Score:.................... 0.4942
+  Best Validation Score:..................... 0.4983 (Round 28)
+  Validation Improvement:.................... -0.0005 (-0.10%)
+
+  Best Validation mAP@0.5:................... 0.5196 (Round 14)
+  Best Validation mAP:....................... 0.3465 (Round 14)
+  Final Validation Loss:..................... 0.1035
+
+GENERALIZATION ANALYSIS
+------------------------------------------------------------------------------------------
+  Final Generalization Gap:.................. 0.0192
+  Average Generalization Gap:................ 0.0203
+  Maximum Generalization Gap:................ 0.0578
+  Status:.................................... SLIGHT OVERFITTING
+
+TIME STATISTICS
+------------------------------------------------------------------------------------------
+  Total Training Time:....................... 1207.11 min (20.12 hours)
+  Average Round Duration:.................... 40.24 min
+  Shortest Round:............................ 37.41 min (Round 13)
+  Longest Round:............................. 47.19 min (Round 2)
+
+  Avg Client Training Time:.................. 28.99 min
+  Avg Client Eval Time:...................... 31.25 sec
+  Total Eval Time:........................... 1341.04 sec
+
+COMMUNICATION STATISTICS
+------------------------------------------------------------------------------------------
+  Total Data Transferred:.................... 8311.95 MB (8.117 GB)
+  Average per Round:......................... 277.06 MB
+  Data Transfer Rate:........................ 6.89 MB/min
+
+CLIENT ANALYSIS
+------------------------------------------------------------------------------------------
+  Best Training Client:...................... Client 9 (0.6311)
+  Worst Training Client:..................... Client 15 (0.4803)
+  Training Performance Gap:.................. 0.1508
+
+  Best Validation Client:.................... Client 9 (0.6357)
+  Worst Validation Client:................... Client 6 (0.4168)
+  Validation Performance Gap:................ 0.2189
+
+KEY INSIGHTS
+------------------------------------------------------------------------------------------
+  [+] Training performance improved by 0.5%
+  [-] Validation performance decreased by 0.1%
+  [!] Acceptable generalization (gap < 0.05)
+  [!] Clients diverging (variance increased from 0.0380 to 0.0412)
+
+==========================================================================================
+==========================================================================================
+RESOURCE USAGE ANALYSIS
+==========================================================================================
+
+CLIENT TRAINING RESOURCES
+------------------------------------------------------------------------------------------
+  CPU Peak (Average):........................ 0.0% (0.0% - 0.0%)
+  CPU Average (Average):..................... 0.0%
+  RAM Peak (Max):............................ 0.0 MB
+  RAM Average (Average):..................... 0.0 MB
+
+CLIENT EVALUATION RESOURCES
+------------------------------------------------------------------------------------------
+  CPU Peak (Average):........................ 0.0% (0.0% - 0.0%)
+  CPU Average (Average):..................... 0.0%
+  RAM Peak (Max):............................ 0.0 MB
+  RAM Average (Average):..................... 0.0 MB
+
+SERVER AGGREGATION RESOURCES
+------------------------------------------------------------------------------------------
+  Training Aggregation CPU Peak:............ 0.0% (avg)
+  Training Aggregation RAM Peak:............ 0.0 MB (avg)
+  Evaluation Aggregation CPU Peak:.......... 0.0% (avg)
+  Evaluation Aggregation RAM Peak:.......... 0.0 MB (avg)
+
+TRAINING VS EVALUATION RESOURCE COMPARISON
+------------------------------------------------------------------------------------------
+  CPU Usage Ratio (Train/Eval):............. 0.00x
+  RAM Usage Ratio (Train/Eval):............. 0.00x
+
+PER-CLIENT RESOURCE VARIABILITY
+------------------------------------------------------------------------------------------
+  Client CPU Variability (Std Dev):........ 0.0% (avg across rounds)
+  Client RAM Variability (Std Dev):........ 0.0 MB (avg across rounds)
+  Status:.................................... GOOD RESOURCE BALANCE
+
+==========================================================================================

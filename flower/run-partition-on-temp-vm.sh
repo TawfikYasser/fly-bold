@@ -142,10 +142,12 @@ set -e
 
 echo "[VM] Installing Python dependencies..."
 
-# Create virtual environment
+# Create /opt/partition_env with sudo, then immediately hand ownership
+# to the SSH user BEFORE creating the venv so all venv files are user-owned
 sudo mkdir -p /opt/partition_env
-sudo chown -R $USER:$USER /opt/partition_env
+sudo chown "$USER:$USER" /opt/partition_env
 
+# Create venv as the SSH user (not root) so pip install works later without sudo
 if [ ! -f /opt/partition_env/bin/activate ]; then
     python3 -m venv /opt/partition_env
 fi
@@ -166,9 +168,9 @@ gcloud config set project inf022 --quiet
 echo "[VM] Setup complete!"
 SETUP_SCRIPT
 
-# Copy and run setup script
+# Copy and run setup script — run as the SSH user (not sudo) so the venv is user-owned
 gcloud compute scp /tmp/vm_setup.sh "$VM_NAME:/app/" --zone="$ZONE" --quiet
-gcloud compute ssh "$VM_NAME" --zone="$ZONE" --quiet --command="sudo bash /app/vm_setup.sh"
+gcloud compute ssh "$VM_NAME" --zone="$ZONE" --quiet --command="bash /app/vm_setup.sh"
 
 ################################################################################
 # PHASE 3: RUN PARTITION WORKFLOW

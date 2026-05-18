@@ -229,19 +229,12 @@ def partition_images_dirichlet_balanced(
     client_configs: List[Dict],
     seed: int,
     source_split: str,
-    target_key: str,  # NEW: 'n_train' or 'n_val'
+    target_key: str,  # 'n_train' or 'n_val'
     min_classes_per_iid_client: int = 65
 ) -> Dict[int, List[Tuple[str, str]]]:
     """
-    FIXED partition using balanced class coverage.
-    Two-phase approach:
-    1. Phase 1: Ensure every IID client gets at least one image from min_classes_per_iid_client
-    2. Phase 2: Distribute remaining images to reach target sizes
-    
-    Args:
-        target_key: 'n_train' or 'n_val' - which config field to use for targets
-    
-    Returns dict mapping client_id -> [(image_name, source_split), ...]
+    Partition dataset using client-wise target sizes and true Dirichlet class propensities.
+    Guarantees target sizes are respected up to global split capacity constraints.
     """
     print(f"\n[BALANCED PARTITION] Starting balanced partitioning for {source_split} (target: {target_key})...")
     np.random.seed(seed)
@@ -265,7 +258,6 @@ def partition_images_dirichlet_balanced(
     # Identify IID and Non-IID clients
     iid_clients = []
     non_iid_clients = []
-    non_iid_alphas = []
     
     for cfg in client_configs:
         cid = cfg['client_id']
@@ -279,21 +271,18 @@ def partition_images_dirichlet_balanced(
             iid_clients.append(cid)
         else:
             non_iid_clients.append(cid)
-            non_iid_alphas.append(alpha)
             
     print(f"[{source_split}] IID Clients: {iid_clients}")
-    print(f"[{source_split}] Non-IID Clients: {non_iid_clients} (alphas: {non_iid_alphas})")
-    print(f"[{source_split}] PHASE 1: Ensuring minimum class coverage ({min_classes_per_iid_client} classes)...")
+    print(f"[{source_split}] Non-IID Clients: {non_iid_clients}")
+    print(f"[{source_split}] PHASE 1: Ensuring minimum class coverage ({min_classes_per_iid_client} classes for IID)...")
     
     # Initialize assignments
     client_pools = {i: [] for i in range(num_clients)}
     client_current_sizes = {i: 0 for i in range(num_clients)}
+    client_targets = {cfg['client_id']: cfg[target_key] for cfg in client_configs}
     
-    # PHASE 1: Minimum coverage for first N classes
-    # GUARANTEE: Each IID client gets at least 1 image from each of the first min_classes_per_iid_client classes
+    # PHASE 1: Minimum coverage for first N classes (Only applies to IID clients if present)
     classes_to_cover = all_classes[:min_classes_per_iid_client]
-    
-    # For each class, distribute 1 image to each IID client if possible
     for cls in classes_to_cover:
         imgs = list(set(class_to_images[cls]))
         random.shuffle(imgs)
@@ -301,7 +290,6 @@ def partition_images_dirichlet_balanced(
         if len(imgs) == 0:
             continue
         
-        # Try to give 1 image to each IID client
         for i, cid in enumerate(iid_clients):
             if i < len(imgs):
                 img = imgs[i]
@@ -310,81 +298,98 @@ def partition_images_dirichlet_balanced(
     
     print(f"[{source_split}] Phase 1 complete. Average size: {sum(client_current_sizes.values()) / len(client_current_sizes) if client_current_sizes else 0:.1f} images")
     print(f"[{source_split}] Phase 1 client sizes: {client_current_sizes}")
-    print(f"[{source_split}] PHASE 2: Distributing remaining images to targets (using {target_key})...")
+    print(f"[{source_split}] PHASE 2: Distributing remaining images via Dirichlet propensities...")
     
-    # PHASE 2: Fill to target with remaining images
+    # Generate true Dirichlet propensities per class across ALL clients
+    alphas = [cfg['alpha'] for cfg in client_configs]
+    class_propensities = {}
+    for cls in all_classes:
+        class_propensities[cls] = np.random.dirichlet(alphas)
+        
+    # Gather all unassigned images from Phase 1
     assigned_images = set()
     for img_list in client_pools.values():
         for img, _ in img_list:
             assigned_images.add(img)
-    
-    remaining_images = [(img, cls) for cls, imgs in class_to_images.items() 
-                        for img in imgs if img not in assigned_images]
-    random.shuffle(remaining_images)
-    
-    remaining_idx = 0
-    max_iterations = 1000  # Increased from 100 to ensure completion
-    
-    for round_num in range(max_iterations):
-        made_progress = False
-        
-        for cid in iid_clients:
-            # FIX: Use the correct target key (n_train or n_val)
-            target = client_configs[cid][target_key]
-            current = client_current_sizes[cid]
             
-            if current >= target:
-                continue
-            
-            needed = target - current
-            to_assign = min(needed, len(remaining_images) - remaining_idx)
-            
-            for _ in range(to_assign):
-                if remaining_idx >= len(remaining_images):
-                    break
+    all_remaining_items = []
+    all_items = []  # Store ALL items for potential replacement reuse
+    for cls in all_classes:
+        for img in class_to_images[cls]:
+            all_items.append((img, cls))
+            if img not in assigned_images:
+                all_remaining_items.append((img, cls))
                 
-                img, _ = remaining_images[remaining_idx]
-                client_pools[cid].append((img, source_split))
-                client_current_sizes[cid] += 1
-                remaining_idx += 1
-                made_progress = True
-        
-        if not made_progress or remaining_idx >= len(remaining_images):
-            break
+    # Globally shuffle items to distribute classes fairly and avoid order bias
+    random.shuffle(all_remaining_items)
     
-    # Debug: Check if all clients reached their targets
-    print(f"[{source_split}] Phase 2 status after {round_num + 1} iterations:")
-    for cid in iid_clients:
-        target = client_configs[cid][target_key]
+    client_assigned_images = {i: set() for i in range(num_clients)}
+    for cid, items in client_pools.items():
+        for img, _ in items:
+            client_assigned_images[cid].add(img)
+
+    # Dynamic allocation loop matching propensities against client remaining budgets
+    item_index = 0
+    consecutive_failures = 0
+    while True:
+        # Determine which clients still need data
+        active_clients = [cid for cid in range(num_clients) if client_current_sizes[cid] < client_targets[cid]]
+        if not active_clients:
+            break  # Every single client has perfectly reached its target profile size!
+            
+        if item_index >= len(all_remaining_items):
+            if source_split == "val2017":
+                all_remaining_items = all_items.copy()
+                random.shuffle(all_remaining_items)
+                item_index = 0
+                if consecutive_failures > len(all_remaining_items) * 2:
+                    print(f"[{source_split}] WARNING: Could not fulfill all targets even with sharing (all clients have all images). Breaking.")
+                    break
+            else:
+                break
+                
+        img, cls = all_remaining_items[item_index]
+        item_index += 1
+        
+        # Filter active clients to those who DON'T already have this image
+        eligible_clients = [cid for cid in active_clients if img not in client_assigned_images[cid]]
+        
+        if not eligible_clients:
+            # No active client can take this image (they all have it)
+            consecutive_failures += 1
+            continue
+            
+        # Extract and isolate class propensities for eligible clients only
+        propensities = class_propensities[cls]
+        active_weights = [propensities[cid] for cid in eligible_clients]
+        
+        sum_weights = sum(active_weights)
+        if sum_weights > 1e-9:
+            weights = [w / sum_weights for w in active_weights]
+        else:
+            # Fallback if remaining active propensities are near-zero
+            n_active = len(eligible_clients)
+            weights = [1.0 / n_active] * n_active
+            
+        # Sample client using optimized random.choices
+        sampled_cid = random.choices(eligible_clients, weights=weights, k=1)[0]
+        
+        client_pools[sampled_cid].append((img, source_split))
+        client_current_sizes[sampled_cid] += 1
+        client_assigned_images[sampled_cid].add(img)
+        consecutive_failures = 0
+
+    # Debug summary checking final assignment states
+    print(f"[{source_split}] Phase 2 status check:")
+    for cid in range(num_clients):
+        target = client_targets[cid]
         current = client_current_sizes[cid]
         status = "✓" if current >= target else "✗"
         print(f"  {status} Client {cid}: {current}/{target}")
-
-    # Non-IID clients get remaining images via Dirichlet
-    if non_iid_clients and remaining_idx < len(remaining_images):
-        remaining_imgs = [img for img, _ in remaining_images[remaining_idx:]]
         
-        if len(remaining_imgs) > 0:
-            proportions = np.random.dirichlet(np.array(non_iid_alphas))
-            counts = (proportions * len(remaining_imgs)).astype(int)
-            
-            leftover = len(remaining_imgs) - counts.sum()
-            if leftover > 0:
-                for i in np.argsort(proportions)[-leftover:]:
-                    counts[i] += 1
-            
-            rem_idx = 0
-            for i, cid in enumerate(non_iid_clients):
-                for _ in range(counts[i]):
-                    if rem_idx >= len(remaining_imgs):
-                        break
-                    client_pools[cid].append((remaining_imgs[rem_idx], source_split))
-                    rem_idx += 1
-    
     print(f"[{source_split}] Phase 2 complete. Final avg size: {sum(client_current_sizes.values()) / len(client_current_sizes) if client_current_sizes else 0:.1f} images")
     
     return client_pools
-
 
 def generate_manifest(bucket_name: str, num_clients: int, 
                      min_train: int, max_train: int,

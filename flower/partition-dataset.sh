@@ -5,10 +5,10 @@
 # This script must be run BEFORE 04-deploy-application.sh
 set -e
 
+PROJECT_ID="inf022"
+
 # Set the project ID for gcloud
 gcloud config set project "$PROJECT_ID" >/dev/null 2>&1 || true
-
-PROJECT_ID="inf022"
 BUCKET_NAME="flybold-coco-${PROJECT_ID}"
 LOCAL_DIR="$HOME/flybold_partitions"
 
@@ -108,20 +108,11 @@ fi
 # Step 1: Generate partition manifest
 if [ "$SKIP_GENERATION" = false ]; then
     echo_info "Step 1: Generating partition manifest for dataset ${DATASET_ID}..."
-    
+
     # Check if generate_partitions.py exists
     if [ ! -f "generate_partitions.py" ]; then
         echo_error "generate_partitions.py not found. Please ensure it's in the current directory."
     fi
-    
-    # Install required Python packages if needed
-    echo "Installing required Python packages..."
-    python3 -m pip install --quiet --upgrade pip
-    python3 -m pip install --quiet numpy matplotlib seaborn
-    echo "Packages installed."
-
-    echo ""
-    echo_info "Generating dataset manifest..."
     
     MANIFEST_FILE="partition_manifest_dataset_${DATASET_ID}.json"
     
@@ -202,7 +193,7 @@ setup_client_partition() {
         --zone="$vm_zone" --quiet
     
     # Setup partition on VM
-    gcloud compute ssh "$vm_name" --zone="$vm_zone" --command="
+    gcloud compute ssh "$vm_name" --zone="$vm_zone" --quiet --command="
         set -e
         
         export CLIENT_ID=$client_id
@@ -315,7 +306,8 @@ PYEOF
             echo '[VM] ✓ Training images already complete, skipping download'
         else
             echo '[VM] Downloading training images...'
-            cat /app/train_images_ds\${DATASET_ID}_c\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/images/train2017/ 2>/dev/null || true
+            find \$BASE_DIR/images/train2017 -name "*.jpg" -delete
+            gsutil -m cp \$(cat /app/train_images_ds\${DATASET_ID}_c\${CLIENT_ID}.txt) \$BASE_DIR/images/train2017/
             
             # Verify
             ACTUAL_TRAIN=\$(ls \$BASE_DIR/images/train2017/*.jpg 2>/dev/null | wc -l)
@@ -331,7 +323,8 @@ PYEOF
             echo '[VM] ✓ Training labels already complete, skipping download'
         else
             echo '[VM] Downloading training labels...'
-            cat /app/train_labels_list_ds\${DATASET_ID}_c\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/labels/train2017/ 2>/dev/null || true
+            find \$BASE_DIR/labels/train2017 -name "*.txt" -delete
+            gsutil -m cp \$(cat /app/train_labels_list_ds\${DATASET_ID}_c\${CLIENT_ID}.txt) \$BASE_DIR/labels/train2017/
             CURRENT_TRAIN_LABELS=\$(ls \$BASE_DIR/labels/train2017/*.txt 2>/dev/null | wc -l)
             if [ \$CURRENT_TRAIN_LABELS -ge \$EXPECTED_TRAIN ]; then
                 echo '[VM] ✓ Training labels downloaded'
@@ -345,7 +338,8 @@ PYEOF
             echo '[VM] ✓ Validation images already complete, skipping download'
         else
             echo '[VM] Downloading validation images...'
-            cat /app/val_images_ds\${DATASET_ID}_c\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/images/val2017/ 2>/dev/null || true
+            find \$BASE_DIR/images/val2017 -name "*.jpg" -delete
+            gsutil -m cp \$(cat /app/val_images_ds\${DATASET_ID}_c\${CLIENT_ID}.txt) \$BASE_DIR/images/val2017/
             
             # Verify
             ACTUAL_VAL=\$(ls \$BASE_DIR/images/val2017/*.jpg 2>/dev/null | wc -l)
@@ -361,7 +355,8 @@ PYEOF
             echo '[VM] ✓ Validation labels already complete, skipping download'
         else
             echo '[VM] Downloading validation labels...'
-            cat /app/val_labels_list_ds\${DATASET_ID}_c\${CLIENT_ID}.txt | gsutil -m cp -I \$BASE_DIR/labels/val2017/ 2>/dev/null || true
+            find \$BASE_DIR/labels/val2017 -name "*.txt" -delete
+            gsutil -m cp \$(cat /app/val_labels_list_ds\${DATASET_ID}_c\${CLIENT_ID}.txt) \$BASE_DIR/labels/val2017/
             CURRENT_VAL_LABELS=\$(ls \$BASE_DIR/labels/val2017/*.txt 2>/dev/null | wc -l)
             if [ \$CURRENT_VAL_LABELS -ge \$EXPECTED_VAL ]; then
                 echo '[VM] ✓ Validation labels downloaded'
@@ -432,8 +427,9 @@ EOF
 
 
 # Prepare all VMs: ensure /app directory has proper permissions
+# VMs 6-10 host clients 10-19 (2 clients per VM)
 echo_info "Preparing VMs: ensuring /app permissions..."
-for i in $(seq 1 5); do
+for i in $(seq 6 10); do
     CLIENT_VM_VAR="CLIENT_${i}_VM"
     CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
     CLIENT_VM=${!CLIENT_VM_VAR}
@@ -451,31 +447,40 @@ done &
 wait
 echo_success "/app directory prepared on all VMs"
 
-# Process all 5 VMs (2 clients each) for this dataset
-for i in $(seq 1 5); do
-    CLIENT_VM_VAR="CLIENT_${i}_VM"
-    CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
-    CLIENT_VM=${!CLIENT_VM_VAR}
-    CLIENT_ZONE=${!CLIENT_ZONE_VAR}
-    
-    # Verify VM variables are loaded
-    if [ -z "$CLIENT_VM" ] || [ -z "$CLIENT_ZONE" ]; then
-        echo_error "VM variables not loaded for VM $i. CLIENT_VM='$CLIENT_VM', CLIENT_ZONE='$CLIENT_ZONE'"
-    fi
-    
-    # Client IDs for this VM
-    CLIENT_ID_1=$(( (i-1)*2 ))
-    CLIENT_ID_2=$(( (i-1)*2 + 1 ))
-    
-    echo_info "Processing VM $i: $CLIENT_VM (Dataset ${DATASET_ID}, Clients $CLIENT_ID_1, $CLIENT_ID_2)"
-    
-    # Setup both clients on this VM in parallel for this dataset
-    setup_client_partition "$CLIENT_VM" "$CLIENT_ZONE" "$CLIENT_ID_1" "$DATASET_ID" &
-    setup_client_partition "$CLIENT_VM" "$CLIENT_ZONE" "$CLIENT_ID_2" "$DATASET_ID" &
-    
-    # Wait for both to complete
-    wait
+# Process VMs 6-10 (2 clients each: clients 10-19)
+#   VM 6  → clients 10, 11
+#   VM 7  → clients 12, 13
+#   VM 8  → clients 14, 15
+#   VM 9  → clients 16, 17
+#   VM 10 → clients 18, 19
+# Process VMs 6-10 in parallel (each VM runs its 2 internal clients sequentially)
+for i in $(seq 6 10); do
+    (
+        CLIENT_VM_VAR="CLIENT_${i}_VM"
+        CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_VM=${!CLIENT_VM_VAR}
+        CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        
+        # Verify VM variables are loaded
+        if [ -z "$CLIENT_VM" ] || [ -z "$CLIENT_ZONE" ]; then
+            echo -e "\033[1;31m[ERROR]\033[0m VM variables not loaded for VM $i."
+            exit 1
+        fi
+        
+        # Client IDs for this VM: VM 6 → 10,11 | VM 7 → 12,13 | ...
+        CLIENT_ID_1=$(( (i - 6) * 2 + 10 ))
+        CLIENT_ID_2=$(( (i - 6) * 2 + 11 ))
+        
+        echo -e "\n\033[1;34m[INFO]\033[0m Starting parallel batch processing on VM $i ($CLIENT_VM)"
+        
+        # Run sequentially INSIDE the VM to avoid gsutil profile/tracker collisions
+        setup_client_partition "$CLIENT_VM" "$CLIENT_ZONE" "$CLIENT_ID_1" "$DATASET_ID"
+        setup_client_partition "$CLIENT_VM" "$CLIENT_ZONE" "$CLIENT_ID_2" "$DATASET_ID"
+    ) &
 done
+
+# Wait for all VMs to complete their tasks
+wait
 
 echo ""
 echo_success "=========================================="

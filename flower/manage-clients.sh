@@ -3,13 +3,19 @@
 # Manage Flybold Clients
 set -e
 
-# Load VM info
+# Load VM info and .env
 if [ ! -f "vm-info.txt" ]; then
     echo "ERROR: vm-info.txt not found. Run deploy-application.sh first."
     exit 1
 fi
 
+if [ ! -f ".env" ]; then
+    echo "ERROR: .env file not found"
+    exit 1
+fi
+
 source vm-info.txt
+source .env
 
 # Verify critical variables are loaded
 if [ -z "$SERVER_VM" ] || [ -z "$SERVER_ZONE" ]; then
@@ -17,9 +23,13 @@ if [ -z "$SERVER_VM" ] || [ -z "$SERVER_ZONE" ]; then
     exit 1
 fi
 
+# Get number of clients from .env (default to 10)
+NUM_CLIENTS=${NUM_CLIENTS:-10}
+MAX_CLIENT_ID=$((NUM_CLIENTS - 1))
+
 show_usage() {
     cat << EOF
-Flybold Client Manager
+Flybold Client Manager (Deployment Mode: $NUM_CLIENTS clients)
 
 USAGE:
     $0 <command> [options]
@@ -33,8 +43,8 @@ COMMANDS:
     server-fresh Restart server container(s) and clear logs (fresh start)
 
 OPTIONS:
-    --client <0-9>      Specific client ID
-    --all               All clients
+    --client <0-$MAX_CLIENT_ID>   Specific client ID
+    --all                  All clients
 
 EXAMPLES:
     $0 status
@@ -142,19 +152,19 @@ view_logs() {
 }
 
 start_all() {
-    for i in $(seq 0 9); do
+    for i in $(seq 0 $MAX_CLIENT_ID); do
         start_client $i
     done
 }
 
 stop_all() {
-    for i in $(seq 0 9); do
+    for i in $(seq 0 $MAX_CLIENT_ID); do
         stop_client $i
     done
 }
 
 restart_all() {
-    for i in $(seq 0 9); do
+    for i in $(seq 0 $MAX_CLIENT_ID); do
         restart_client $i
     done
 }

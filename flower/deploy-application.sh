@@ -370,20 +370,25 @@ EOF
         exit 1
     fi
 
-    # Write Client Info (clients indexed 1..5)
-    for i in $(seq 1 5); do
-        if [ -n "${client_internal[$i]:-}" ]; then
+    # Write Client Info - dynamically for all discovered clients
+    MAX_CLIENT_NUM=0
+    for idx in "${!client_names[@]}"; do
+        if [ "$idx" -gt "$MAX_CLIENT_NUM" ]; then
+            MAX_CLIENT_NUM=$idx
+        fi
+        if [ -n "${client_internal[$idx]:-}" ]; then
             cat >> vm-info.txt << EOF
-CLIENT_${i}_VM=${client_names[$i]}
-CLIENT_${i}_ZONE=${client_zones[$i]}
-CLIENT_${i}_INTERNAL_IP=${client_internal[$i]}
-CLIENT_${i}_EXTERNAL_IP=${client_external[$i]}
+CLIENT_${idx}_VM=${client_names[$idx]}
+CLIENT_${idx}_ZONE=${client_zones[$idx]}
+CLIENT_${idx}_INTERNAL_IP=${client_internal[$idx]}
+CLIENT_${idx}_EXTERNAL_IP=${client_external[$idx]}
 
 EOF
-        else
-            echo_warning "Client VM (flybold-client-$i) not found or not running"
         fi
     done
+    
+    # Save max client number for later use
+    echo "MAX_CLIENT_NUM=$MAX_CLIENT_NUM" >> vm-info.txt
     
     echo_success "vm-info.txt updated with current IPs"
 }
@@ -403,10 +408,13 @@ echo_success "All VM IPs refreshed successfully!"
 echo ""
 echo "Current Configuration:"
 echo "  Server: $SERVER_VM ($SERVER_INTERNAL_IP)"
-for i in $(seq 1 5); do
+echo "  Found $MAX_CLIENT_NUM client VMs:"
+for i in $(seq 1 $MAX_CLIENT_NUM); do
     CLIENT_VM_VAR="CLIENT_${i}_VM"
     CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
-    echo "  ${!CLIENT_VM_VAR}: ${!CLIENT_IP_VAR}"
+    if [ -n "${!CLIENT_VM_VAR:-}" ]; then
+        echo "    ${!CLIENT_VM_VAR}: ${!CLIENT_IP_VAR}"
+    fi
 done
 echo ""
 
@@ -531,6 +539,29 @@ if [ "$SKIP_PROMPTS" = false ]; then
     HPO_ROUNDS=${HPO_ROUNDS:-3}
 fi
 
+# Ask user if they want to deploy server
+read -p "Do you want to deploy/update the server? (yes/no) [yes]: " DEPLOY_SERVER_INPUT
+DEPLOY_SERVER=${DEPLOY_SERVER_INPUT:-yes}
+if [[ ! "$DEPLOY_SERVER" =~ ^[Yy]|^yes|^YES$ ]]; then
+    DEPLOY_SERVER="no"
+else
+    DEPLOY_SERVER="yes"
+fi
+
+# Ask user if they want to deploy clients
+read -p "Do you want to deploy/update clients (1-${MAX_CLIENT_NUM})? (yes/no) [yes]: " DEPLOY_CLIENTS_INPUT
+DEPLOY_CLIENTS=${DEPLOY_CLIENTS_INPUT:-yes}
+if [[ ! "$DEPLOY_CLIENTS" =~ ^[Yy]|^yes|^YES$ ]]; then
+    DEPLOY_CLIENTS="no"
+else
+    DEPLOY_CLIENTS="yes"
+fi
+
+echo_info "Deployment Plan:"
+echo "  Server:  $([ "$DEPLOY_SERVER" = "yes" ] && echo "✓ Will deploy" || echo "✗ Skip")"
+echo "  Clients: $([ "$DEPLOY_CLIENTS" = "yes" ] && echo "✓ Will deploy (1-${MAX_CLIENT_NUM})" || echo "✗ Skip")"
+echo ""
+
 # Load RUN_ID directly from .env (no auto-increment)
 echo_info "Loading RUN_ID from .env..."
 if ! grep -q '^RUN_ID=' .env; then
@@ -626,33 +657,34 @@ fi
 echo_success "Configuration saved"
 
 # Deploy server
-echo_info "Deploying server on $SERVER_VM (IP: $SERVER_INTERNAL_IP)"
+if [ "$DEPLOY_SERVER" = "yes" ]; then
+    echo_info "Deploying server on $SERVER_VM (IP: $SERVER_INTERNAL_IP)"
 
-# Clean remote cache and setup directories
-echo "  → Setting up server directories..."
-ssh_with_retry "$SERVER_VM" "$SERVER_ZONE" "
-    sudo mkdir -p /app/{logs,checkpoints,certs}
-    sudo chown -R \$USER:\$USER /app
-    echo 'Cleaning remote Python cache...'
-    sudo find /app/src -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-    sudo find /app/yolov5 -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-    sudo find /app/src -type f -name '*.pyc' -delete 2>/dev/null || true
-    sudo find /app/yolov5 -type f -name '*.pyc' -delete 2>/dev/null || true
-    echo 'Remote cache cleaned'
-" || { echo_error "Failed to setup server directories"; exit 1; }
+    # Clean remote cache and setup directories
+    echo "  → Setting up server directories..."
+    ssh_with_retry "$SERVER_VM" "$SERVER_ZONE" "
+        sudo mkdir -p /app/{logs,checkpoints,certs}
+        sudo chown -R \$USER:\$USER /app
+        echo 'Cleaning remote Python cache...'
+        sudo find /app/src -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+        sudo find /app/yolov5 -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+        sudo find /app/src -type f -name '*.pyc' -delete 2>/dev/null || true
+        sudo find /app/yolov5 -type f -name '*.pyc' -delete 2>/dev/null || true
+        echo 'Remote cache cleaned'
+    " || { echo_error "Failed to setup server directories"; exit 1; }
 
-echo "  → Syncing files to server..."
-gcloud compute scp --recurse --compress ./src $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
-PID1=$!
-gcloud compute scp --recurse --compress ./yolov5 $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
-PID2=$!
-wait $PID1 $PID2
-gcloud compute scp --compress requirements.txt pyproject.toml .env $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
+    echo "  → Syncing files to server..."
+    gcloud compute scp --recurse --compress ./src $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
+    PID1=$!
+    gcloud compute scp --recurse --compress ./yolov5 $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1 &
+    PID2=$!
+    wait $PID1 $PID2
+    gcloud compute scp --compress requirements.txt pyproject.toml .env $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
 
-if [ "$ENABLE_TLS" = "true" ]; then
-    gcloud compute scp --recurse --compress ./certs $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
-fi
-echo "  ✓ Files synced"
+    if [ "$ENABLE_TLS" = "true" ]; then
+        gcloud compute scp --recurse --compress ./certs $SERVER_VM:/app/ --zone=$SERVER_ZONE > /dev/null 2>&1
+    fi
+    echo "  ✓ Files synced"
 
 # Create server docker-compose
 cat > /tmp/docker-compose-server.yml << 'EOF'
@@ -687,36 +719,36 @@ networks:
     driver: bridge
 EOF
 
-gcloud compute scp /tmp/docker-compose-server.yml $SERVER_VM:/app/docker-compose.yml --zone=$SERVER_ZONE --quiet > /dev/null 2>&1
+    gcloud compute scp /tmp/docker-compose-server.yml $SERVER_VM:/app/docker-compose.yml --zone=$SERVER_ZONE --quiet > /dev/null 2>&1
 
-# Start server with force-recreate
-echo "  → Starting server container..."
-gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
-    cd /app
-    echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
-    sudo docker compose pull --quiet
-    sudo docker compose up -d --force-recreate
-    sleep 10
-    sudo docker compose exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-    sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
-    sudo docker compose ps
-" 2>&1 | grep -E "(NAME|fl-server)" || true
+    # Start server with force-recreate
+    echo "  → Starting server container..."
+    gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
+        cd /app
+        echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
+        sudo docker compose pull --quiet
+        sudo docker compose up -d --force-recreate
+        sleep 10
+        sudo docker compose exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+        sudo docker compose ps
+    " 2>&1 | grep -E "(NAME|fl-server)" || true
 
-echo_info "Writing Flower config.toml inside fl-server (set default to deployment)..."
+    echo_info "Writing Flower config.toml inside fl-server (set default to deployment)..."
 
-# Build config content (deployment is default)
-if [ "$ENABLE_TLS" = "true" ]; then
-  FLWR_INSECURE_FLAG="false"
-else
-  FLWR_INSECURE_FLAG="true"
-fi
+    # Build config content (deployment is default)
+    if [ "$ENABLE_TLS" = "true" ]; then
+      FLWR_INSECURE_FLAG="false"
+    else
+      FLWR_INSECURE_FLAG="true"
+    fi
 
-gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
-  set -e
-  cd /app
-  sudo docker compose exec -T fl-server sh -c '
-    mkdir -p /root/.flwr
-    cat > /root/.flwr/config.toml <<EOF
+    gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
+      set -e
+      cd /app
+      sudo docker compose exec -T fl-server sh -c '
+        mkdir -p /root/.flwr
+        cat > /root/.flwr/config.toml <<EOF
 [superlink]
 default = \"deployment\"
 
@@ -726,18 +758,22 @@ default = \"deployment\"
 address = \"127.0.0.1:9093\"
 insecure = ${FLWR_INSECURE_FLAG}
 EOF
-  '
-  sudo docker compose exec -T fl-server flwr config list || true
-"
+      '
+      sudo docker compose exec -T fl-server flwr config list || true
+    "
 
-echo_success "Server deployed at $SERVER_INTERNAL_IP"
+    echo_success "Server deployed at $SERVER_INTERNAL_IP"
+else
+    echo_warning "Server deployment skipped by user"
+fi
 
 # Clients deployment
 
-echo_info "Deploying clients..."
+if [ "$DEPLOY_CLIENTS" = "yes" ]; then
+    echo_info "Deploying clients (1-${MAX_CLIENT_NUM})..."
 
-# Deploy clients - PARALLELIZED FILE SYNC
-echo_info "Deploying to all 5 client VMs in parallel..."
+    # Deploy clients - PARALLELIZED FILE SYNC
+    echo_info "Deploying to all $MAX_CLIENT_NUM client VMs in parallel..."
 
 # Create service account key for GCS access (do once before parallel operations)
 if [ ! -f "gcs-key.json" ]; then
@@ -745,85 +781,85 @@ if [ ! -f "gcs-key.json" ]; then
         --iam-account=default-compute@${PROJECT_ID}.iam.gserviceaccount.com 2>/dev/null || true
 fi
 
-# Step 1: Setup directories on all clients in parallel
-echo "  → Setting up directories on all client VMs..."
-SETUP_PIDS=()
-for i in $(seq 1 5); do
-    CLIENT_VM_VAR="CLIENT_${i}_VM"
-    CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
-    CLIENT_VM=${!CLIENT_VM_VAR}
-    CLIENT_ZONE=${!CLIENT_ZONE_VAR}
-    
-    (
-        ssh_with_retry "$CLIENT_VM" "$CLIENT_ZONE" "
-            sudo mkdir -p /app/{logs,certs}
-            sudo chown -R \$USER:\$USER /app
-            sudo find /app/src -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-            sudo find /app/yolov5 -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-            sudo find /app/src -type f -name '*.pyc' -delete 2>/dev/null || true
-            sudo find /app/yolov5 -type f -name '*.pyc' -delete 2>/dev/null || true
-        " && echo "  ✓ $CLIENT_VM directories ready"
-    ) &
-    SETUP_PIDS+=($!)
-done
+    # Step 1: Setup directories on all clients in parallel
+    echo "  → Setting up directories on all client VMs..."
+    SETUP_PIDS=()
+    for i in $(seq 1 $MAX_CLIENT_NUM); do
+        CLIENT_VM_VAR="CLIENT_${i}_VM"
+        CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_VM=${!CLIENT_VM_VAR}
+        CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        
+        (
+            ssh_with_retry "$CLIENT_VM" "$CLIENT_ZONE" "
+                sudo mkdir -p /app/{logs,certs}
+                sudo chown -R \$USER:\$USER /app
+                sudo find /app/src -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+                sudo find /app/yolov5 -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+                sudo find /app/src -type f -name '*.pyc' -delete 2>/dev/null || true
+                sudo find /app/yolov5 -type f -name '*.pyc' -delete 2>/dev/null || true
+            " && echo "  ✓ $CLIENT_VM directories ready"
+        ) &
+        SETUP_PIDS+=($!)
+    done
 
-# Wait for all directory setups to complete
-for pid in "${SETUP_PIDS[@]}"; do
-    wait $pid || { echo_error "Failed to setup client directories"; exit 1; }
-done
-echo_success "All client directories setup complete"
+    # Wait for all directory setups to complete
+    for pid in "${SETUP_PIDS[@]}"; do
+        wait $pid || { echo_error "Failed to setup client directories"; exit 1; }
+    done
+    echo_success "All client directories setup complete"
 
-# Step 2: Sync files to all clients in parallel
-echo_info "Syncing files to all 5 client VMs in parallel..."
+    # Step 2: Sync files to all clients in parallel
+    echo_info "Syncing files to all $MAX_CLIENT_NUM client VMs in parallel..."
 
-for i in $(seq 1 5); do
-    CLIENT_VM_VAR="CLIENT_${i}_VM"
-    CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
-    CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
-    CLIENT_VM=${!CLIENT_VM_VAR}
-    CLIENT_ZONE=${!CLIENT_ZONE_VAR}
-    CLIENT_IP=${!CLIENT_IP_VAR}
-    
-    echo "  → Syncing to $CLIENT_VM ($CLIENT_IP)..."
-    
-    # Sync large directories in parallel (within this client)
-    gcloud compute scp --recurse --compress ./src $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
-    PID1=$!
-    gcloud compute scp --recurse --compress ./yolov5 $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
-    PID2=$!
-    
-    # Wait for large directories to finish
-    wait $PID1 $PID2
-    
-    # Sync config files sequentially
-    gcloud compute scp --compress requirements.txt pyproject.toml .env gcs-key.json $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
-    
-    if [ "$ENABLE_TLS" = "true" ]; then
-        gcloud compute scp --recurse --compress ./certs $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
-    fi
-    
-    echo "  ✓ $CLIENT_VM files synced"
-done
+    for i in $(seq 1 $MAX_CLIENT_NUM); do
+        CLIENT_VM_VAR="CLIENT_${i}_VM"
+        CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
+        CLIENT_VM=${!CLIENT_VM_VAR}
+        CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        CLIENT_IP=${!CLIENT_IP_VAR}
+        
+        echo "  → Syncing to $CLIENT_VM ($CLIENT_IP)..."
+        
+        # Sync large directories in parallel (within this client)
+        gcloud compute scp --recurse --compress ./src $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
+        PID1=$!
+        gcloud compute scp --recurse --compress ./yolov5 $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
+        PID2=$!
+        
+        # Wait for large directories to finish
+        wait $PID1 $PID2
+        
+        # Sync config files sequentially
+        gcloud compute scp --compress requirements.txt pyproject.toml .env gcs-key.json $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
+        
+        if [ "$ENABLE_TLS" = "true" ]; then
+            gcloud compute scp --recurse --compress ./certs $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1
+        fi
+        
+        echo "  ✓ $CLIENT_VM files synced"
+    done
 
-echo_success "All client files synced successfully!"
+    echo_success "All client files synced successfully!"
 
-# Step 3: Verify data and create docker-compose files (still serial, but fast)
-echo_info "Verifying data and creating configurations..."
-for i in $(seq 1 5); do
-    CLIENT_VM_VAR="CLIENT_${i}_VM"
-    CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
-    CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
-    CLIENT_VM=${!CLIENT_VM_VAR}
-    CLIENT_ZONE=${!CLIENT_ZONE_VAR}
-    CLIENT_IP=${!CLIENT_IP_VAR}
+    # Step 3: Verify data and create docker-compose files (still serial, but fast)
+    echo_info "Verifying data and creating configurations..."
+    for i in $(seq 1 $MAX_CLIENT_NUM); do
+        CLIENT_VM_VAR="CLIENT_${i}_VM"
+        CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
+        CLIENT_VM=${!CLIENT_VM_VAR}
+        CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        CLIENT_IP=${!CLIENT_IP_VAR}
     
-    # Calculate client IDs for this VM (2 clients per VM)
-    CLIENT_ID_1=$(( (i-1)*2 ))
-    CLIENT_ID_2=$(( (i-1)*2 + 1 ))
+        # Calculate client IDs for this VM (2 clients per VM)
+        CLIENT_ID_1=$(( (i-1)*2 ))
+        CLIENT_ID_2=$(( (i-1)*2 + 1 ))
 
-    # Verify pre-partitioned data exists
-    echo "  → Verifying pre-partitioned data (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
-    VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
+        # Verify pre-partitioned data exists
+        echo "  → Verifying pre-partitioned data (Clients $CLIENT_ID_1, $CLIENT_ID_2)..."
+        VERIFICATION_OUTPUT=$(gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
         set -e
         DATASET=$DATASET_PADDED
         for CLIENT_ID in $CLIENT_ID_1 $CLIENT_ID_2; do
@@ -852,16 +888,16 @@ for i in $(seq 1 5); do
         done
     " 2>&1)
     
-    if echo "$VERIFICATION_OUTPUT" | grep -q "ERROR"; then
-        echo_error "Pre-partitioned data verification failed on $CLIENT_VM:\n$VERIFICATION_OUTPUT"
-        exit 1
-    else
-        echo "$VERIFICATION_OUTPUT"
-    fi
+        if echo "$VERIFICATION_OUTPUT" | grep -q "ERROR"; then
+            echo_error "Pre-partitioned data verification failed on $CLIENT_VM:\n$VERIFICATION_OUTPUT"
+            exit 1
+        else
+            echo "$VERIFICATION_OUTPUT"
+        fi
 
-    
-    # Create client docker-compose with CURRENT server IP
-    cat > /tmp/docker-compose-client-${i}.yml << EOF
+        
+        # Create client docker-compose with CURRENT server IP
+        cat > /tmp/docker-compose-client-${i}.yml << EOF
 version: '3.8'
 services:
   fl-client-${CLIENT_ID_1}:
@@ -927,45 +963,59 @@ networks:
 EOF
     
     gcloud compute scp /tmp/docker-compose-client-${i}.yml $CLIENT_VM:/app/docker-compose.yml --zone=$CLIENT_ZONE --quiet > /dev/null 2>&1
-done
+    done
 
-echo_success "All clients configured and data verified"
+    echo_success "All clients configured and data verified"
 
-# Start clients
-for i in $(seq 1 5); do
-    CLIENT_VM_VAR="CLIENT_${i}_VM"
-    CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
-    CLIENT_VM=${!CLIENT_VM_VAR}
-    CLIENT_ZONE=${!CLIENT_ZONE_VAR}
-    
-    echo_info "Starting clients on $CLIENT_VM"
-    gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
-        cd /app
-        echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
-        sudo docker compose pull --quiet
-        sudo docker compose up -d --force-recreate
-        sleep 5
-        for CLIENT_ID in \$(sudo docker compose ps --services); do
-            sudo docker compose exec -T \$CLIENT_ID find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-            sudo docker compose exec -T \$CLIENT_ID find /app -type f -name '*.pyc' -delete 2>/dev/null || true
-        done
-        sudo docker compose ps
-    " 2>&1 | grep -E "(NAME|fl-client)" || true
-done
+    # Start clients
+    for i in $(seq 1 $MAX_CLIENT_NUM); do
+        CLIENT_VM_VAR="CLIENT_${i}_VM"
+        CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_VM=${!CLIENT_VM_VAR}
+        CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        
+        echo_info "Starting clients on $CLIENT_VM"
+        gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
+            cd /app
+            echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
+            sudo docker compose pull --quiet
+            sudo docker compose up -d --force-recreate
+            sleep 5
+            for CLIENT_ID in \$(sudo docker compose ps --services); do
+                sudo docker compose exec -T \$CLIENT_ID find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+                sudo docker compose exec -T \$CLIENT_ID find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+            done
+            sudo docker compose ps
+        " 2>&1 | grep -E "(NAME|fl-client)" || true
+    done
+    echo_success "Clients deployment complete!"
+else
+    echo_warning "Clients deployment skipped by user"
+fi
 
-echo_success "Deployment complete!"
+echo_success "Deployment process complete!"
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  Run ID: $RUN_ID"
 echo "  Server IP: $SERVER_INTERNAL_IP"
-echo "  All clients connected to: ${SERVER_INTERNAL_IP}:9092"
+echo "  Clients deployed: $MAX_CLIENT_NUM"
 echo "  ✅ Using Dataset $DATASET_PADDED from /app/datasets_${DATASET_PADDED}/coco_partitions/"
-echo "  ✅ All caches cleaned and containers recreated"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
-echo "To start training:"
-echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
-echo ""
-echo "Monitor with: ./05-manage-clients.sh status"
+if [ "$DEPLOY_SERVER" = "yes" ] && [ "$DEPLOY_CLIENTS" = "yes" ]; then
+    echo "To start training:"
+    echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
+    echo ""
+    echo "Monitor with: ./05-manage-clients.sh status"
+elif [ "$DEPLOY_SERVER" = "yes" ]; then
+    echo "Server deployed. Clients were not updated."
+    echo "To start training (ensure clients are already running):"
+    echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
+elif [ "$DEPLOY_CLIENTS" = "yes" ]; then
+    echo "Clients deployed. Server was not updated."
+    echo "All clients connected to: ${SERVER_INTERNAL_IP}:9092"
+else
+    echo "⚠️  Neither server nor clients were deployed."
+fi
 echo ""
 echo "Note: vm-info.txt has been updated with current IPs (backup saved as vm-info.txt.backup)"
