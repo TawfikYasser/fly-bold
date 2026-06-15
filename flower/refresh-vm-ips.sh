@@ -109,25 +109,55 @@ SERVER_EXTERNAL_IP=$server_external
 
 EOF
 
-# Fetch client IPs
-client_zones=("us-central1-a" "us-central1-b" "us-central1-c" "us-central1-f" "us-central1-a")
+# Fetch client IPs - dynamically discover all clients
+echo ""
+echo_info "Discovering all client VMs..."
+client_list=$(gcloud compute instances list \
+    --project="$PROJECT_ID" \
+    --filter="name~'^flybold-client-'" \
+    --format="csv[no-heading](name,zone)" \
+    --sort-by=name 2>/dev/null || true)
 
-for i in $(seq 1 5); do
-    echo ""
-    echo_info "Fetching Client $i IP..."
-    zone="${client_zones[$((i-1))]}"
-    client_ips="$(fetch_vm_ips "flybold-client-$i" "$zone")"
-    client_internal="$(echo "$client_ips" | cut -d'|' -f1)"
-    client_external="$(echo "$client_ips" | cut -d'|' -f2)"
+if [ -z "$client_list" ]; then
+    echo_warning "No client VMs found running."
+    MAX_CLIENT_NUM=0
+else
+    MAX_CLIENT_NUM=0
 
-    cat >> vm-info.txt << EOF
-CLIENT_${i}_VM=flybold-client-${i}
+    # Sort numerically by the trailing number in the VM name (flybold-client-N)
+    # so client-2 always comes before client-10, regardless of gcloud string sort.
+    sorted_client_list=$(echo "$client_list" | sort -t'-' -k3 -n)
+
+    while IFS=, read -r vm_name zone; do
+        # Derive index from the VM name suffix (e.g. flybold-client-7 -> 7)
+        # This keeps CLIENT_N_* numbering stable even when VMs are missing.
+        i=$(echo "$vm_name" | grep -oE '[0-9]+$')
+        if [ -z "$i" ]; then
+            echo_warning "Could not parse numeric index from VM name: $vm_name — skipping."
+            continue
+        fi
+
+        echo ""
+        echo_info "Fetching $vm_name IP (index $i)..."
+        client_ips="$(fetch_vm_ips "$vm_name" "$zone")"
+        client_internal="$(echo "$client_ips" | cut -d'|' -f1)"
+        client_external="$(echo "$client_ips" | cut -d'|' -f2)"
+
+        cat >> vm-info.txt << EOF
+CLIENT_${i}_VM=$vm_name
 CLIENT_${i}_ZONE=$zone
 CLIENT_${i}_INTERNAL_IP=$client_internal
 CLIENT_${i}_EXTERNAL_IP=$client_external
 
 EOF
-done
+        if [ "$i" -gt "$MAX_CLIENT_NUM" ]; then
+            MAX_CLIENT_NUM=$i
+        fi
+    done <<< "$sorted_client_list"
+fi
+
+# Add MAX_CLIENT_NUM to vm-info.txt
+echo "MAX_CLIENT_NUM=$MAX_CLIENT_NUM" >> vm-info.txt
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
@@ -145,12 +175,14 @@ printf "%-20s %-15s %-15s\n" "VM Name" "Internal IP" "External IP"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 printf "%-20s %-15s %-15s\n" "flybold-server" "$SERVER_INTERNAL_IP" "$SERVER_EXTERNAL_IP"
 
-for i in $(seq 1 5); do
+for i in $(seq 1 $MAX_CLIENT_NUM); do
     CLIENT_VM_VAR="CLIENT_${i}_VM"
     CLIENT_INTERNAL_VAR="CLIENT_${i}_INTERNAL_IP"
     CLIENT_EXTERNAL_VAR="CLIENT_${i}_EXTERNAL_IP"
 
-    printf "%-20s %-15s %-15s\n" "${!CLIENT_VM_VAR}" "${!CLIENT_INTERNAL_VAR}" "${!CLIENT_EXTERNAL_VAR}"
+    if [ -n "${!CLIENT_VM_VAR:-}" ]; then
+        printf "%-20s %-15s %-15s\n" "${!CLIENT_VM_VAR}" "${!CLIENT_INTERNAL_VAR}" "${!CLIENT_EXTERNAL_VAR}"
+    fi
 done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

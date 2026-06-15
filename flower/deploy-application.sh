@@ -43,6 +43,23 @@ SSH_FLAGS=(
     "-o Compression=yes"          # Added for better transfer speed
 )
 
+# Helper function: Check if VM is running
+check_vm_running() {
+    local vm=$1
+    local zone=$2
+    
+    local status=$(gcloud compute instances describe "$vm" \
+        --zone="$zone" \
+        --format='get(status)' 2>/dev/null || echo "UNKNOWN")
+    
+    if [ "$status" = "RUNNING" ]; then
+        return 0
+    else
+        echo "not_running"
+        return 1
+    fi
+}
+
 # Helper function: Execute SSH command with retry logic
 ssh_with_retry() {
     local vm=$1
@@ -291,117 +308,24 @@ reserve_run_id() {
     return 1
 }
 
-# Optimized function to fetch and update all VM IPs in one batch
-update_vm_info() {
-    echo_info "Updating vm-info.txt with current IP addresses..."
-    
-    if [ -f "vm-info.txt" ]; then
-        cp vm-info.txt vm-info.txt.backup
-        echo "  Backed up existing vm-info.txt"
-    fi
-    
-    # Initialize file
-    cat > vm-info.txt << EOF
-PROJECT_ID=$PROJECT_ID
-REGION=us-central1
-NETWORK=flybold-network
-
-EOF
-
-    echo "  Fetching IPs for all VMs in a single batch request..."
-    
-    # Fetch all VM details in one single API call (filters for exact matches)
-    # Output format: name,zone,internal_ip,external_ip
-    local vm_data=$(gcloud compute instances list \
-        --project="$PROJECT_ID" \
-        --filter="name=(flybold-server) OR name:(flybold-client*)" \
-        --format="csv[no-heading](name,zone,networkInterfaces[0].networkIP,networkInterfaces[0].accessConfigs[0].natIP)")
-        
-    if [ -z "$vm_data" ]; then
-        echo_error "No VMs found! Are they running?"
-        exit 1
-    fi
-
-    # Store found data using indexed arrays (compatible with macOS bash 3.x)
-    declare -a client_names
-    declare -a client_zones
-    declare -a client_internal
-    declare -a client_external
-
-    # Server placeholders
-    SERVER_NAME=""
-    SERVER_ZONE=""
-    SERVER_INTERNAL_IP=""
-    SERVER_EXTERNAL_IP=""
-
-    # Parse the CSV output
-    while IFS=, read -r name zone internal_ip external_ip; do
-        if [ "$name" = "flybold-server" ]; then
-            SERVER_NAME="$name"
-            SERVER_ZONE="$zone"
-            SERVER_INTERNAL_IP="$internal_ip"
-            SERVER_EXTERNAL_IP="$external_ip"
-            echo "    Found $name: $internal_ip (Ext: ${external_ip:-None})" >&2
-            continue
-        fi
-
-        # Match client names like: flybold-client-1 .. flybold-client-5
-        if echo "$name" | grep -qE '^flybold-client-[0-9]+$'; then
-            idx=$(echo "$name" | sed -E 's/.*-([0-9]+)$/\1/')
-            client_names[$idx]="$name"
-            client_zones[$idx]="$zone"
-            client_internal[$idx]="$internal_ip"
-            client_external[$idx]="$external_ip"
-            echo "    Found $name: $internal_ip (Ext: ${external_ip:-None})" >&2
-        fi
-    done <<< "$vm_data"
-
-    # Write Server Info
-    if [ -n "$SERVER_INTERNAL_IP" ]; then
-        cat >> vm-info.txt << EOF
-SERVER_VM=flybold-server
-SERVER_ZONE=$SERVER_ZONE
-SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP
-SERVER_EXTERNAL_IP=$SERVER_EXTERNAL_IP
-
-EOF
-    else
-        echo_error "Server VM (flybold-server) not found in running instances!"
-        exit 1
-    fi
-
-    # Write Client Info - dynamically for all discovered clients
-    MAX_CLIENT_NUM=0
-    for idx in "${!client_names[@]}"; do
-        if [ "$idx" -gt "$MAX_CLIENT_NUM" ]; then
-            MAX_CLIENT_NUM=$idx
-        fi
-        if [ -n "${client_internal[$idx]:-}" ]; then
-            cat >> vm-info.txt << EOF
-CLIENT_${idx}_VM=${client_names[$idx]}
-CLIENT_${idx}_ZONE=${client_zones[$idx]}
-CLIENT_${idx}_INTERNAL_IP=${client_internal[$idx]}
-CLIENT_${idx}_EXTERNAL_IP=${client_external[$idx]}
-
-EOF
-        fi
-    done
-    
-    # Save max client number for later use
-    echo "MAX_CLIENT_NUM=$MAX_CLIENT_NUM" >> vm-info.txt
-    
-    echo_success "vm-info.txt updated with current IPs"
-}
-
 # Load or create VM info
 if [ ! -f "vm-info.txt" ]; then
     echo_error "vm-info.txt not found. Run 02-setup-infrastructure.sh first."
     exit 1
 fi
 
-# Check if VMs are running and update IPs
-echo_info "Checking VM status and fetching current IPs..."
-update_vm_info
+# Refresh VM IPs using the dedicated script
+echo_info "Refreshing VM IPs using refresh-vm-ips.sh..."
+if [ ! -f "refresh-vm-ips.sh" ]; then
+    echo_error "refresh-vm-ips.sh not found. Cannot refresh VM IPs."
+    exit 1
+fi
+
+chmod +x refresh-vm-ips.sh
+./refresh-vm-ips.sh
+
+# Load updated VM info
+echo_info "Loading updated VM configuration..."
 source vm-info.txt
 
 echo_success "All VM IPs refreshed successfully!"
@@ -449,6 +373,11 @@ if [ -f .env ]; then
         echo "  Old IP in .env: ${SERVER_INTERNAL_IP}"
         source vm-info.txt
         echo "  Current IP: ${SERVER_INTERNAL_IP}"
+        # Bug fix: these variables may not be in .env — guard against empty expansion
+        # which would silently wipe the values in pyproject.toml.
+        OPTUNA_TRIALS=${OPTUNA_TRIALS:-0}
+        HPO_ROUNDS=${HPO_ROUNDS:-3}
+        HPO_TRIALS=${HPO_TRIALS:-${OPTUNA_TRIALS}}
     else
         SKIP_PROMPTS=false
     fi
@@ -532,10 +461,10 @@ if [ "$SKIP_PROMPTS" = false ]; then
     read -p "Path to pretrained checkpoint (optional, leave empty for new training): " PRETRAINED_CHECKPOINT
     PRETRAINED_CHECKPOINT=${PRETRAINED_CHECKPOINT:-}
     
-    read -p "Number of Optuna HPO trials [0]: " OPTUNA_TRIALS
-    OPTUNA_TRIALS=${OPTUNA_TRIALS:-0}
+    read -p "Number of HPO trials [0]: " HPO_TRIALS
+    HPO_TRIALS=${HPO_TRIALS:-0}
     
-    read -p "Rounds per Optuna trial [3]: " HPO_ROUNDS
+    read -p "Rounds per HPO trial [3]: " HPO_ROUNDS
     HPO_ROUNDS=${HPO_ROUNDS:-3}
 fi
 
@@ -548,18 +477,12 @@ else
     DEPLOY_SERVER="yes"
 fi
 
-# Ask user if they want to deploy clients
-read -p "Do you want to deploy/update clients (1-${MAX_CLIENT_NUM})? (yes/no) [yes]: " DEPLOY_CLIENTS_INPUT
-DEPLOY_CLIENTS=${DEPLOY_CLIENTS_INPUT:-yes}
-if [[ ! "$DEPLOY_CLIENTS" =~ ^[Yy]|^yes|^YES$ ]]; then
-    DEPLOY_CLIENTS="no"
-else
-    DEPLOY_CLIENTS="yes"
-fi
+# Clients are always deployed — IPs are sourced from vm-info.txt after refresh
+DEPLOY_CLIENTS="yes"
 
 echo_info "Deployment Plan:"
 echo "  Server:  $([ "$DEPLOY_SERVER" = "yes" ] && echo "✓ Will deploy" || echo "✗ Skip")"
-echo "  Clients: $([ "$DEPLOY_CLIENTS" = "yes" ] && echo "✓ Will deploy (1-${MAX_CLIENT_NUM})" || echo "✗ Skip")"
+echo "  Clients: ✓ Will deploy all running VMs (1-${MAX_CLIENT_NUM}, IPs from vm-info.txt)"
 echo ""
 
 # Load RUN_ID directly from .env (no auto-increment)
@@ -616,25 +539,54 @@ echo "[DEBUG] Created run_config.json"
 gcs_with_retry gcloud storage cp /tmp/run_config.json "gs://${BUCKET_NAME}/configs/run_${RUN_ID}_config.json"
 echo "[DEBUG] Uploaded run_config.json"
 
-# Update pyproject.toml
-sedi "s/^num-server-rounds[[:space:]]*=[[:space:]]*[0-9]+/num-server-rounds = ${NUM_SERVER_ROUNDS}/" pyproject.toml
-sedi "s/^run_id[[:space:]]*=[[:space:]]*[0-9]+/run_id = ${RUN_ID}/" pyproject.toml
-sedi "s/^fraction-train[[:space:]]*=[[:space:]]*[0-9.]+/fraction-train = ${FRACTION_TRAIN}/" pyproject.toml
-sedi "s/^fraction_evaluate[[:space:]]*=[[:space:]]*[0-9.]+/fraction_evaluate = ${FRACTION_EVALUATE}/" pyproject.toml
-sedi "s/^local-epochs[[:space:]]*=[[:space:]]*[0-9]+/local-epochs = ${LOCAL_EPOCHS}/" pyproject.toml
-sedi "s/^lr[[:space:]]*=[[:space:]]*[0-9.]+/lr = ${LR}/" pyproject.toml
-sedi "s/^yolo_size[[:space:]]*=[[:space:]]*\"[^\"]+\"/yolo_size = \"${YOLO_SIZE}\"/" pyproject.toml
-sedi "s/^img_size[[:space:]]*=[[:space:]]*[0-9]+/img_size = ${IMG_SIZE}/" pyproject.toml
-sedi "s/^batch_size[[:space:]]*=[[:space:]]*[0-9]+/batch_size = ${BATCH_SIZE}/" pyproject.toml
-sedi "s/^dataset[[:space:]]*=[[:space:]]*[0-9]+/dataset = ${DATASET}/" pyproject.toml
-sedi "s/^strategy[[:space:]]*=[[:space:]]*[0-9]+/strategy = ${STRATEGY}/" pyproject.toml
-sedi "s/^use_pretrained[[:space:]]*=[[:space:]]*[0-9]+/use_pretrained = ${USE_PRETRAINED}/" pyproject.toml
+# Update pyproject.toml (use patterns that stop at inline comments to avoid corrupting comments)
+# FIX: replacements for non-quoted values now include two trailing spaces so the
+# greedy [^#]* match (which consumes the original spaces before '#') doesn't cause
+# the inline comment to be glued directly onto the value.
+sedi "s/^num-server-rounds[[:space:]]*=[[:space:]]*[^#]*/num-server-rounds = ${NUM_SERVER_ROUNDS}  /" pyproject.toml
+sedi "s/^run_id[[:space:]]*=[[:space:]]*[^#]*/run_id = ${RUN_ID}  /" pyproject.toml
+sedi "s/^fraction-train[[:space:]]*=[[:space:]]*[^#]*/fraction-train = ${FRACTION_TRAIN}  /" pyproject.toml
+sedi "s/^fraction_evaluate[[:space:]]*=[[:space:]]*[^#]*/fraction_evaluate = ${FRACTION_EVALUATE}  /" pyproject.toml
+sedi "s/^local-epochs[[:space:]]*=[[:space:]]*[^#]*/local-epochs = ${LOCAL_EPOCHS}  /" pyproject.toml
+sedi "s/^lr[[:space:]]*=[[:space:]]*[^#]*/lr = ${LR}  /" pyproject.toml
+sedi "s/^yolo_size[[:space:]]*=[[:space:]]*\"[^\"]*\"/yolo_size = \"${YOLO_SIZE}\"/" pyproject.toml
+sedi "s/^img_size[[:space:]]*=[[:space:]]*[^#]*/img_size = ${IMG_SIZE}  /" pyproject.toml
+sedi "s/^batch_size[[:space:]]*=[[:space:]]*[^#]*/batch_size = ${BATCH_SIZE}  /" pyproject.toml
+sedi "s/^dataset[[:space:]]*=[[:space:]]*[^#]*/dataset = ${DATASET}  /" pyproject.toml
+sedi "s/^strategy[[:space:]]*=[[:space:]]*[^#]*/strategy = ${STRATEGY}  /" pyproject.toml
+sedi "s/^use_pretrained[[:space:]]*=[[:space:]]*[^#]*/use_pretrained = ${USE_PRETRAINED}  /" pyproject.toml
+# Read PRETRAINED_CHECKPOINT from .env with proper comment stripping
+PRETRAINED_CHECKPOINT=$(grep '^PRETRAINED_CHECKPOINT=' .env 2>/dev/null | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || echo "")
+
 sedi "s|^pretrained_checkpoint[[:space:]]*=[[:space:]]*\"[^\"]*\"|pretrained_checkpoint = \"${PRETRAINED_CHECKPOINT}\"|" pyproject.toml
-sedi "s/^n_optuna_trials[[:space:]]*=[[:space:]]*[0-9]+/n_optuna_trials = ${OPTUNA_TRIALS}/" pyproject.toml
-sedi "s/^hpo_rounds[[:space:]]*=[[:space:]]*[0-9]+/hpo_rounds = ${HPO_ROUNDS}/" pyproject.toml
+sedi "s/^hpo_trials[[:space:]]*=[[:space:]]*[^#]*/hpo_trials = ${HPO_TRIALS}  /" pyproject.toml
+sedi "s/^hpo_rounds[[:space:]]*=[[:space:]]*[^#]*/hpo_rounds = ${HPO_ROUNDS}  /" pyproject.toml
 sedi "s|^gcs_bucket[[:space:]]*=[[:space:]]*\".*\"|gcs_bucket = \"${BUCKET_NAME}\"|" pyproject.toml
 
-# Increment version in pyproject.toml
+# Sync FLAML and HPO configuration from .env to pyproject.toml
+# Bug fix: add `sed 's/[[:space:]]*#.*//'` before `tr -d '[:space:]'` so that inline
+# comments in .env (e.g. FLAML_TIME_BUDGET=36000  # 1 hour) are stripped cleanly
+# instead of being concatenated into the value after whitespace removal.
+USE_FLAML=$(grep '^USE_FLAML=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+HPO_MODE=$(grep '^HPO_MODE=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+FLAML_TIME_BUDGET=$(grep '^FLAML_TIME_BUDGET=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+FLAML_METRIC=$(grep '^FLAML_METRIC=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+FLAML_ESTIMATOR=$(grep '^FLAML_ESTIMATOR=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+FLAML_SAMPLE_SIZE=$(grep '^FLAML_SAMPLE_SIZE=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+FLAML_USE_COE=$(grep '^FLAML_USE_COE=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+FLAML_LOG_HISTORY=$(grep '^FLAML_LOG_HISTORY=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+
+sedi "s/^use_flaml[[:space:]]*=[[:space:]]*[^#]*/use_flaml = ${USE_FLAML}  /" pyproject.toml
+sedi "s/^hpo_mode[[:space:]]*=[[:space:]]*\"[^\"]*\"/hpo_mode = \"${HPO_MODE}\"/" pyproject.toml
+sedi "s/^flaml_time_budget[[:space:]]*=[[:space:]]*[^#]*/flaml_time_budget = ${FLAML_TIME_BUDGET}  /" pyproject.toml
+sedi "s/^flaml_metric[[:space:]]*=[[:space:]]*\"[^\"]*\"/flaml_metric = \"${FLAML_METRIC}\"/" pyproject.toml
+sedi "s/^flaml_estimator[[:space:]]*=[[:space:]]*\"[^\"]*\"/flaml_estimator = \"${FLAML_ESTIMATOR}\"/" pyproject.toml
+sedi "s/^flaml_sample_size[[:space:]]*=[[:space:]]*[^#]*/flaml_sample_size = ${FLAML_SAMPLE_SIZE}  /" pyproject.toml
+sedi "s/^flaml_use_coe[[:space:]]*=[[:space:]]*[^#]*/flaml_use_coe = ${FLAML_USE_COE}  /" pyproject.toml
+sedi "s/^flaml_log_history[[:space:]]*=[[:space:]]*[^#]*/flaml_log_history = ${FLAML_LOG_HISTORY}  /" pyproject.toml
+
+echo_success "FLAML configuration synced to pyproject.toml"
+echo_warning "⚠️  IMPORTANT: Docker image may need rebuild to include flaml[automl]. If FLAML not found, run: ./03-build-push-image.sh"
 echo_info "Incrementing version in pyproject.toml..."
 CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
 IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
@@ -687,6 +639,7 @@ if [ "$DEPLOY_SERVER" = "yes" ]; then
     echo "  ✓ Files synced"
 
 # Create server docker-compose
+# Use --insecure flag directly (no TLS by default, as certificates are not provided)
 cat > /tmp/docker-compose-server.yml << 'EOF'
 version: '3.8'
 services:
@@ -697,15 +650,7 @@ services:
     env_file: [.env]
     environment:
       - PYTHONPATH=/app/src:/app
-    command: >
-      sh -c "
-      echo '=== Flower Server Starting ===' &&
-      echo 'PYTHONPATH:' \$PYTHONPATH &&
-      if [ \"\$INSECURE\" = 'true' ]; then
-        flower-superlink --insecure --fleet-api-address=0.0.0.0:9092;
-      else
-        flower-superlink --fleet-api-address=0.0.0.0:9092 --ssl-ca-certfile=/app/certs/ca.crt --ssl-certfile=/app/certs/server.crt --ssl-keyfile=/app/certs/server.key;
-      fi"
+    command: flower-superlink --insecure --fleet-api-address=0.0.0.0:9092
     ports: ["9092:9092", "9093:9093"]
     volumes:
       - "./src:/app/src"
@@ -727,12 +672,50 @@ EOF
         cd /app
         echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
         sudo docker compose pull --quiet
+        
+        # Ensure FLAML is installed in running container (if not in image)
+        if ! python3 -c 'import flaml' 2>/dev/null; then
+            echo '⚠️  FLAML not found, installing in-container...'
+            pip install -q 'flaml[automl]>=2.0.0' || true
+        fi
+        
         sudo docker compose up -d --force-recreate
-        sleep 10
-        sudo docker compose exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-        sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+        
+        # Wait for container to be running and healthy
+        echo '  → Waiting for fl-server to be ready...'
+        MAX_WAIT=60
+        WAITED=0
+        while [ \$WAITED -lt \$MAX_WAIT ]; do
+            CONTAINER_STATE=\$(sudo docker compose ps fl-server --format '{{.State}}' 2>/dev/null || echo 'unknown')
+            if [ \"\$CONTAINER_STATE\" = \"running\" ]; then
+                echo '  ✓ Container is running'
+                break
+            fi
+            WAITED=\$((WAITED + 5))
+            if [ \$WAITED -lt \$MAX_WAIT ]; then
+                echo \"  ⏳ Waiting... (\${WAITED}s/\${MAX_WAIT}s)\"
+                sleep 5
+            fi
+        done
+        
+        if [ \$WAITED -ge \$MAX_WAIT ]; then
+            echo '  ⚠️  Container did not become ready within \$MAX_WAIT seconds'
+            sudo docker compose logs fl-server | tail -20
+        fi
+        
+        # Now execute cleanup commands with retry
+        for attempt in 1 2 3; do
+            if sudo docker compose exec -T fl-server find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; then
+                sudo docker compose exec -T fl-server find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+                break
+            elif [ \$attempt -lt 3 ]; then
+                echo \"  ℹ️  Cleanup attempt \$attempt failed, retrying...\"
+                sleep 2
+            fi
+        done
+        
         sudo docker compose ps
-    " 2>&1 | grep -E "(NAME|fl-server)" || true
+    " 2>&1 | grep -E "(NAME|fl-server|Waiting|ready)" || true
 
     echo_info "Writing Flower config.toml inside fl-server (set default to deployment)..."
 
@@ -743,9 +726,35 @@ EOF
       FLWR_INSECURE_FLAG="true"
     fi
 
+    # Wait for container to be fully ready before executing commands
+    # Note: no 'set -e' inside the remote command — failures are handled explicitly
+    # so a non-critical config write cannot kill the whole deploy script.
     gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command="
-      set -e
       cd /app
+      
+      # Additional wait to ensure container is healthy
+      echo 'Waiting for fl-server to be fully ready...'
+      MAX_WAIT=90
+      WAITED=0
+      READY=0
+      while [ \$WAITED -lt \$MAX_WAIT ]; do
+        if sudo docker compose exec -T fl-server echo 'Container ready' >/dev/null 2>&1; then
+          echo 'fl-server is ready'
+          READY=1
+          break
+        fi
+        WAITED=\$((WAITED + 3))
+        echo \"  ⏳ Still waiting... (\${WAITED}s/\${MAX_WAIT}s)\"
+        sleep 3
+      done
+      
+      if [ \$READY -eq 0 ]; then
+        echo 'WARNING: Container did not respond within timeout — skipping config write'
+        sudo docker compose logs fl-server | tail -20
+        exit 0
+      fi
+      
+      # Write the Flower config (failures are non-fatal, hence || true on each exec)
       sudo docker compose exec -T fl-server sh -c '
         mkdir -p /root/.flwr
         cat > /root/.flwr/config.toml <<EOF
@@ -753,14 +762,13 @@ EOF
 default = \"deployment\"
 
 [superlink.deployment]
-# flwr run executes inside the same container as the SuperLink,
-# so localhost is correct.
 address = \"127.0.0.1:9093\"
 insecure = ${FLWR_INSECURE_FLAG}
 EOF
-      '
+        echo Config written successfully
+      ' || echo 'WARNING: config write failed — continuing anyway'
       sudo docker compose exec -T fl-server flwr config list || true
-    "
+    " || echo_warning "Config-write SSH step had non-zero exit — server is still running, continuing to clients"
 
     echo_success "Server deployed at $SERVER_INTERNAL_IP"
 else
@@ -787,8 +795,28 @@ fi
     for i in $(seq 1 $MAX_CLIENT_NUM); do
         CLIENT_VM_VAR="CLIENT_${i}_VM"
         CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_EXT_IP_VAR="CLIENT_${i}_EXTERNAL_IP"
         CLIENT_VM=${!CLIENT_VM_VAR}
         CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        CLIENT_EXT_IP=${!CLIENT_EXT_IP_VAR}
+        
+        # Skip if VM is not running (not in vm-info.txt)
+        if [ -z "$CLIENT_VM" ] || [ -z "$CLIENT_ZONE" ]; then
+            echo "  ℹ️  Skipping client VM $i (not running or not found)"
+            continue
+        fi
+        
+        # Skip if VM doesn't have external IP (can't connect via SSH)
+        if [ -z "$CLIENT_EXT_IP" ] || [ "$CLIENT_EXT_IP" = "None" ]; then
+            echo "  ⚠️  Skipping client VM $i ($CLIENT_VM) - no external IP assigned"
+            continue
+        fi
+        
+        # Check if VM is actually running
+        if ! check_vm_running "$CLIENT_VM" "$CLIENT_ZONE"; then
+            echo "  ⏹️  Skipping client VM $i ($CLIENT_VM) - VM is stopped"
+            continue
+        fi
         
         (
             ssh_with_retry "$CLIENT_VM" "$CLIENT_ZONE" "
@@ -816,11 +844,29 @@ fi
         CLIENT_VM_VAR="CLIENT_${i}_VM"
         CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
         CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
+        CLIENT_EXT_IP_VAR="CLIENT_${i}_EXTERNAL_IP"
         CLIENT_VM=${!CLIENT_VM_VAR}
         CLIENT_ZONE=${!CLIENT_ZONE_VAR}
         CLIENT_IP=${!CLIENT_IP_VAR}
+        CLIENT_EXT_IP=${!CLIENT_EXT_IP_VAR}
         
-        echo "  → Syncing to $CLIENT_VM ($CLIENT_IP)..."
+        # Skip if VM is not running (not in vm-info.txt)
+        if [ -z "$CLIENT_VM" ] || [ -z "$CLIENT_ZONE" ]; then
+            echo "  ℹ️  Skipping client VM $i (not running or not found)"
+            continue
+        fi
+        
+        # Skip if VM doesn't have external IP (can't connect via SSH)
+        if [ -z "$CLIENT_EXT_IP" ] || [ "$CLIENT_EXT_IP" = "None" ]; then
+            echo "  ⚠️  Skipping client VM $i ($CLIENT_VM) - no external IP assigned"
+            continue
+        fi
+        
+        # Check if VM is actually running
+        if ! check_vm_running "$CLIENT_VM" "$CLIENT_ZONE"; then
+            echo "  ⏹️  Skipping client VM $i ($CLIENT_VM) - VM is stopped"
+            continue
+        fi
         
         # Sync large directories in parallel (within this client)
         gcloud compute scp --recurse --compress ./src $CLIENT_VM:/app/ --zone=$CLIENT_ZONE > /dev/null 2>&1 &
@@ -849,9 +895,29 @@ fi
         CLIENT_VM_VAR="CLIENT_${i}_VM"
         CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
         CLIENT_IP_VAR="CLIENT_${i}_INTERNAL_IP"
+        CLIENT_EXT_IP_VAR="CLIENT_${i}_EXTERNAL_IP"
         CLIENT_VM=${!CLIENT_VM_VAR}
         CLIENT_ZONE=${!CLIENT_ZONE_VAR}
         CLIENT_IP=${!CLIENT_IP_VAR}
+        CLIENT_EXT_IP=${!CLIENT_EXT_IP_VAR}
+        
+        # Skip if VM is not running (not in vm-info.txt)
+        if [ -z "$CLIENT_VM" ] || [ -z "$CLIENT_ZONE" ]; then
+            echo "  ℹ️  Skipping client VM $i (not running or not found)"
+            continue
+        fi
+        
+        # Skip if VM doesn't have external IP (can't connect via SSH)
+        if [ -z "$CLIENT_EXT_IP" ] || [ "$CLIENT_EXT_IP" = "None" ]; then
+            echo "  ⚠️  Skipping client VM $i ($CLIENT_VM) - no external IP assigned"
+            continue
+        fi
+        
+        # Check if VM is actually running
+        if ! check_vm_running "$CLIENT_VM" "$CLIENT_ZONE"; then
+            echo "  ⏹️  Skipping client VM $i ($CLIENT_VM) - VM is stopped"
+            continue
+        fi
     
         # Calculate client IDs for this VM (2 clients per VM)
         CLIENT_ID_1=$(( (i-1)*2 ))
@@ -910,15 +976,7 @@ services:
       - PARTITION_ID=${CLIENT_ID_1}
       - PYTHONPATH=/app/src:/app
       - GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
-    command: >
-      sh -c "
-      echo '=== Flower Client ${CLIENT_ID_1} Starting ===' &&
-      echo 'PYTHONPATH:' \$PYTHONPATH &&
-      if [ \"\\\$INSECURE\" = 'true' ]; then
-        flower-supernode --insecure --superlink=${SERVER_INTERNAL_IP}:9092;
-      else
-        flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
-      fi"
+    command: flower-supernode --insecure --superlink=${SERVER_INTERNAL_IP}:9092
     volumes:
       - "./src:/app/src"
       - "./yolov5:/app/yolov5"
@@ -939,15 +997,7 @@ services:
       - PARTITION_ID=${CLIENT_ID_2}
       - PYTHONPATH=/app/src:/app
       - GOOGLE_APPLICATION_CREDENTIALS=/app/gcs-key.json
-    command: >
-      sh -c "
-      echo '=== Flower Client ${CLIENT_ID_2} Starting ===' &&
-      echo 'PYTHONPATH:' \$PYTHONPATH &&
-      if [ \"\\\$INSECURE\" = 'true' ]; then
-        flower-supernode --insecure --superlink=${SERVER_INTERNAL_IP}:9092;
-      else
-        flower-supernode --superlink=${SERVER_INTERNAL_IP}:9092 --root-certificates=/app/certs/ca.crt;
-      fi"
+    command: flower-supernode --insecure --superlink=${SERVER_INTERNAL_IP}:9092
     volumes:
       - "./src:/app/src"
       - "./yolov5:/app/yolov5"
@@ -967,30 +1017,127 @@ EOF
 
     echo_success "All clients configured and data verified"
 
-    # Start clients
+    # Start clients in parallel for faster deployment
+    echo_info "Starting all client containers in parallel..."
+    
+    # Background job tracking
+    DEPLOYMENT_PIDS=()
+    FAILED_CLIENTS=()
+    
     for i in $(seq 1 $MAX_CLIENT_NUM); do
         CLIENT_VM_VAR="CLIENT_${i}_VM"
         CLIENT_ZONE_VAR="CLIENT_${i}_ZONE"
+        CLIENT_EXT_IP_VAR="CLIENT_${i}_EXTERNAL_IP"
         CLIENT_VM=${!CLIENT_VM_VAR}
         CLIENT_ZONE=${!CLIENT_ZONE_VAR}
+        CLIENT_EXT_IP=${!CLIENT_EXT_IP_VAR}
         
-        echo_info "Starting clients on $CLIENT_VM"
-        gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
-            cd /app
-            echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
-            sudo docker compose pull --quiet
-            sudo docker compose up -d --force-recreate
-            sleep 5
-            for CLIENT_ID in \$(sudo docker compose ps --services); do
-                sudo docker compose exec -T \$CLIENT_ID find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-                sudo docker compose exec -T \$CLIENT_ID find /app -type f -name '*.pyc' -delete 2>/dev/null || true
-            done
-            sudo docker compose ps
-        " 2>&1 | grep -E "(NAME|fl-client)" || true
+        # Skip if VM is not running (not in vm-info.txt)
+        if [ -z "$CLIENT_VM" ] || [ -z "$CLIENT_ZONE" ]; then
+            echo "  ℹ️  Skipping client VM $i (not running or not found)"
+            continue
+        fi
+        
+        # Skip if VM doesn't have external IP (can't connect via SSH)
+        if [ -z "$CLIENT_EXT_IP" ] || [ "$CLIENT_EXT_IP" = "None" ]; then
+            echo "  ⚠️  Skipping client VM $i ($CLIENT_VM) - no external IP assigned"
+            continue
+        fi
+        
+        # Check if VM is actually running
+        if ! check_vm_running "$CLIENT_VM" "$CLIENT_ZONE"; then
+            echo "  ⏹️  Skipping client VM $i ($CLIENT_VM) - VM is stopped"
+            continue
+        fi
+        
+        # Deploy client in background
+        (
+            echo_info "Starting client deployment on $CLIENT_VM (background)"
+            
+            if gcloud compute ssh $CLIENT_VM --zone=$CLIENT_ZONE --command="
+                cd /app
+                echo 'DOCKER_IMAGE=$DOCKER_IMAGE' >> .env
+                sudo docker compose pull --quiet
+                
+                # Ensure FLAML is installed in running container (if not in image)
+                if ! python3 -c 'import flaml' 2>/dev/null; then
+                    echo '⚠️  FLAML not found, installing in-container...'
+                    pip install -q 'flaml[automl]>=2.0.0' || true
+                fi
+                
+                sudo docker compose up -d --force-recreate
+                
+                # Wait for containers to be running
+                echo '  → Waiting for client containers to be ready...'
+                MAX_WAIT=60
+                WAITED=0
+                while [ \$WAITED -lt \$MAX_WAIT ]; do
+                    RUNNING_COUNT=\$(sudo docker compose ps --filter 'status=running' --format 'table' 2>/dev/null | grep -c 'running' || echo '0')
+                    if [ \$RUNNING_COUNT -ge 2 ]; then
+                        echo '  ✓ Client containers are running'
+                        break
+                    fi
+                    WAITED=\$((WAITED + 5))
+                    if [ \$WAITED -lt \$MAX_WAIT ]; then
+                        echo \"  ⏳ Waiting for containers... (\${WAITED}s/\${MAX_WAIT}s)\"
+                        sleep 5
+                    fi
+                done
+                
+                # Execute cleanup with retry
+                for attempt in 1 2 3; do
+                    if sudo docker compose exec -T fl-client-0 find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; then
+                        for CLIENT_ID in \$(sudo docker compose ps --services 2>/dev/null); do
+                            sudo docker compose exec -T \$CLIENT_ID find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+                        done
+                        break
+                    elif [ \$attempt -lt 3 ]; then
+                        echo \"  ℹ️  Cleanup attempt \$attempt failed, retrying...\"
+                        sleep 2
+                    fi
+                done
+                
+                sudo docker compose ps
+            " 2>&1 | grep -E "(NAME|fl-client|Waiting|ready)" || true; then
+                echo "[BACKGROUND] ✅ Client $i deployment succeeded"
+                exit 0
+            else
+                echo "[BACKGROUND] ❌ Client $i deployment failed"
+                exit 1
+            fi
+        ) &
+        
+        # Store PID
+        DEPLOYMENT_PIDS+=($!)
+        LAST_INDEX=$((${#DEPLOYMENT_PIDS[@]} - 1))
+        echo "  ↳ Client $i deployment spawned (PID: ${DEPLOYMENT_PIDS[$LAST_INDEX]})"
     done
-    echo_success "Clients deployment complete!"
-else
-    echo_warning "Clients deployment skipped by user"
+    
+    # Wait for all background deployments to complete
+    echo_info "Waiting for all client deployments to complete..."
+    TOTAL_CLIENTS=${#DEPLOYMENT_PIDS[@]}
+    COMPLETED=0
+    FAILED=0
+    
+    for i in "${!DEPLOYMENT_PIDS[@]}"; do
+        PID=${DEPLOYMENT_PIDS[$i]}
+        CLIENT_NUM=$((i + 1))
+        
+        if wait $PID 2>/dev/null; then
+            COMPLETED=$((COMPLETED + 1))
+            echo "  ✅ Client $CLIENT_NUM completed"
+        else
+            FAILED=$((FAILED + 1))
+            FAILED_CLIENTS+=("$CLIENT_NUM")
+            echo "  ❌ Client $CLIENT_NUM failed"
+        fi
+    done
+    
+    echo_success "Client deployment complete! ($COMPLETED succeeded, $FAILED failed)"
+    
+    if [ $FAILED -gt 0 ]; then
+        echo_warning "Failed clients: ${FAILED_CLIENTS[@]}"
+    fi
 fi
 
 echo_success "Deployment process complete!"
@@ -1002,20 +1149,14 @@ echo "  Clients deployed: $MAX_CLIENT_NUM"
 echo "  ✅ Using Dataset $DATASET_PADDED from /app/datasets_${DATASET_PADDED}/coco_partitions/"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
-if [ "$DEPLOY_SERVER" = "yes" ] && [ "$DEPLOY_CLIENTS" = "yes" ]; then
+if [ "$DEPLOY_SERVER" = "yes" ]; then
     echo "To start training:"
     echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
     echo ""
     echo "Monitor with: ./05-manage-clients.sh status"
-elif [ "$DEPLOY_SERVER" = "yes" ]; then
-    echo "Server deployed. Clients were not updated."
-    echo "To start training (ensure clients are already running):"
-    echo "  gcloud compute ssh $SERVER_VM --zone=$SERVER_ZONE --command='cd /app && sudo docker compose exec fl-server flwr run .'"
-elif [ "$DEPLOY_CLIENTS" = "yes" ]; then
+else
     echo "Clients deployed. Server was not updated."
     echo "All clients connected to: ${SERVER_INTERNAL_IP}:9092"
-else
-    echo "⚠️  Neither server nor clients were deployed."
 fi
 echo ""
 echo "Note: vm-info.txt has been updated with current IPs (backup saved as vm-info.txt.backup)"

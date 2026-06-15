@@ -7,18 +7,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "flower_benchmarks"
-version = "1.0.178"
+name = "flower-benchmarks"
+version = "1.0.210"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
-
-[project.optional-dependencies]
-# For pip to find CPU-only PyTorch versions
-pytorch = [
-    "torch==2.0.0+cpu ; platform_system != 'Darwin'",
-    "torchvision==0.15.1+cpu ; platform_system != 'Darwin'"
-]
-
 # Dependencies for your Flower App
 # flwr[rest] is needed for SuperLink with REST backend
 # flwr[simulation] is kept for local simulation testing
@@ -28,6 +20,7 @@ dependencies = [
     "protobuf>=5.28.2",
     "numpy>=1.24.4,<2.0.0",
     "optuna>=4.8.0",
+    "flaml[automl]>=2.3.0",
     "torch==2.0.0+cpu",
     "torchvision==0.15.1+cpu",
     "pycocotools>=2.0.6",
@@ -41,6 +34,13 @@ dependencies = [
     "prometheus-client==0.19.0",
     "Pillow==10.1.0",
     "requests>=2.28.0"
+]
+
+[project.optional-dependencies]
+# For pip to find CPU-only PyTorch versions
+pytorch = [
+    "torch==2.0.0+cpu ; platform_system != 'Darwin'",
+    "torchvision==0.15.1+cpu ; platform_system != 'Darwin'"
 ]
 
 # CRITICAL FIX: Include yolov5 models directory with YAML files
@@ -79,20 +79,32 @@ clientapp = "flower_benchmarks.client_app:app"
 # Custom config values accessible via `context.run_config`
 [tool.flwr.app.config]
 gcs_bucket = "flybold-coco-inf022"
-num-server-rounds = 30
-fraction-train = 1
-fraction_evaluate = 1
-local-epochs = 3
-lr = 0.000259
-use_pretrained = 1
+num-server-rounds = 10  
+fraction-train = 1  
+fraction_evaluate = 1  
+local-epochs = 3  
+lr = 0.000259  
+use_pretrained = 1  
 pretrained_checkpoint = ""  # Optional: Path to previous .pt checkpoint to resume training from
 task = "detection"  # "classification" or "detection"
 yolo_runs_dir = "./yolov5/runs/train"  # Runs dir for YOLO training
 yolo_size = "s"  # n, s, m, l, or x
-img_size = 416
-batch_size = 32
-dataset = 0
-strategy = 3
-n_optuna_trials = 0   # set to 0 to skip HPO entirely
-hpo_rounds = 0         # proxy rounds per trial
-run_id = 302033200032
+img_size = 416  
+batch_size = 32  
+dataset = 0  
+strategy = 3  
+run_id = 1031000021  
+
+# HPO Configuration
+use_flaml = true  # true = use FLAML, false = use Optuna
+hpo_trials = 10  # Number of HPO trials (0 to disable HPO)
+hpo_rounds = 3  # Number of rounds to run per trial
+hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then final training with best params
+
+# FLAML-specific parameters (used when use_flaml = true)
+flaml_time_budget = 36000  # Total time budget in seconds (1 hour default)
+flaml_metric = "mAP50"  # Optimization metric: mAP50, mAP, loss, accuracy
+flaml_estimator = "lgb"  # Estimator type: lgb (default)
+flaml_sample_size = 32  # Number of samples per HPO iteration
+flaml_use_coe = false  # Use cost-aware early exit
+flaml_log_history = true  # Log trial history

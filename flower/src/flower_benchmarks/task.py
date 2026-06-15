@@ -454,6 +454,7 @@ def yolo_train_from_state_and_return_state_dict(received_state_dict: dict,
         
         if proc.returncode != 0:
             print("YOLOv5 subprocess training failed.")
+            raise RuntimeError(f"YOLOv5 subprocess training failed with return code {proc.returncode}")
         else:
             print(f"[yolo_train] YOLOv5 subprocess training completed successfully.")
 

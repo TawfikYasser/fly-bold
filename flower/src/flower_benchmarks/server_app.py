@@ -26,8 +26,17 @@ from flower_benchmarks.plugins.yolov5.model import (
 from yolov5.models.yolo import Model
 from yolov5.utils.downloads import attempt_download
 import numpy as np
-import optuna
-from optuna.distributions import FloatDistribution, IntDistribution, CategoricalDistribution
+
+# HPO Backend Selection: FLAML or Optuna
+USE_FLAML = os.getenv("USE_FLAML", "false").lower() in ("true", "1")
+
+if not USE_FLAML:
+    import optuna
+    from optuna.distributions import FloatDistribution, IntDistribution, CategoricalDistribution
+else:
+    from flower_benchmarks.flaml_hpo import (
+        create_flaml_study, TrialPruneSignal as FLAMLTrialPruneSignal
+    )
 
 # =====================================================================
 # GLOBAL STATE (needed for Flower's aggregation callbacks)
@@ -42,9 +51,9 @@ CURRENT_OPTUNA_TRIAL = None
 
 
 class _TrialPruneSignal(Exception):
-    """Raised inside the eval aggregation callback when Optuna decides to prune.
-    Caught by _run_trial() and re-raised as optuna.exceptions.TrialPruned so
-    strategy.start() is interrupted cleanly without corrupting the study DB.
+    """Raised when a trial should be pruned (early stopped).
+    For Optuna: caught by _run_trial() and re-raised as optuna.exceptions.TrialPruned
+    For FLAML: caught by _run_trial() and re-raised as FLAMLTrialPruneSignal
     """
     pass
 
@@ -555,7 +564,6 @@ def custom_eval_metrics_aggregation(record_dicts: List[RecordDict], weighted_by_
         "eval_mAP50": round_eval_acc_mAP50,
     })
 
-
 @app.main()
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for ServerApp with optimized configuration."""
@@ -754,8 +762,19 @@ def main(grid: Grid, context: Context) -> None:
 
 
     strategy_id     = get_config("strategy",        context, default=1,  type_converter=int)
-    n_optuna_trials = get_config("n_optuna_trials", context, default=0,  type_converter=int)
+    # Try new hpo_trials first, fall back to old n_optuna_trials for compatibility
+    hpo_trials      = get_config("hpo_trials",      context, default=None, type_converter=int)
+    if hpo_trials is None:
+        hpo_trials = get_config("n_optuna_trials", context, default=0,  type_converter=int)
     hpo_rounds      = get_config("hpo_rounds",      context, default=3,  type_converter=int)
+    hpo_mode        = get_config("hpo_mode",        context, default="hpo_then_train", type_converter=str)
+    
+    # Read FLAML config parameters
+    use_flaml       = USE_FLAML  # Use global setting from environment/imports
+    flaml_time_budget = get_config("flaml_time_budget", context, default=3600, type_converter=int)
+    flaml_metric      = get_config("flaml_metric",      context, default="mAP50", type_converter=str)
+    flaml_estimator   = get_config("flaml_estimator",   context, default="lgb", type_converter=str)
+    flaml_sample_size = get_config("flaml_sample_size", context, default=32, type_converter=int)
 
     # -- Snapshot initial weights ONCE so every trial/run starts identically.
     # ArrayRecord is consumed by strategy.start(), so we keep the raw state_dict
@@ -867,10 +886,13 @@ def main(grid: Grid, context: Context) -> None:
                 timeout=18000,
             )
         except _TrialPruneSignal:
-            # FIX 4: eval callback raised the prune signal -- re-raise as the
-            # Optuna exception so the study records this trial as pruned cleanly.
+            # Eval callback raised the prune signal -- re-raise as appropriate exception
+            # so the HPO framework records this trial as pruned cleanly.
             CURRENT_OPTUNA_TRIAL = None
-            raise optuna.exceptions.TrialPruned()
+            if USE_FLAML:
+                raise FLAMLTrialPruneSignal()
+            else:
+                raise optuna.exceptions.TrialPruned()
         finally:
             CURRENT_OPTUNA_TRIAL = None  # always clear after the trial ends
 
@@ -878,293 +900,338 @@ def main(grid: Grid, context: Context) -> None:
         return result, list(ALL_ROUND_LOGS)
 
     # ================================================================
-    # OPTUNA HPO BLOCK -- skipped entirely when n_optuna_trials == 0
+    # HPO BLOCK -- skipped entirely when hpo_trials == 0
+    # Supports both Optuna and FLAML backends based on USE_FLAML setting
     # ================================================================
-    if n_optuna_trials > 0:
-        print(f"\n{'='*70}")
-        print(f"OPTUNA HPO: {n_optuna_trials} trials x {hpo_rounds} proxy rounds each")
-        print(f"{'='*70}\n")
+    if hpo_trials > 0:
+        if USE_FLAML:
+            print(f"\n{'='*70}")
+            print(f"FLAML HPO: {hpo_trials} trials x {hpo_rounds} proxy rounds each")
+            print(f"HPO Mode: {hpo_mode}")
+            print(f"{'='*70}\n")
 
-        optuna.logging.set_verbosity(optuna.logging.INFO)
+            study = create_flaml_study(
+                study_name=f"{experiment_name}_{run_id}_hpo",
+                direction="maximize",
+                time_budget=flaml_time_budget,
+                metric_name=flaml_metric,
+                seed=42,
+            )
 
-        # SQLite storage: completed trials survive VM preemption / crashes.
-        # load_if_exists=True means a restarted run resumes from where it stopped.
-        study = optuna.create_study(
-            study_name=f"{experiment_name}_{run_id}_hpo",
-            direction="maximize",
-            storage=f"sqlite:///{experiment_name}_{run_id}_hpo.db",
-            load_if_exists=True,
-            sampler=optuna.samplers.TPESampler(seed=42),
+            def objective_flaml(trial):
+                trial_lr = trial.suggest_float("lr", 0.0001, 0.01, log=True)
+                trial_epochs = trial.suggest_int("local_epochs", 1, 5)
+                trial_batch = trial.suggest_categorical("batch_size", [8, 16, 32])
+                trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
 
-            # FIX 4: MedianPruner kills a trial at step S if its reported mAP
-            # is below the median of all completed trials at the same step.
-            # n_startup_trials=3: don't prune before we have enough baseline data.
-            # n_warmup_steps=1: never prune on the very first round (too noisy).
-            # pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=1),
+                print(f"\n[FLAML-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f}, strategy={trial_strategy}, local_epochs={trial_epochs}, batch_size={trial_batch}")
 
-            # Using HyperbandPruner instead of MedianPruner to leverage early stopping
-            # with aggressive pruning of bad configs, which is beneficial given the high
-            # variance in FL training and the cost of each trial.
-            pruner=optuna.pruners.HyperbandPruner(min_resource=1, max_resource=hpo_rounds, reduction_factor=3),
-        )
+                if trial_strategy == 1:
+                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial)
+                elif trial_strategy == 2:
+                    t_eta = trial.suggest_float("yogi_eta", 1e-4, 1e-1, log=True)
+                    t_eta_l = trial.suggest_float("yogi_eta_l", 1e-3, 1e-1, log=True)
+                    t_beta_1 = trial.suggest_float("yogi_beta_1", 0.8, 0.99)
+                    t_beta_2 = trial.suggest_float("yogi_beta_2", 0.9, 0.999)
+                    t_tau = trial.suggest_float("yogi_tau", 1e-4, 1e-2, log=True)
+                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial, eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1, beta_2=t_beta_2, tau=t_tau)
+                elif trial_strategy == 3:
+                    t_eta = trial.suggest_float("adam_eta", 1e-3, 5e-1, log=True)
+                    t_eta_l = trial.suggest_float("adam_eta_l", 1e-3, 5e-1, log=True)
+                    t_beta_1 = trial.suggest_float("adam_beta_1", 0.8, 0.99)
+                    t_beta_2 = trial.suggest_float("adam_beta_2", 0.9, 0.999)
+                    t_tau = trial.suggest_float("adam_tau", 1e-4, 1e-2, log=True)
+                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial, eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1, beta_2=t_beta_2, tau=t_tau)
+                elif trial_strategy == 4:
+                    t_proximal_mu = trial.suggest_float("proximal_mu", 0.001, 10.0, log=True)
+                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial, proximal_mu=t_proximal_mu)
 
-        def objective(trial):
-            trial_lr = trial.suggest_float("lr", 0.0001, 0.01, log=True)
-            trial_epochs   = trial.suggest_int("local_epochs",   1, 5)
-            trial_batch    = trial.suggest_categorical("batch_size", [8, 16, 32])
-            trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
+                if not trial_logs:
+                    raise FLAMLTrialPruneSignal()
 
-            print(f"\n[OPTUNA-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f}, "
-                  f"strategy={trial_strategy}, local_epochs={trial_epochs}, batch_size={trial_batch}")
+                eval_maps = [r.get("round_eval_acc", {}).get("mAP@0.5", 0.0) for r in trial_logs]
+                mAP = max(eval_maps) if eval_maps else 0.0
+                try:
+                    trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
+                    with open(trial_logs_path, "w") as f:
+                        json.dump(trial_logs, f, indent=2)
+                except Exception as e:
+                    print(f"[FLAML] Warning: {e}")
 
-            if trial_strategy == 1: # FedAvg
+                print(f"[FLAML] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f}, strategy={trial_strategy}, epochs={trial_epochs}, batch={trial_batch})")
+                return mAP
 
-                _, trial_logs = _run_trial(
-                    trial_lr,
-                    n_rounds=hpo_rounds,
-                    trial_epochs=trial_epochs,
-                    trial_batch=trial_batch,
-                    trial_tag=f"optuna_trial_{(trial.number)+1}",
-                    trial_strategy=trial_strategy,
-                    optuna_trial=trial,
-                )
+            study.optimize(objective_flaml, n_trials=hpo_trials)
+            best = study.best_params
+            print(f"\n{'='*70}")
+            print(f"FLAML COMPLETE -- Best trial #{(study.best_trial.number)+1}")
+            print(f"  mAP@0.5  = {study.best_value:.4f}")
+            print(f"  lr       = {best['lr']:.6f} | strategy = {best['strategy']}")
+            print(f"{'='*70}\n")
 
-            elif trial_strategy == 2: # FedYogi
-                # Suggest around FedYogi defaults: eta=1e-2, eta_l=0.0316, tau=1e-3
-                t_eta    = trial.suggest_float("yogi_eta",    1e-4, 1e-1, log=True)
-                t_eta_l  = trial.suggest_float("yogi_eta_l",  1e-3, 1e-1, log=True)
-                t_beta_1 = trial.suggest_float("yogi_beta_1", 0.8,  0.99)
-                t_beta_2 = trial.suggest_float("yogi_beta_2", 0.9,  0.999)
-                t_tau    = trial.suggest_float("yogi_tau",    1e-4, 1e-2, log=True)
-
-                _, trial_logs = _run_trial(
-                    trial_lr,
-                    n_rounds=hpo_rounds,
-                    trial_epochs=trial_epochs,
-                    trial_batch=trial_batch,
-                    trial_tag=f"optuna_trial_{(trial.number)+1}",
-                    trial_strategy=trial_strategy,
-                    optuna_trial=trial,
-                    eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
-                    beta_2=t_beta_2, tau=t_tau,
-                )
-
-            elif trial_strategy == 3: # FedAdam
-                # Suggest around FedAdam defaults: eta=1e-1, eta_l=1e-1, tau=1e-3
-                t_eta    = trial.suggest_float("adam_eta",    1e-3, 5e-1, log=True)
-                t_eta_l  = trial.suggest_float("adam_eta_l",  1e-3, 5e-1, log=True)
-                t_beta_1 = trial.suggest_float("adam_beta_1", 0.8,  0.99)
-                t_beta_2 = trial.suggest_float("adam_beta_2", 0.9,  0.999)
-                t_tau    = trial.suggest_float("adam_tau",    1e-4, 1e-2, log=True)
-
-                _, trial_logs = _run_trial(
-                    trial_lr,
-                    n_rounds=hpo_rounds,
-                    trial_epochs=trial_epochs,
-                    trial_batch=trial_batch,
-                    trial_tag=f"optuna_trial_{(trial.number)+1}",
-                    trial_strategy=trial_strategy,
-                    optuna_trial=trial,
-                    eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
-                    beta_2=t_beta_2, tau=t_tau,
-                )
-
-            elif trial_strategy == 4: # FedProx
-                # proximal_mu=0.0 == FedAvg; useful range is [0.001, 10.0]
-                t_proximal_mu = trial.suggest_float("proximal_mu", 0.001, 10.0, log=True)
-
-                _, trial_logs = _run_trial(
-                    trial_lr,
-                    n_rounds=hpo_rounds,
-                    trial_epochs=trial_epochs,
-                    trial_batch=trial_batch,
-                    trial_tag=f"optuna_trial_{(trial.number)+1}",
-                    trial_strategy=trial_strategy,
-                    optuna_trial=trial,
-                    proximal_mu=t_proximal_mu,
-                )
-
-            # Empty logs means all clients failed -- treat as a pruned trial
-            if not trial_logs:
-                raise optuna.exceptions.TrialPruned()
-
-            # FIX 2: Use max mAP@0.5 across all proxy rounds, not just the last.
-            # A single dip at round N (FL non-IID variance is high) would unfairly
-            # kill a good config if we only read the final round.  max() is more
-            # robust; mean-of-last-2 is an alternative if you prefer smoothing.
-            eval_maps = [r.get("round_eval_acc", {}).get("mAP@0.5", 0.0) for r in trial_logs]
-            mAP = max(eval_maps) if eval_maps else 0.0
-
-            # Persist per-trial logs for post-analysis (non-fatal if it fails)
-            try:
-                trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
-                with open(trial_logs_path, "w") as f:
-                    json.dump(trial_logs, f, indent=2)
-            except Exception as e:
-                print(f"[OPTUNA] Warning: could not save trial logs: {e}")
-
-            print(f"[OPTUNA] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  "
-                  f"(lr={trial_lr:.5f}, strategy={trial_strategy}, epochs={trial_epochs}, batch={trial_batch})")
-            return mAP
-
-        # Seed with the known best baseline before letting Optuna explore.
-        # This becomes trial 0 — TPE builds its probability model around it
-        # immediately instead of starting blind.  load_if_exists=True means
-        # this is skipped automatically if the study already ran it (resume).
-        if len(study.trials) == 0:
-            study.enqueue_trial({"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1})
-        
-        distributions = {
-            "fedavg":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-            "local_epochs": optuna.distributions.IntDistribution(1, 5),
-            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),},
-            
-            "fedyogi":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-            "local_epochs": optuna.distributions.IntDistribution(1, 5),
-            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
-                "yogi_eta": optuna.distributions.FloatDistribution(1e-4, 1e-1, log=True),
-                "yogi_eta_l": optuna.distributions.FloatDistribution(1e-3, 1e-1, log=True),
-                "yogi_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
-                "yogi_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
-                "yogi_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
-            
-            "fedadam":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-            "local_epochs": optuna.distributions.IntDistribution(1, 5),
-            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
-                "adam_eta": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
-                "adam_eta_l": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
-                "adam_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
-                "adam_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
-                "adam_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
-
-            "fedprox":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-            "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-            "local_epochs": optuna.distributions.IntDistribution(1, 5),
-            "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
-                "proximal_mu": optuna.distributions.FloatDistribution(0.001, 10.0, log=True),},
-        }
-        best_prev_params = {
-        1:{"lr": 0.001,
-            "local_epochs": 3,
-            "batch_size": 16,
-            "strategy": 1,},
-        2:{"lr": 0.000561,
-            "local_epochs": 5,
-            "batch_size": 8,
-            "strategy": 3,
-            "adam_eta": 0.0814829,
-            "adam_eta_l": 0.00113647,
-            "adam_beta_1": 0.984283,
-            "adam_beta_2": 0.982412,
-            "adam_tau": 0.000265875,},
-        3:{"lr": 0.000231,
-            "local_epochs": 1,
-            "batch_size": 16,
-            "strategy": 2,
-            "yogi_eta": 0.00125628,
-            "yogi_eta_l": 0.00816846,
-            "yogi_beta_1": 0.949183,
-            "yogi_beta_2": 0.919768,
-            "yogi_tau": 0.00106775,},
-        4:{"lr": 0.001530,
-            "local_epochs": 1,
-            "batch_size": 8,
-            "strategy": 2,
-            "yogi_eta": 0.000196343,
-            "yogi_eta_l": 0.0233596,
-            "yogi_beta_1": 0.883629,
-            "yogi_beta_2": 0.912082,
-            "yogi_tau": 0.000978034,},
-        5:{"lr": 0.000117,
-            "local_epochs": 5,
-            "batch_size": 16,
-            "strategy": 4,
-            "proximal_mu": 1.2604664585649468,},
-        }
-        if dataset_number == 100:
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5218,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5181,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5162,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5048,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[2],
-                distributions=distributions["fedadam"],
-                value=0.5001,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[3],
-                distributions=distributions["fedyogi"],
-                value=0.5001,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[4],
-                distributions=distributions["fedyogi"],
-                value=0.4448,
-                state=optuna.trial.TrialState.PRUNED,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[5],
-                distributions=distributions["fedprox"],
-                value=0.5039,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
         else:
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5309,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5211,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
-            study.add_trial(optuna.trial.create_trial(
-                params=best_prev_params[1],
-                distributions=distributions["fedavg"],
-                value=0.5200,
-                state=optuna.trial.TrialState.COMPLETE,
-            ))
+            # OPTUNA BACKEND
+            print(f"\n{'='*70}")
+            print(f"OPTUNA HPO: {hpo_trials} trials x {hpo_rounds} proxy rounds each")
+            print(f"HPO Mode: {hpo_mode}")
+            print(f"{'='*70}\n")
 
-        study.optimize(objective, n_trials=n_optuna_trials)
+            optuna.logging.set_verbosity(optuna.logging.INFO)
 
-        best = study.best_params
-        print(f"\n{'='*70}")
-        print(f"OPTUNA COMPLETE -- Best trial #{(study.best_trial.number)+1}")
-        print(f"  mAP@0.5  = {study.best_value:.4f}")
-        print(f"  lr       = {best['lr']:.6f}")
-        print(f"  epochs   = {best['local_epochs']}")
-        print(f"  batch    = {best['batch_size']}")
-        print(f"  strategy = {best['strategy']} "
-              f"({'FedAvg' if best['strategy']==1 else 'FedYogi' if best['strategy']==2 else 'FedAdam' if best['strategy']==3 else 'FedProx'})")
-        print(f"{'='*70}\n")
+            study = optuna.create_study(
+                study_name=f"{experiment_name}_{run_id}_hpo",
+                direction="maximize",
+                storage=f"sqlite:///{experiment_name}_{run_id}_hpo.db",
+                load_if_exists=True,
+                sampler=optuna.samplers.TPESampler(seed=42),
+                pruner=optuna.pruners.HyperbandPruner(min_resource=1, max_resource=hpo_rounds, reduction_factor=3),
+            )
+
+            def objective(trial):
+                trial_lr = trial.suggest_float("lr", 0.0001, 0.01, log=True)
+                trial_epochs   = trial.suggest_int("local_epochs",   1, 5)
+                trial_batch    = trial.suggest_categorical("batch_size", [8, 16, 32])
+                trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
+
+                print(f"\n[OPTUNA-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f}, strategy={trial_strategy}, local_epochs={trial_epochs}, batch_size={trial_batch}")
+
+                if trial_strategy == 1: # FedAvg
+                    _, trial_logs = _run_trial(
+                        trial_lr,
+                        n_rounds=hpo_rounds,
+                        trial_epochs=trial_epochs,
+                        trial_batch=trial_batch,
+                        trial_tag=f"optuna_trial_{(trial.number)+1}",
+                        trial_strategy=trial_strategy,
+                        optuna_trial=trial,
+                    )
+
+                elif trial_strategy == 2: # FedYogi
+                    t_eta    = trial.suggest_float("yogi_eta",    1e-4, 1e-1, log=True)
+                    t_eta_l  = trial.suggest_float("yogi_eta_l",  1e-3, 1e-1, log=True)
+                    t_beta_1 = trial.suggest_float("yogi_beta_1", 0.8,  0.99)
+                    t_beta_2 = trial.suggest_float("yogi_beta_2", 0.9,  0.999)
+                    t_tau    = trial.suggest_float("yogi_tau",    1e-4, 1e-2, log=True)
+
+                    _, trial_logs = _run_trial(
+                        trial_lr,
+                        n_rounds=hpo_rounds,
+                        trial_epochs=trial_epochs,
+                        trial_batch=trial_batch,
+                        trial_tag=f"optuna_trial_{(trial.number)+1}",
+                        trial_strategy=trial_strategy,
+                        optuna_trial=trial,
+                        eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
+                        beta_2=t_beta_2, tau=t_tau,
+                    )
+
+                elif trial_strategy == 3: # FedAdam
+                    t_eta    = trial.suggest_float("adam_eta",    1e-3, 5e-1, log=True)
+                    t_eta_l  = trial.suggest_float("adam_eta_l",  1e-3, 5e-1, log=True)
+                    t_beta_1 = trial.suggest_float("adam_beta_1", 0.8,  0.99)
+                    t_beta_2 = trial.suggest_float("adam_beta_2", 0.9,  0.999)
+                    t_tau    = trial.suggest_float("adam_tau",    1e-4, 1e-2, log=True)
+
+                    _, trial_logs = _run_trial(
+                        trial_lr,
+                        n_rounds=hpo_rounds,
+                        trial_epochs=trial_epochs,
+                        trial_batch=trial_batch,
+                        trial_tag=f"optuna_trial_{(trial.number)+1}",
+                        trial_strategy=trial_strategy,
+                        optuna_trial=trial,
+                        eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
+                        beta_2=t_beta_2, tau=t_tau,
+                    )
+
+                elif trial_strategy == 4: # FedProx
+                    t_proximal_mu = trial.suggest_float("proximal_mu", 0.001, 10.0, log=True)
+
+                    _, trial_logs = _run_trial(
+                        trial_lr,
+                        n_rounds=hpo_rounds,
+                        trial_epochs=trial_epochs,
+                        trial_batch=trial_batch,
+                        trial_tag=f"optuna_trial_{(trial.number)+1}",
+                        trial_strategy=trial_strategy,
+                        optuna_trial=trial,
+                        proximal_mu=t_proximal_mu,
+                    )
+
+                if not trial_logs:
+                    raise optuna.exceptions.TrialPruned()
+
+                eval_maps = [r.get("round_eval_acc", {}).get("mAP@0.5", 0.0) for r in trial_logs]
+                mAP = max(eval_maps) if eval_maps else 0.0
+
+                try:
+                    trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
+                    with open(trial_logs_path, "w") as f:
+                        json.dump(trial_logs, f, indent=2)
+                except Exception as e:
+                    print(f"[OPTUNA] Warning: could not save trial logs: {e}")
+
+                print(f"[OPTUNA] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f}, strategy={trial_strategy}, epochs={trial_epochs}, batch={trial_batch})")
+                return mAP
+
+            # Seed with the known best baseline before letting Optuna explore.
+            # This becomes trial 0 — TPE builds its probability model around it
+            # immediately instead of starting blind.  load_if_exists=True means
+            # this is skipped automatically if the study already ran it (resume).
+            if len(study.trials) == 0:
+                study.enqueue_trial({"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1})
+        
+            distributions = {
+                "fedavg":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+                "local_epochs": optuna.distributions.IntDistribution(1, 5),
+                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),},
+            
+                "fedyogi":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+                "local_epochs": optuna.distributions.IntDistribution(1, 5),
+                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
+                    "yogi_eta": optuna.distributions.FloatDistribution(1e-4, 1e-1, log=True),
+                    "yogi_eta_l": optuna.distributions.FloatDistribution(1e-3, 1e-1, log=True),
+                    "yogi_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
+                    "yogi_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
+                    "yogi_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
+            
+                "fedadam":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+                "local_epochs": optuna.distributions.IntDistribution(1, 5),
+                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
+                    "adam_eta": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
+                    "adam_eta_l": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
+                    "adam_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
+                    "adam_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
+                    "adam_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
+
+                "fedprox":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
+                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
+                "local_epochs": optuna.distributions.IntDistribution(1, 5),
+                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
+                    "proximal_mu": optuna.distributions.FloatDistribution(0.001, 10.0, log=True),},
+            }
+            best_prev_params = {
+            1:{"lr": 0.001,
+                "local_epochs": 3,
+                "batch_size": 16,
+                "strategy": 1,},
+            2:{"lr": 0.000561,
+                "local_epochs": 5,
+                "batch_size": 8,
+                "strategy": 3,
+                "adam_eta": 0.0814829,
+                "adam_eta_l": 0.00113647,
+                "adam_beta_1": 0.984283,
+                "adam_beta_2": 0.982412,
+                "adam_tau": 0.000265875,},
+            3:{"lr": 0.000231,
+                "local_epochs": 1,
+                "batch_size": 16,
+                "strategy": 2,
+                "yogi_eta": 0.00125628,
+                "yogi_eta_l": 0.00816846,
+                "yogi_beta_1": 0.949183,
+                "yogi_beta_2": 0.919768,
+                "yogi_tau": 0.00106775,},
+            4:{"lr": 0.001530,
+                "local_epochs": 1,
+                "batch_size": 8,
+                "strategy": 2,
+                "yogi_eta": 0.000196343,
+                "yogi_eta_l": 0.0233596,
+                "yogi_beta_1": 0.883629,
+                "yogi_beta_2": 0.912082,
+                "yogi_tau": 0.000978034,},
+            5:{"lr": 0.000117,
+                "local_epochs": 5,
+                "batch_size": 16,
+                "strategy": 4,
+                "proximal_mu": 1.2604664585649468,},
+            }
+            if dataset_number == 100:
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5218,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5181,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5162,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5048,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[2],
+                    distributions=distributions["fedadam"],
+                    value=0.5001,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[3],
+                    distributions=distributions["fedyogi"],
+                    value=0.5001,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[4],
+                    distributions=distributions["fedyogi"],
+                    value=0.4448,
+                    state=optuna.trial.TrialState.PRUNED,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[5],
+                    distributions=distributions["fedprox"],
+                    value=0.5039,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+            else:
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5309,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5211,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+                study.add_trial(optuna.trial.create_trial(
+                    params=best_prev_params[1],
+                    distributions=distributions["fedavg"],
+                    value=0.5200,
+                    state=optuna.trial.TrialState.COMPLETE,
+                ))
+
+            study.optimize(objective, n_trials=hpo_trials)
+
+            best = study.best_params
+            print(f"\n{'='*70}")
+            print(f"OPTUNA COMPLETE -- Best trial #{(study.best_trial.number)+1}")
+            print(f"  mAP@0.5  = {study.best_value:.4f}")
+            print(f"  lr       = {best['lr']:.6f}")
+            print(f"  epochs   = {best['local_epochs']}")
+            print(f"  batch    = {best['batch_size']}")
+            print(f"  strategy = {best['strategy']} "
+                  f"({'FedAvg' if best['strategy']==1 else 'FedYogi' if best['strategy']==2 else 'FedAdam' if best['strategy']==3 else 'FedProx'})")
+            print(f"{'='*70}\n")
 
         # Promote HPO winners as values for the final full run
         lr             = best["lr"]
@@ -1228,18 +1295,25 @@ def main(grid: Grid, context: Context) -> None:
     # ================================================================
     # FINAL (or sole) FULL RUN
     # num_rounds is the TOTAL budget.  HPO already consumed
-    # n_optuna_trials * hpo_rounds of it, so the final run only
+    # hpo_trials * hpo_rounds of it, so the final run only
     # gets the remainder.  When HPO is off, hpo_consumed = 0 and
     # final_rounds == num_rounds, preserving the original behaviour.
+    # When hpo_mode == "hpo_only", skip final training entirely.
     # ================================================================
-    hpo_consumed = n_optuna_trials * hpo_rounds if n_optuna_trials > 0 else 0
+    hpo_consumed = hpo_trials * hpo_rounds if hpo_trials > 0 else 0
     final_rounds = num_rounds - hpo_consumed
+    
+    # Check if we should skip final training based on hpo_mode
+    skip_final_training = (hpo_mode == "hpo_only" and hpo_trials > 0)
  
     if final_rounds <= 0:
         print(f"[WARN] HPO consumed all {num_rounds} rounds "
-              f"({n_optuna_trials} trials x {hpo_rounds} hpo_rounds). "
+              f"({hpo_trials} trials x {hpo_rounds} hpo_rounds). "
               f"No rounds left for the final run. "
-              f"Increase num-server-rounds or reduce n_optuna_trials/hpo_rounds.")
+              f"Increase num-server-rounds or reduce hpo_trials/hpo_rounds.")
+    elif skip_final_training:
+        print(f"\n[INFO] HPO Mode is '{hpo_mode}' - skipping final training run")
+        print(f"Best HPO result will be used for model export")
     else:
         print(f"\n[INFO] Round budget: {num_rounds} total -- "
               f"{hpo_consumed} HPO -- {final_rounds} final run")
@@ -1253,8 +1327,13 @@ def main(grid: Grid, context: Context) -> None:
             **final_strategy_kwargs,
         )
  
-    if final_rounds <= 0:
-        return  # budget exhausted by HPO, nothing to save
+    if final_rounds <= 0 or skip_final_training:
+        print(f"\nFinal run skipped or no budget available")
+        if use_flaml and hpo_trials > 0:
+            print(f"[INFO] Best HPO params from FLAML will be used")
+        elif hpo_trials > 0:
+            print(f"[INFO] Best HPO params from Optuna will be used")
+        return  # budget exhausted or hpo_only mode
 
     print(f"\n{'='*70}")
     print(f"TRAINING COMPLETE")

@@ -38,6 +38,21 @@ def ensure_yolo_models_available():
     if _YOLO_MODELS_SETUP:
         return
     
+    # Pre-download Arial.ttf using requests to handle 308 redirects that urllib fails on
+    font_path = os.path.expanduser("~/.config/Ultralytics/Arial.ttf")
+    if not os.path.exists(font_path):
+        try:
+            os.makedirs(os.path.dirname(font_path), exist_ok=True)
+            import requests
+            url = "https://github.com/ultralytics/assets/releases/download/v0.0.0/Arial.ttf"
+            response = requests.get(url, allow_redirects=True, timeout=10)
+            if response.status_code == 200:
+                with open(font_path, "wb") as f:
+                    f.write(response.content)
+                print(f"[setup] Pre-downloaded Arial.ttf to {font_path}")
+        except Exception as e:
+            print(f"[setup] Warning: could not pre-download Arial.ttf: {e}")
+            
     import shutil
     import glob
     
@@ -146,7 +161,7 @@ def calculate_message_size_fast(msg: Message) -> int:
     # âœ… CRITICAL: Ensure minimum size to avoid Flower validation error
     return max(total_size, 1)
 
-def prepare_client_yolo_dataset_prepartitioned(client_id: int):
+def prepare_client_yolo_dataset_prepartitioned(client_id: int, context: Context = None):
     """
     OPTIMIZED: Use pre-partitioned dataset with caching.
     Previous version verified file system every round (expensive with 10k+ images).
@@ -158,7 +173,7 @@ def prepare_client_yolo_dataset_prepartitioned(client_id: int):
     if cache_key in _DATASET_CACHE:
         return _DATASET_CACHE[cache_key]
     
-    dataset_number = int(get_config("dataset", context=None, default=1, type_converter=int))
+    dataset_number = int(get_config("dataset", context=context, default=1, type_converter=int))
     dataset_str = str(dataset_number).zfill(3)
 
     print(f"[dataset] Preparing pre-partitioned dataset for client {client_id} (dataset choice {dataset_str})")
@@ -220,7 +235,7 @@ def train(msg: Message, context: Context):
     # round_start_time = time.perf_counter()  # COMMENTED: Resource monitoring disabled
 
     received_state = msg.content["arrays"].to_torch_state_dict()
-    data_yaml, client_dataset_root = prepare_client_yolo_dataset_prepartitioned(client_id)
+    data_yaml, client_dataset_root = prepare_client_yolo_dataset_prepartitioned(client_id, context=context)
 
     model_size = get_config("yolo_size", context, default="n")
     # Read local-epochs and batch_size from msg.content["config"] first so the
@@ -283,8 +298,7 @@ def train(msg: Message, context: Context):
         print(f"[CLIENT {client_id}] TRAINING FAILED with error: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        train_error_msg = f"{type(e).__name__}: {str(e)}"
-        new_state = received_state
+        raise e
     
     # COMMENTED: Resource monitoring disabled
     # ✅ STOP TRAINING PHASE MONITORING
@@ -395,7 +409,7 @@ def evaluate(msg: Message, context: Context):
     
     try:
         # Use the same dataset preparation as train function
-        data_yaml, partition_root = prepare_client_yolo_dataset_prepartitioned(client_id)
+        data_yaml, partition_root = prepare_client_yolo_dataset_prepartitioned(client_id, context=context)
         
         server_round = msg.content["config"].get("server-round", 0)
         
@@ -453,7 +467,7 @@ def evaluate(msg: Message, context: Context):
         print(f"[CLIENT {client_id}] EVALUATION FAILED with error: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        eval_error_msg = f"{type(e).__name__}: {str(e)}"
+        raise e
     
     if val_metrics is None:
         print(f"[CLIENT {client_id}] WARNING: val_metrics is None, defaulting to zeros")
