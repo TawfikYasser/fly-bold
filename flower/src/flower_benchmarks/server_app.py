@@ -776,6 +776,25 @@ def main(grid: Grid, context: Context) -> None:
     flaml_estimator   = get_config("flaml_estimator",   context, default="lgb", type_converter=str)
     flaml_sample_size = get_config("flaml_sample_size", context, default=32, type_converter=int)
 
+    # Client-side local HPO flags -- forwarded to clients via train_cfg below.
+    # Stored as bool/int here; env-var overrides (CLIENT_HPO_ENABLED=true/1) are
+    # coerced the same way USE_FLAML is, since TOML/run_config booleans don't
+    # round-trip cleanly through string env vars.
+    _client_hpo_raw = get_config("client_hpo_enabled", context, default=False, type_converter=str)
+    client_hpo_enabled = (
+        _client_hpo_raw if isinstance(_client_hpo_raw, bool)
+        else str(_client_hpo_raw).strip().lower() in ("1", "true", "yes")
+    )
+    client_hpo_trials  = get_config("client_hpo_trials", context, default=3, type_converter=int)
+
+    if client_hpo_enabled and hpo_trials and hpo_trials > 0:
+        print(
+            f"[WARN] client_hpo_enabled=true while hpo_trials={hpo_trials} (server-side HPO is ON). "
+            f"Both server and client will be tuning epochs/batch simultaneously -- "
+            f"this is usually not what you want. Consider setting hpo_trials=0 "
+            f"when using client-side HPO."
+        )
+
     # -- Snapshot initial weights ONCE so every trial/run starts identically.
     # ArrayRecord is consumed by strategy.start(), so we keep the raw state_dict
     # and rebuild a fresh ArrayRecord before each strategy.start() call.
@@ -868,6 +887,11 @@ def main(grid: Grid, context: Context) -> None:
             "num_rounds":   n_rounds,
             "local-epochs": trial_epochs,   # client reads from msg.content["config"]
             "batch_size":   trial_batch,    # client reads from msg.content["config"]
+            # Client-side local HPO (independent of this function's own Optuna/FLAML
+            # trial loop). Forwarded every round so clients can self-tune epochs/batch
+            # when enabled. Static for the whole _run_trial call -- not searched here.
+            "client_hpo_enabled": client_hpo_enabled,
+            "client_hpo_trials":  client_hpo_trials,
         }
         if task_type == "detection":
             train_cfg["yolo_size"] = yolo_size

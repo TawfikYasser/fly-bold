@@ -115,6 +115,156 @@ def get_config(key: str, context: Context, default=None, type_converter=str):
     
     return default
 
+
+def get_bool_config(key: str, context: Context, default: bool = False) -> bool:
+    """Like get_config, but coerces TOML bools / env-var strings to a real bool."""
+    raw = get_config(key, context, default=default, type_converter=str)
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("1", "true", "yes")
+
+
+def run_client_local_hpo(
+    received_state,
+    model_size: str,
+    data_yaml: str,
+    img: int,
+    client_id: int,
+    run_id: str,
+    server_round: int,
+    n_trials: int,
+    epoch_range=(1, 5),
+    batch_choices=(8, 16, 32),
+):
+    """
+    Client-side Optuna search for the best (local-epochs, batch_size) pair,
+    using each trial's TRAIN mAP@0.5 as the objective (maximize).
+
+    Each trial is a real, disposable YOLO training call on this client's own
+    data -- there is no cheaper proxy here, so cost scales linearly with
+    n_trials. The winning weights are NOT reused: only the winning
+    hyperparameters are returned, and `train()` re-trains for real afterwards
+    starting from `received_state` again, so the trials never pollute the
+    weights that get sent back to the server.
+
+    Returns: (best_epochs, best_batch, best_map, trials_info)
+    """
+    import optuna
+    import time
+    import gc
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    tag = f"[CLIENT {client_id}][ROUND {server_round}][HPO]"
+    print(f"\n{'='*70}")
+    print(f"{tag} STARTING LOCAL HPO -- {n_trials} trial(s)")
+    print(f"{tag} search space: local_epochs in {list(range(epoch_range[0], epoch_range[1]+1))}, "
+          f"batch_size in {list(batch_choices)}")
+    print(f"{tag} objective: maximize TRAIN mAP@0.5")
+    print(f"{'='*70}\n")
+
+    trials_info = []
+    running_best = {"map50": float("-inf"), "epochs": None, "batch": None, "trial": None}
+    hpo_start = time.time()
+
+    def objective(trial: "optuna.Trial") -> float:
+        trial_epochs = trial.suggest_int("local_epochs", epoch_range[0], epoch_range[1])
+        trial_batch = trial.suggest_categorical("batch_size", list(batch_choices))
+
+        print(
+            f"{tag} -- Trial {trial.number + 1}/{n_trials} START -- "
+            f"local_epochs={trial_epochs}, batch_size={trial_batch}"
+        )
+        t0 = time.time()
+
+        try:
+            _, trial_log = yolo_train_from_state_and_return_state_dict(
+                received_state,
+                model_size=model_size,
+                client_dataset_yaml=data_yaml,
+                epochs=trial_epochs,
+                img=img,
+                batch=trial_batch,
+                run_dir="/tmp/client_hpo_runs",
+                client_tag=f"client{client_id}_hpo_t{trial.number}",
+                round_idx=server_round,
+                run_id=run_id,
+            )
+        except Exception as e:
+            print(f"{tag} -- Trial {trial.number + 1}/{n_trials} FAILED ({time.time()-t0:.1f}s): {e}")
+            trials_info.append({
+                "trial": trial.number, "epochs": trial_epochs, "batch": trial_batch,
+                "map50": None, "status": "FAILED", "duration_s": round(time.time() - t0, 1),
+            })
+            raise optuna.exceptions.TrialPruned()
+
+        trial_map = float(trial_log.get("mAP@0.5", 0.0))
+        trial_loss = trial_log.get("train_loss", trial_log.get("loss", None))
+        duration = time.time() - t0
+
+        trials_info.append({
+            "trial": trial.number, "epochs": trial_epochs, "batch": trial_batch,
+            "map50": trial_map, "status": "OK", "duration_s": round(duration, 1),
+        })
+
+        is_new_best = trial_map > running_best["map50"]
+        if is_new_best:
+            running_best.update(map50=trial_map, epochs=trial_epochs, batch=trial_batch, trial=trial.number)
+
+        loss_str = f", train_loss={trial_loss:.4f}" if trial_loss is not None else ""
+        print(
+            f"{tag} -- Trial {trial.number + 1}/{n_trials} DONE  ({duration:.1f}s) -- "
+            f"train_mAP@0.5={trial_map:.4f}{loss_str}"
+            f"{'  <-- NEW BEST' if is_new_best else ''}"
+        )
+        print(
+            f"{tag} -- running best so far: epochs={running_best['epochs']}, "
+            f"batch={running_best['batch']}, mAP@0.5={running_best['map50']:.4f} "
+            f"(trial {running_best['trial']})\n"
+        )
+
+        # Memory cleanup between disposable trial runs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+
+        return trial_map
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=client_id),
+    )
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    best_epochs = study.best_params["local_epochs"]
+    best_batch = study.best_params["batch_size"]
+    best_map = study.best_value
+    total_time = time.time() - hpo_start
+
+    # ── Summary table, sorted best-first ────────────────────────────────────
+    print(f"{'='*70}")
+    print(f"{tag} SEARCH COMPLETE -- {len(trials_info)} trial(s) in {total_time:.1f}s")
+    print(f"{'='*70}")
+    print(f"  {'Trial':>5}  {'Epochs':>6}  {'Batch':>5}  {'mAP@0.5':>8}  {'Time(s)':>8}  {'Status':>7}")
+    sorted_trials = sorted(
+        trials_info,
+        key=lambda t: (t["map50"] is None, -(t["map50"] or 0)),
+    )
+    for t in sorted_trials:
+        map_str = f"{t['map50']:.4f}" if t["map50"] is not None else "   --  "
+        marker = "  <-- BEST" if (t["status"] == "OK" and t["epochs"] == best_epochs
+                                   and t["batch"] == best_batch and t["map50"] == best_map) else ""
+        print(
+            f"  {t['trial']+1:>5}  {t['epochs']:>6}  {t['batch']:>5}  "
+            f"{map_str:>8}  {t['duration_s']:>8}  {t['status']:>7}{marker}"
+        )
+    print(f"{'-'*70}")
+    print(f"{tag} BEST -> local_epochs={best_epochs}, batch_size={best_batch}, "
+          f"train_mAP@0.5={best_map:.4f}")
+    print(f"{'='*70}\n")
+
+    return best_epochs, best_batch, best_map, trials_info
+
 # Flower ClientApp
 app = ClientApp()
 
@@ -249,8 +399,46 @@ def train(msg: Message, context: Context):
     batch = int(msg.content["config"].get(
         "batch_size",   get_config("batch_size",   context, default=16)))
 
-    # Read lr from msg config (server injects the trial's lr here).
-    # Then patch hyp.scratch-low.yaml so YOLO actually trains with it.
+    # =================================================================
+    # CLIENT-SIDE LOCAL HPO (optional, independent of server-side HPO)
+    # When enabled, this client runs its own small Optuna study every round
+    # to pick (epochs, batch) that maximize ITS OWN train mAP@0.5, instead
+    # of just using the epochs/batch the server sent. The search trials are
+    # disposable -- they never touch `received_state` in place -- so the
+    # real training call right after still starts from the fresh weights
+    # the server sent this round.
+    # =================================================================
+    client_hpo_enabled = get_bool_config("client_hpo_enabled", context, default=False)
+    if "client_hpo_enabled" in msg.content["config"]:
+        client_hpo_enabled = bool(msg.content["config"].get("client_hpo_enabled"))
+
+    client_hpo_trials = int(msg.content["config"].get(
+        "client_hpo_trials", get_config("client_hpo_trials", context, default=3)))
+
+    client_hpo_best_map = None
+    client_hpo_trials_run = 0
+
+    if client_hpo_enabled and client_hpo_trials > 0:
+        print(f"[CLIENT {client_id}] [HPO] Client-side HPO enabled "
+              f"({client_hpo_trials} trials) -- searching local-epochs/batch_size")
+        try:
+            hpo_epochs, hpo_batch, client_hpo_best_map, _trials_info = run_client_local_hpo(
+                received_state,
+                model_size=model_size,
+                data_yaml=data_yaml,
+                img=img,
+                client_id=client_id,
+                run_id=run_id,
+                server_round=server_round,
+                n_trials=client_hpo_trials,
+            )
+            epochs, batch = hpo_epochs, hpo_batch
+            client_hpo_trials_run = client_hpo_trials
+        except Exception as e:
+            print(f"[CLIENT {client_id}] [HPO] Client-side HPO failed, "
+                  f"falling back to server-provided epochs/batch: {e}")
+
+    # Patch hyp.scratch-low.yaml so YOLO actually trains with the chosen lr.
     # Without this patch, YOLO reads lr0 from the YAML that was baked at
     # deploy time and silently ignores whatever lr Optuna suggested.
     lr = float(msg.content["config"].get("lr", get_config("lr", context, default=0.001)))
@@ -343,6 +531,12 @@ def train(msg: Message, context: Context):
         "round_duration": float(round_log.get("round_duration", 0.0)),
         "round_start_time": float(round_log.get("round_start_time", 0.0)),
         "round_end_time": float(round_log.get("round_end_time", 0.0)),
+        # Client-side local HPO visibility (0/-1 when disabled for this round)
+        "client_hpo_enabled": float(1.0 if client_hpo_enabled else 0.0),
+        "client_hpo_trials_run": float(client_hpo_trials_run),
+        "client_hpo_best_local_epochs": float(epochs),
+        "client_hpo_best_batch_size": float(batch),
+        "client_hpo_best_train_mAP@0.5": float(client_hpo_best_map if client_hpo_best_map is not None else -1.0),
         # COMMENTED: Resource monitoring disabled
         # Training phase resource metrics
         # "train_resources_per_process_cpu_peak": float(train_resources['per_process']['cpu_percent']['peak']),

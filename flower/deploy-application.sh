@@ -530,6 +530,8 @@ cat > /tmp/run_config.json <<EOJSON
   "enable_tls": $ENABLE_TLS,
   "optuna_trials": $OPTUNA_TRIALS,
   "hpo_rounds": $HPO_ROUNDS,
+  "client_hpo_enabled": $CLIENT_HPO_ENABLED,
+  "client_hpo_trials": $CLIENT_HPO_TRIALS,
   "server_internal_ip": "$SERVER_INTERNAL_IP",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -561,6 +563,12 @@ PRETRAINED_CHECKPOINT=$(grep '^PRETRAINED_CHECKPOINT=' .env 2>/dev/null | cut -d
 sedi "s|^pretrained_checkpoint[[:space:]]*=[[:space:]]*\"[^\"]*\"|pretrained_checkpoint = \"${PRETRAINED_CHECKPOINT}\"|" pyproject.toml
 sedi "s/^hpo_trials[[:space:]]*=[[:space:]]*[^#]*/hpo_trials = ${HPO_TRIALS}  /" pyproject.toml
 sedi "s/^hpo_rounds[[:space:]]*=[[:space:]]*[^#]*/hpo_rounds = ${HPO_ROUNDS}  /" pyproject.toml
+
+# Client-side HPO flags (default to false/3 if not set in .env)
+CLIENT_HPO_ENABLED=${CLIENT_HPO_ENABLED:-false}
+CLIENT_HPO_TRIALS=${CLIENT_HPO_TRIALS:-3}
+sedi "s/^client_hpo_enabled[[:space:]]*=[[:space:]]*[^#]*/client_hpo_enabled = ${CLIENT_HPO_ENABLED}  /" pyproject.toml
+sedi "s/^client_hpo_trials[[:space:]]*=[[:space:]]*[^#]*/client_hpo_trials = ${CLIENT_HPO_TRIALS}  /" pyproject.toml
 sedi "s|^gcs_bucket[[:space:]]*=[[:space:]]*\".*\"|gcs_bucket = \"${BUCKET_NAME}\"|" pyproject.toml
 
 # Sync FLAML and HPO configuration from .env to pyproject.toml

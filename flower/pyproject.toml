@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower-benchmarks"
-version = "1.0.210"
+version = "1.0.212"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 # Dependencies for your Flower App
@@ -93,13 +93,20 @@ img_size = 416
 batch_size = 32  
 dataset = 0  
 strategy = 3  
-run_id = 1031000021  
+run_id = 101033230003  
 
 # HPO Configuration
-use_flaml = true  # true = use FLAML, false = use Optuna
-hpo_trials = 10  # Number of HPO trials (0 to disable HPO)
+use_flaml = false  # true = use FLAML, false = use Optuna
+hpo_trials = 0  # Number of HPO trials (0 to disable HPO)
 hpo_rounds = 3  # Number of rounds to run per trial
 hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then final training with best params
+
+# Client-side HPO Configuration (per-client local Optuna search for local_epochs/batch_size)
+# Independent of server-side HPO above -- intended for use when hpo_trials = 0
+# (i.e. the server is NOT doing its own HPO sweep) and you supply fixed
+# lr/strategy yourself, letting each client tune its own epochs/batch instead.
+client_hpo_enabled = true  # true = each client runs its own Optuna study every round
+client_hpo_trials = 3  # Number of local Optuna trials per client per round
 
 # FLAML-specific parameters (used when use_flaml = true)
 flaml_time_budget = 36000  # Total time budget in seconds (1 hour default)
