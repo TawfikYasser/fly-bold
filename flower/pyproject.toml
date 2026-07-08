@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower-benchmarks"
-version = "1.0.213"
+version = "1.0.217"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 # Dependencies for your Flower App
@@ -93,7 +93,7 @@ img_size = 416
 batch_size = 32  
 dataset = 0  
 strategy = 3  
-run_id = 101033230006  
+run_id = 1010000864000101  
 
 # HPO Configuration
 use_flaml = false  # true = use FLAML, false = use Optuna
@@ -105,8 +105,34 @@ hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then fina
 # Independent of server-side HPO above -- intended for use when hpo_trials = 0
 # (i.e. the server is NOT doing its own HPO sweep) and you supply fixed
 # lr/strategy yourself, letting each client tune its own epochs/batch instead.
-client_hpo_enabled = true  # true = each client runs its own Optuna study every round
+client_hpo_enabled = false  # true = each client runs its own Optuna study every round
 client_hpo_trials = 6  # Number of local Optuna trials per client per round
+
+# Adaptive Batch/Epoch Tuning (ABS -- client-side, per round)
+# Mutually exclusive with client_hpo_enabled above -- if both are true, ABS wins.
+# Replaces fixed local-epochs/batch_size: batch starts at adaptive_batch_min and
+# grows (up to adaptive_batch_max, capped at adaptive_batch_max_increases bumps)
+# whenever local training stalls (low RMD) or loss regresses; epoch count becomes
+# an OUTPUT rather than a fixed input.
+adaptive_batch_enabled = true  
+adaptive_batch_min = 8  # beta_min
+adaptive_batch_max = 64  # beta_max
+adaptive_batch_max_increases = 4  # H_beta -- max batch-size bumps per round
+adaptive_batch_rmd_threshold = 0.01  # rho threshold below which learning is "stalled"
+adaptive_batch_rmd_patience = 2  # consecutive stalled epochs before bumping batch
+adaptive_batch_growth_factor = 2.0  # multiplicative batch growth per bump
+adaptive_batch_max_epochs = 10  # hard safety ceiling on epochs/round
+
+# Adaptive Global LR Tuning (ALR -- server-side, final run only, not during HPO)
+# Replaces the static `lr` above for the final training run: starts at
+# adaptive_lr_min, grows toward adaptive_lr_max when validation loss improves,
+# and falls back (shrinking the upper bound) when validation loss regresses.
+adaptive_lr_enabled = true  
+adaptive_lr_min = 0.0001  # lambda_min
+adaptive_lr_max = 0.01  # lambda_max (initial upper bound)
+adaptive_lr_max_reductions = 3  # H_lambda -- max LR rollbacks before terminating
+adaptive_lr_growth_factor = 1.2  # multiplicative LR growth on improvement
+adaptive_lr_backoff_factor = 0.5  # multiplicative LR shrink on regression
 
 # FLAML-specific parameters (used when use_flaml = true)
 flaml_time_budget = 36000  # Total time budget in seconds (1 hour default)

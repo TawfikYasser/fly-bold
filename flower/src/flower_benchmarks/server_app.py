@@ -787,6 +787,28 @@ def main(grid: Grid, context: Context) -> None:
     )
     client_hpo_trials  = get_config("client_hpo_trials", context, default=3, type_converter=int)
 
+    # Forwarded to clients every round so they know whether to run their own
+    # ABS (adaptive batch/epoch) loop -- server doesn't control ABS decisions
+    # itself, it just needs to pass the flag through in train_cfg.
+    _adaptive_batch_raw = get_config("adaptive_batch_enabled", context, default=False, type_converter=str)
+    adaptive_batch_enabled_cfg = (
+        _adaptive_batch_raw if isinstance(_adaptive_batch_raw, bool)
+        else str(_adaptive_batch_raw).strip().lower() in ("1", "true", "yes")
+    )
+
+    # Adaptive Global LR tuning (server-side), used only for the FINAL run
+    # (not inside the Optuna/FLAML HPO trial loop).
+    _adaptive_lr_raw = get_config("adaptive_lr_enabled", context, default=False, type_converter=str)
+    adaptive_lr_enabled = (
+        _adaptive_lr_raw if isinstance(_adaptive_lr_raw, bool)
+        else str(_adaptive_lr_raw).strip().lower() in ("1", "true", "yes")
+    )
+    adaptive_lr_min            = get_config("adaptive_lr_min", context, default=0.0001, type_converter=float)
+    adaptive_lr_max            = get_config("adaptive_lr_max", context, default=0.01, type_converter=float)
+    adaptive_lr_max_reductions = get_config("adaptive_lr_max_reductions", context, default=3, type_converter=int)
+    adaptive_lr_growth_factor  = get_config("adaptive_lr_growth_factor", context, default=1.2, type_converter=float)
+    adaptive_lr_backoff_factor = get_config("adaptive_lr_backoff_factor", context, default=0.5, type_converter=float)
+
     if client_hpo_enabled and hpo_trials and hpo_trials > 0:
         print(
             f"[WARN] client_hpo_enabled=true while hpo_trials={hpo_trials} (server-side HPO is ON). "
@@ -892,6 +914,7 @@ def main(grid: Grid, context: Context) -> None:
             # when enabled. Static for the whole _run_trial call -- not searched here.
             "client_hpo_enabled": client_hpo_enabled,
             "client_hpo_trials":  client_hpo_trials,
+            "adaptive_batch_enabled": adaptive_batch_enabled_cfg,
         }
         if task_type == "detection":
             train_cfg["yolo_size"] = yolo_size
@@ -921,6 +944,112 @@ def main(grid: Grid, context: Context) -> None:
             CURRENT_OPTUNA_TRIAL = None  # always clear after the trial ends
 
         # Return a copy so the global can be safely reset next trial
+        return result, list(ALL_ROUND_LOGS)
+
+    def _run_adaptive_lr_final_run(
+        n_rounds, trial_epochs, trial_batch, trial_tag,
+        lr_min, lr_max, max_reductions, growth_factor, backoff_factor,
+        trial_strategy=None,
+        eta=None, eta_l=None, beta_1=None, beta_2=None, tau=None, proximal_mu=None,
+    ):
+        """
+        Global learning-rate tuning ("ALR"), run ONCE for the final training
+        run (not inside the Optuna/FLAML HPO trial loop).
+
+        Unlike _run_trial (which must build a fresh strategy + fresh arrays
+        every call to keep HPO trials scientifically isolated), this function
+        builds ONE strategy instance and calls strategy.start(num_rounds=1)
+        repeatedly, threading the previous round's resulting arrays back in
+        as `initial_arrays` for the next round. This is required so that
+        FedAdam/FedYogi's momentum buffers persist correctly across rounds --
+        exactly like a normal multi-round run, just with an lr that changes
+        round-to-round based on validation-loss trend.
+
+        Algorithm:
+          - lr starts at lr_min. lr_max_dynamic starts at lr_max.
+          - After each round, compare this round's eval loss to the previous:
+              - improved  -> lr = min(lr * growth_factor, lr_max_dynamic)  (explore higher)
+              - regressed -> lr_max_dynamic = lr (cap shrinks to the value that
+                              caused the regression), lr = max(lr_min, lr * backoff_factor)
+                              (fall back to a lower value), reductions_used += 1
+          - Training terminates early if reductions_used exceeds max_reductions.
+
+        Returns: (result, logs_snapshot) -- same shape as _run_trial's return,
+        so the caller (the FINAL RUN block) doesn't need to change downstream code.
+        """
+        global ALL_ROUND_LOGS, CURRENT_ROUND
+        ALL_ROUND_LOGS = []
+        CURRENT_ROUND  = 0
+
+        effective_sid = trial_strategy if trial_strategy is not None else strategy_id
+        strategy = _make_strategy(
+            sid=effective_sid,
+            eta=eta, eta_l=eta_l, beta_1=beta_1, beta_2=beta_2, tau=tau,
+            proximal_mu=proximal_mu,
+        )
+
+        lr = lr_min
+        lr_max_dynamic = lr_max
+        reductions_used = 0
+        prev_val_loss = None
+        current_arrays = ArrayRecord(torch_state_dict=initial_state_dict, keep_input=True)
+
+        print(f"\n{'='*70}")
+        print(f"STARTING ADAPTIVE-LR FINAL RUN  [{trial_tag}]")
+        print(f"  lr_min={lr_min:.6f}  lr_max={lr_max:.6f}  max_reductions={max_reductions}  "
+              f"growth={growth_factor}  backoff={backoff_factor}  rounds={n_rounds}")
+        print(f"{'='*70}\n")
+
+        result = None
+        for round_num in range(1, n_rounds + 1):
+            train_cfg = {
+                "lr":           lr,
+                "num_rounds":   n_rounds,
+                "local-epochs": trial_epochs,
+                "batch_size":   trial_batch,
+                "client_hpo_enabled": client_hpo_enabled,
+                "client_hpo_trials":  client_hpo_trials,
+                "adaptive_batch_enabled": adaptive_batch_enabled_cfg,
+            }
+            if task_type == "detection":
+                train_cfg["yolo_size"] = yolo_size
+
+            print(f"[ALR] Round {round_num}/{n_rounds} -- lr={lr:.6f} "
+                  f"(cap={lr_max_dynamic:.6f}, reductions_used={reductions_used}/{max_reductions})")
+
+            result = strategy.start(
+                grid=grid,
+                initial_arrays=current_arrays,
+                train_config=ConfigRecord(train_cfg),
+                num_rounds=1,
+                timeout=18000,
+            )
+
+            eval_loss = None
+            if ALL_ROUND_LOGS:
+                eval_loss = ALL_ROUND_LOGS[-1].get("round_eval_loss")
+
+            if eval_loss is not None and prev_val_loss is not None:
+                if eval_loss < prev_val_loss:
+                    lr = min(lr * growth_factor, lr_max_dynamic)
+                    print(f"[ALR] Validation loss improved ({prev_val_loss:.4f} -> {eval_loss:.4f}) "
+                          f"-- raising lr to {lr:.6f}")
+                else:
+                    lr_max_dynamic = lr
+                    lr = max(lr_min, lr * backoff_factor)
+                    reductions_used += 1
+                    print(f"[ALR] Validation loss regressed ({prev_val_loss:.4f} -> {eval_loss:.4f}) "
+                          f"-- capping lr at {lr_max_dynamic:.6f}, falling back to {lr:.6f} "
+                          f"(reduction {reductions_used}/{max_reductions})")
+                    if reductions_used > max_reductions:
+                        print(f"[ALR] Max LR reductions exceeded -- terminating early "
+                              f"after round {round_num}/{n_rounds}.")
+                        break
+
+            if eval_loss is not None:
+                prev_val_loss = eval_loss
+            current_arrays = result.arrays
+
         return result, list(ALL_ROUND_LOGS)
 
     # ================================================================
@@ -1341,15 +1470,30 @@ def main(grid: Grid, context: Context) -> None:
     else:
         print(f"\n[INFO] Round budget: {num_rounds} total -- "
               f"{hpo_consumed} HPO -- {final_rounds} final run")
-        result, _ = _run_trial(
-            lr,
-            n_rounds=final_rounds,
-            trial_epochs=final_epochs,
-            trial_batch=final_batch,
-            trial_tag=f"final_run_{run_id}",
-            trial_strategy=final_strategy,
-            **final_strategy_kwargs,
-        )
+        if adaptive_lr_enabled:
+            result, _ = _run_adaptive_lr_final_run(
+                n_rounds=final_rounds,
+                trial_epochs=final_epochs,
+                trial_batch=final_batch,
+                trial_tag=f"final_run_{run_id}",
+                lr_min=adaptive_lr_min,
+                lr_max=adaptive_lr_max,
+                max_reductions=adaptive_lr_max_reductions,
+                growth_factor=adaptive_lr_growth_factor,
+                backoff_factor=adaptive_lr_backoff_factor,
+                trial_strategy=final_strategy,
+                **final_strategy_kwargs,
+            )
+        else:
+            result, _ = _run_trial(
+                lr,
+                n_rounds=final_rounds,
+                trial_epochs=final_epochs,
+                trial_batch=final_batch,
+                trial_tag=f"final_run_{run_id}",
+                trial_strategy=final_strategy,
+                **final_strategy_kwargs,
+            )
  
     if final_rounds <= 0 or skip_final_training:
         print(f"\nFinal run skipped or no budget available")

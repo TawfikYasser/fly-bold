@@ -268,6 +268,134 @@ def run_client_local_hpo(
 # Flower ClientApp
 app = ClientApp()
 
+def run_adaptive_batch_epoch_training(
+    received_state,
+    model_size: str,
+    data_yaml: str,
+    img: int,
+    client_id: int,
+    run_id: str,
+    server_round: int,
+    batch_min: int,
+    batch_max: int,
+    max_increases: int,
+    rmd_threshold: float,
+    rmd_patience: int,
+    growth_factor: float,
+    max_epochs: int,
+):
+    """
+    Adaptive local batch-size / epoch-count tuning ("ABS"), per the paper's
+    per-client algorithm:
+
+      - Start each round at batch_min.
+      - Train ONE epoch at a time (yolo_train_from_state_and_return_state_dict
+        is called repeatedly with epochs=1, feeding the returned state dict
+        back in as the input checkpoint for the next epoch -- it already
+        supports this since it's a pure state_dict -> state_dict + round_log
+        call).
+      - After every epoch, compute the local Relative Model Deviation (RMD):
+            rho = ||W_t - W_{t-1}|| / ||W_{t-1}||
+        i.e. the global (all-parameters-flattened) relative L2 change in
+        weights across that epoch. Low rho => learning has stalled.
+      - Bump the batch size when either:
+          (a) rho stays below rmd_threshold for `rmd_patience` consecutive
+              epochs (stalled learning -- noisy small-batch gradients), or
+          (b) this epoch's training loss increased vs. the previous epoch
+              (noisy/poor gradient signal).
+      - Batch grows multiplicatively (by growth_factor, capped at batch_max)
+        each time it's bumped, up to `max_increases` bumps total.
+      - If a bump condition fires again after batch is already at batch_max
+        (or increases are exhausted), training for this round stops --
+        this is what "adjusts the number of epochs" means in practice: the
+        epoch count is an OUTPUT of this loop, not a fixed input.
+      - `max_epochs` is a hard safety ceiling so a pathological case can
+        never hang a round indefinitely.
+
+    Returns: (final_state_dict, final_round_log, epochs_run, final_batch, increases_used)
+    """
+    def _flat_norm_and_delta(state_a, state_b):
+        """Relative L2 change between two state dicts, flattened & concatenated."""
+        total_sq_delta = 0.0
+        total_sq_norm = 0.0
+        for k, v_b in state_b.items():
+            v_a = state_a.get(k)
+            if v_a is None or not torch.is_tensor(v_b) or not torch.is_tensor(v_a):
+                continue
+            v_a_f = v_a.detach().float()
+            v_b_f = v_b.detach().float()
+            total_sq_delta += torch.sum((v_b_f - v_a_f) ** 2).item()
+            total_sq_norm += torch.sum(v_a_f ** 2).item()
+        denom = total_sq_norm ** 0.5
+        return (total_sq_delta ** 0.5) / denom if denom > 0 else 0.0
+
+    batch = int(batch_min)
+    increases_used = 0
+    stalled_streak = 0
+    prev_loss = None
+    current_state = received_state
+    final_round_log = {}
+    epochs_run = 0
+
+    tag = f"[CLIENT {client_id}] [ABS]"
+    print(f"{tag} Starting adaptive batch/epoch training: batch_min={batch_min}, "
+          f"batch_max={batch_max}, max_increases={max_increases}, "
+          f"rmd_threshold={rmd_threshold}, rmd_patience={rmd_patience}")
+
+    for epoch_num in range(1, max_epochs + 1):
+        epoch_tag = f"client{client_id}_abs"
+        new_state, round_log = yolo_train_from_state_and_return_state_dict(
+            current_state,
+            model_size=model_size,
+            client_dataset_yaml=data_yaml,
+            epochs=1,
+            img=img,
+            batch=batch,
+            run_dir=f"./yolov5/runs/train_abs",
+            client_tag=epoch_tag,
+            round_idx=f"{server_round}_e{epoch_num}",
+            run_id=run_id,
+        )
+
+        loss = round_log.get("loss", 0.0)
+        rho = _flat_norm_and_delta(current_state, new_state)
+
+        print(f"{tag} epoch {epoch_num}: batch={batch}, loss={loss:.4f}, rho={rho:.6f} "
+              f"(increases_used={increases_used}/{max_increases})")
+
+        current_state = new_state
+        final_round_log = round_log
+        epochs_run = epoch_num
+
+        loss_regressed = (prev_loss is not None) and (loss > prev_loss)
+        if rho < rmd_threshold:
+            stalled_streak += 1
+        else:
+            stalled_streak = 0
+        stalled = stalled_streak >= rmd_patience
+
+        should_bump = loss_regressed or stalled
+
+        if should_bump:
+            if increases_used >= max_increases or batch >= batch_max:
+                print(f"{tag} Stall/regression detected but batch already at cap "
+                      f"or increases exhausted -- ending round after {epochs_run} epoch(s).")
+                prev_loss = loss
+                break
+            new_batch = min(batch_max, max(batch + 1, int(round(batch * growth_factor))))
+            print(f"{tag} {'Loss regressed' if loss_regressed else 'Learning stalled'} "
+                  f"-- growing batch {batch} -> {new_batch}")
+            batch = new_batch
+            increases_used += 1
+            stalled_streak = 0
+
+        prev_loss = loss
+
+    print(f"{tag} Finished: epochs_run={epochs_run}, final_batch={batch}, "
+          f"increases_used={increases_used}")
+    return current_state, final_round_log, epochs_run, batch, increases_used
+
+
 def _safe_float(v, default=0.0):
     """Safely convert to float."""
     try:
@@ -415,8 +543,59 @@ def train(msg: Message, context: Context):
     client_hpo_trials = int(msg.content["config"].get(
         "client_hpo_trials", get_config("client_hpo_trials", context, default=3)))
 
+    # =================================================================
+    # ADAPTIVE BATCH/EPOCH TUNING (ABS) -- mutually exclusive with the
+    # Optuna-based client_hpo above. If both are enabled, ABS wins and
+    # client-side HPO is skipped for this round (a warning is printed).
+    # =================================================================
+    adaptive_batch_enabled = get_bool_config("adaptive_batch_enabled", context, default=False)
+    if "adaptive_batch_enabled" in msg.content["config"]:
+        adaptive_batch_enabled = bool(msg.content["config"].get("adaptive_batch_enabled"))
+
+    adaptive_batch_epochs_run = 0
+    adaptive_batch_increases_used = 0
+
+    if adaptive_batch_enabled and client_hpo_enabled:
+        print(f"[CLIENT {client_id}] [WARN] Both adaptive_batch_enabled and "
+              f"client_hpo_enabled are true -- adaptive batch/epoch tuning "
+              f"takes priority; client-side HPO is skipped this round.")
+        client_hpo_enabled = False
+
     client_hpo_best_map = None
     client_hpo_trials_run = 0
+
+    if adaptive_batch_enabled:
+        batch_min     = int(get_config("adaptive_batch_min", context, default=8))
+        batch_max     = int(get_config("adaptive_batch_max", context, default=64))
+        max_increases = int(get_config("adaptive_batch_max_increases", context, default=4))
+        rmd_threshold = float(get_config("adaptive_batch_rmd_threshold", context, default=0.01))
+        rmd_patience  = int(get_config("adaptive_batch_rmd_patience", context, default=2))
+        growth_factor = float(get_config("adaptive_batch_growth_factor", context, default=2.0))
+        max_epochs    = int(get_config("adaptive_batch_max_epochs", context, default=10))
+
+        (received_state, round_log_abs, adaptive_batch_epochs_run,
+         batch, adaptive_batch_increases_used) = run_adaptive_batch_epoch_training(
+            received_state,
+            model_size=model_size,
+            data_yaml=data_yaml,
+            img=img,
+            client_id=client_id,
+            run_id=run_id,
+            server_round=server_round,
+            batch_min=batch_min,
+            batch_max=batch_max,
+            max_increases=max_increases,
+            rmd_threshold=rmd_threshold,
+            rmd_patience=rmd_patience,
+            growth_factor=growth_factor,
+            max_epochs=max_epochs,
+        )
+        # `received_state` now holds the fully-trained weights for this round
+        # (already run epoch-by-epoch above), and `epochs`/`batch` reflect what
+        # was actually used -- feed these into the normal metrics/response path
+        # below instead of the single multi-epoch training call.
+        epochs = adaptive_batch_epochs_run
+        round_log = round_log_abs
 
     if client_hpo_enabled and client_hpo_trials > 0:
         print(f"[CLIENT {client_id}] [HPO] Client-side HPO enabled "
@@ -458,7 +637,8 @@ def train(msg: Message, context: Context):
     train_start = time.perf_counter()
     train_status = "FAILED"
     train_error_msg = ""
-    round_log = {}
+    if not adaptive_batch_enabled:
+        round_log = {}
     
     # COMMENTED: Resource monitoring disabled
     # ✅ START TRAINING PHASE MONITORING
@@ -466,21 +646,49 @@ def train(msg: Message, context: Context):
     # train_monitor.start()  # COMMENTED: Resource monitoring disabled
 
     try:
-        print(f"[CLIENT {client_id}] Calling yolo_train_from_state_and_return_state_dict...")
-        new_state, round_log = yolo_train_from_state_and_return_state_dict(
-            received_state,
-            model_size=model_size,
-            client_dataset_yaml=data_yaml,
-            epochs=epochs,
-            img=img,
-            batch=batch,
-            run_dir=context.run_config.get("yolo_runs_dir"),
-            client_tag=f"client{client_id}",
-            round_idx=server_round,
-            run_id=run_id,
-        )
-        print(f"[CLIENT {client_id}] yolo_train returned round_log keys: {sorted(round_log.keys())}")
-        print(f"[CLIENT {client_id}] Train metrics - Loss: {round_log.get('loss', 0.0):.4f}, mAP@0.5: {round_log.get('mAP@0.5', 0.0):.4f}, mAP: {round_log.get('mAP', 0.0):.4f}")
+        if adaptive_batch_enabled:
+            # ABS already ran the full epoch-by-epoch loop above; `received_state`
+            # holds the final trained weights and `round_log` the last epoch's log.
+            new_state = received_state
+            print(f"[CLIENT {client_id}] ABS training already complete "
+                  f"(epochs_run={epochs}, final_batch={batch}) -- skipping normal train call.")
+            print(f"[CLIENT {client_id}] Train metrics - Loss: {round_log.get('loss', 0.0):.4f}, mAP@0.5: {round_log.get('mAP@0.5', 0.0):.4f}, mAP: {round_log.get('mAP', 0.0):.4f}")
+
+            # ---------------------------------------------------------------
+            # FIX: ABS trains into its own per-epoch run dirs
+            # (./yolov5/runs/train_abs/client{id}_abs_r{round}_e{n}/weights),
+            # but evaluate() unconditionally looks for a checkpoint at
+            # {yolo_runs_dir}/client{id}_r{round}/weights/{best,last}.pt --
+            # the same path the non-ABS path writes to. Without this, ABS
+            # rounds always fail evaluation with a FileNotFoundError.
+            # Write the final ABS weights to that exact expected location.
+            # ---------------------------------------------------------------
+            eval_run_dir = context.run_config.get("yolo_runs_dir", "runs/train")
+            eval_weights_dir = os.path.join(eval_run_dir, f"client{client_id}_r{server_round}", "weights")
+            os.makedirs(eval_weights_dir, exist_ok=True)
+            eval_checkpoint_path = os.path.join(eval_weights_dir, "best.pt")
+            try:
+                save_state_dict_as_yolo_checkpoint(new_state, model_size, eval_checkpoint_path)
+                print(f"[CLIENT {client_id}] [ABS] Saved final checkpoint for evaluate() at: {eval_checkpoint_path}")
+            except Exception as _save_exc:
+                print(f"[CLIENT {client_id}] [ABS] WARNING: could not save eval checkpoint "
+                      f"at {eval_checkpoint_path}: {_save_exc}")
+        else:
+            print(f"[CLIENT {client_id}] Calling yolo_train_from_state_and_return_state_dict...")
+            new_state, round_log = yolo_train_from_state_and_return_state_dict(
+                received_state,
+                model_size=model_size,
+                client_dataset_yaml=data_yaml,
+                epochs=epochs,
+                img=img,
+                batch=batch,
+                run_dir=context.run_config.get("yolo_runs_dir"),
+                client_tag=f"client{client_id}",
+                round_idx=server_round,
+                run_id=run_id,
+            )
+            print(f"[CLIENT {client_id}] yolo_train returned round_log keys: {sorted(round_log.keys())}")
+            print(f"[CLIENT {client_id}] Train metrics - Loss: {round_log.get('loss', 0.0):.4f}, mAP@0.5: {round_log.get('mAP@0.5', 0.0):.4f}, mAP: {round_log.get('mAP', 0.0):.4f}")
         train_status = "SUCCESS"
     except Exception as e:
         print(f"[CLIENT {client_id}] TRAINING FAILED with error: {type(e).__name__}: {str(e)}")
@@ -537,6 +745,11 @@ def train(msg: Message, context: Context):
         "client_hpo_best_local_epochs": float(epochs),
         "client_hpo_best_batch_size": float(batch),
         "client_hpo_best_train_mAP@0.5": float(client_hpo_best_map if client_hpo_best_map is not None else -1.0),
+        # Adaptive batch/epoch (ABS) visibility (0 when disabled for this round)
+        "adaptive_batch_enabled": float(1.0 if adaptive_batch_enabled else 0.0),
+        "adaptive_batch_epochs_run": float(adaptive_batch_epochs_run),
+        "adaptive_batch_final_batch_size": float(batch if adaptive_batch_enabled else -1.0),
+        "adaptive_batch_increases_used": float(adaptive_batch_increases_used),
         # COMMENTED: Resource monitoring disabled
         # Training phase resource metrics
         # "train_resources_per_process_cpu_peak": float(train_resources['per_process']['cpu_percent']['peak']),

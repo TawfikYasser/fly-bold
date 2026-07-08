@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federated Learning Tuning Visualizer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for smooth plotting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-full flex flex-col selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-indigo-600 rounded-lg text-white shadow-lg shadow-indigo-500/20">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                    FL-Tune Visualizer
+                    <span class="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-medium border border-emerald-500/20">Active Simulation</span>
+                </h1>
+                <p class="text-xs text-slate-400">Interactive demonstration of Local Batch-Size Tuning and Global Learning-Rate Adaptation</p>
+            </div>
+        </div>
+        
+        <!-- Controls Hub -->
+        <div class="flex items-center gap-3 flex-wrap">
+            <button id="btn-play" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-md shadow-indigo-600/10">
+                <svg id="icon-play" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                <span id="txt-play">Start FL Training</span>
+            </button>
+            <button id="btn-step" class="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition border border-slate-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                Step Epoch
+            </button>
+            <button id="btn-reset" class="flex items-center gap-1 bg-slate-800 hover:bg-red-900/30 hover:text-red-400 active:bg-red-950 text-slate-400 px-3 py-2 rounded-lg text-sm font-medium transition border border-slate-750">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H19" /></svg>
+                Reset
+            </button>
+            <div class="h-6 w-px bg-slate-800 hidden md:block"></div>
+            <select id="preset-select" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm font-medium text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="balanced">Preset: Balanced FL Convergence</option>
+                <option value="high-noise">Preset: Noisy Client Gradients</option>
+                <option value="fast-stall">Preset: Fast Client Stall (Low RMD)</option>
+                <option value="unstable">Preset: Unstable Learning Rate</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-6 max-w-[1600px] w-full mx-auto grid grid-cols-1 xl:grid-cols-12 gap-6">
+        
+        <!-- Column 1: Config & Interactive Nodes (Left/Middle) -->
+        <section class="xl:col-span-4 flex flex-col gap-6">
+            
+            <!-- Global & Local Configurations Card -->
+            <div class="bg-slate-850/50 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col gap-4">
+                <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                    Simulation Settings
+                </h2>
+                
+                <!-- Client Batch Size Limits -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-slate-400">Client Batch Range [<span class="text-indigo-400 font-mono">β_min</span>, <span class="text-indigo-400 font-mono">β_max</span>]</label>
+                        <span id="lbl-batch-range" class="text-xs font-mono text-slate-300 bg-slate-800 px-2 py-0.5 rounded">16 - 256</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-[10px] text-slate-500 block mb-1">β_min</span>
+                            <input type="number" id="input-b-min" value="16" min="8" max="64" step="8" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-500 block mb-1">β_max</span>
+                            <input type="number" id="input-b-max" value="256" min="128" max="1024" step="32" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label for="input-h-beta" class="text-xs font-semibold text-slate-400">Max Batch Updates (<span class="font-mono text-indigo-400">H_β</span>)</label>
+                        <input type="number" id="input-h-beta" value="5" min="1" max="10" class="w-16 bg-slate-800 border border-slate-700 rounded p-1 text-xs text-white text-center focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-850"></div>
+
+                <!-- Server Learning Rate Limits -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-slate-400">Server LR Range [<span class="text-emerald-400 font-mono">λ_min</span>, <span class="text-emerald-400 font-mono">λ_max</span>]</label>
+                        <span id="lbl-lr-range" class="text-xs font-mono text-slate-300 bg-slate-800 px-2 py-0.5 rounded">0.01 - 0.50</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-[10px] text-slate-500 block mb-1">λ_min</span>
+                            <input type="number" id="input-l-min" value="0.01" step="0.01" min="0.001" max="0.1" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-500 block mb-1">λ_max</span>
+                            <input type="number" id="input-l-max" value="0.50" step="0.05" min="0.1" max="1.0" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label for="input-h-lambda" class="text-xs font-semibold text-slate-400">Max LR Reductions (<span class="font-mono text-emerald-400">H_λ</span>)</label>
+                        <input type="number" id="input-h-lambda" value="4" min="1" max="10" class="w-16 bg-slate-800 border border-slate-700 rounded p-1 text-xs text-white text-center focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-850"></div>
+
+                <!-- Environmental parameters -->
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label for="input-noise" class="text-xs font-semibold text-slate-400">Environment Gradient Noise</label>
+                        <span id="lbl-noise" class="text-xs font-mono text-indigo-400">Medium</span>
+                    </div>
+                    <input type="range" id="input-noise" min="1" max="3" value="2" class="w-full accent-indigo-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer">
+                    
+                    <div class="flex justify-between mt-2">
+                        <label for="input-speed" class="text-xs font-semibold text-slate-400">Simulation Interval (Speed)</label>
+                        <span id="lbl-speed" class="text-xs font-mono text-indigo-400">800 ms</span>
+                    </div>
+                    <input type="range" id="input-speed" min="200" max="2000" step="100" value="800" class="w-full accent-indigo-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Live Status Overview -->
+            <div class="bg-slate-850/50 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-xl flex-1 flex flex-col justify-between min-h-[300px]">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-4">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Active FL Engine State
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">FL Round</span>
+                            <span id="status-round" class="text-2xl font-bold font-mono text-white">0</span>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Local Epoch</span>
+                            <span id="status-epoch" class="text-2xl font-bold font-mono text-indigo-400">0</span>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Local Batch Size</span>
+                            <span id="status-batch-size" class="text-xl font-bold font-mono text-indigo-300">β_min</span>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Learning Rate</span>
+                            <span id="status-lr" class="text-xl font-bold font-mono text-emerald-400">λ_min</span>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+                            <span class="text-slate-400">Local RMD (<span class="font-mono">ρ</span>)</span>
+                            <span id="val-rmd" class="font-mono text-slate-200">0.0000</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+                            <span class="text-slate-400">Current Local Loss</span>
+                            <span id="val-train-loss" class="font-mono text-slate-200">0.0000</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+                            <span class="text-slate-400">Batch Updates Count (<span class="font-mono">h_β</span>)</span>
+                            <span id="val-h-beta" class="font-mono text-indigo-400">0 / H_β</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+                            <span class="text-slate-400">LR Reductions Count (<span class="font-mono">h_λ</span>)</span>
+                            <span id="val-h-lambda" class="font-mono text-emerald-400">0 / H_λ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-800/60">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">State Log</span>
+                    <div id="terminal-log" class="text-xs font-mono h-24 overflow-y-auto bg-slate-950 p-2 rounded text-indigo-300 space-y-1">
+                        System ready. Choose preset or click Start.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Column 2: The Core Dual Dynamic View (Middle/Right) -->
+        <section class="xl:col-span-8 flex flex-col gap-6">
+            
+            <!-- Dashboard Navigation Tabs -->
+            <div class="bg-slate-850/40 p-1.5 rounded-lg border border-slate-800 flex gap-2 w-full md:w-auto self-start">
+                <button id="tab-visual" class="tab-btn px-4 py-1.5 rounded-md text-sm font-semibold transition bg-indigo-600 text-white shadow">
+                    Interactive Live Network
+                </button>
+                <button id="tab-charts" class="tab-btn px-4 py-1.5 rounded-md text-sm font-semibold text-slate-400 hover:text-slate-200 transition">
+                    Performance Analytics
+                </button>
+                <button id="tab-logic" class="tab-btn px-4 py-1.5 rounded-md text-sm font-semibold text-slate-400 hover:text-slate-200 transition">
+                    Algorithm Architecture
+                </button>
+            </div>
+
+            <!-- TAB 1: Visual Network & Dynamics -->
+            <div id="panel-visual" class="space-y-6">
+                
+                <!-- Grid of Live States -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Client Dynamic Tuning Panel -->
+                    <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl"></div>
+                        
+                        <div>
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <span class="text-[10px] bg-indigo-500/15 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Client Node</span>
+                                    <h3 class="text-base font-bold text-white mt-1">Local Batch & Epoch Adaptive Tuning</h3>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs text-slate-400 block">Relative Weight Deviation (RMD)</span>
+                                    <span id="vis-rmd-alert" class="text-xs font-bold text-emerald-400">Monitoring Progress...</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-400 mb-4">Increases batch size $\beta$ if RMD $\rho$ remains stalled (low) or if training loss increases ($L_t > L_{t-1}$). Terminated early when $\beta_{max}$ is reached.</p>
+                            
+                            <!-- Batch size step dynamic bar -->
+                            <div class="space-y-2 mb-4 bg-slate-900/40 p-3 rounded-lg border border-slate-800">
+                                <div class="flex justify-between text-xs text-slate-400">
+                                    <span>Batch Size Dynamic Tracker</span>
+                                    <span id="vis-batch-size" class="font-mono text-indigo-300 font-bold">16 / 256</span>
+                                </div>
+                                <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden flex">
+                                    <div id="vis-batch-bar" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-300" style="width: 10%"></div>
+                                </div>
+                                <div class="flex justify-between text-[10px] text-slate-500">
+                                    <span>β_min (<span id="txt-b-min-val">16</span>)</span>
+                                    <span>β_max (<span id="txt-b-max-val">256</span>)</span>
+                                </div>
+                            </div>
+
+                            <!-- Live Particle Gradient Visualization -->
+                            <div class="relative bg-slate-950 h-36 rounded-lg border border-slate-800 flex flex-col justify-between p-3 overflow-hidden">
+                                <span class="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Interactive Gradient Noise Sandbox</span>
+                                
+                                <canvas id="canvas-gradient" class="absolute inset-0 w-full h-full pointer-events-none opacity-80"></canvas>
+                                
+                                <div class="relative z-10 flex justify-between items-end">
+                                    <div class="bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded border border-slate-800">
+                                        <span class="text-[9px] text-slate-400 block">Gradient Variance</span>
+                                        <span id="vis-variance-lbl" class="text-xs font-mono font-bold text-indigo-300">Noisy (Small Batch)</span>
+                                    </div>
+                                    <div class="bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded border border-slate-850 text-right">
+                                        <span class="text-[9px] text-slate-400 block">RMD State (Change Rate)</span>
+                                        <span id="vis-rmd-meter" class="text-xs font-mono font-bold text-amber-400">0.000</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Server Dynamic Tuning Panel -->
+                    <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl"></div>
+                        
+                        <div>
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <span class="text-[10px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Server Node</span>
+                                    <h3 class="text-base font-bold text-white mt-1">Global Learning Rate Adaptive Search</h3>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs text-slate-400 block">Validation Phase</span>
+                                    <span id="vis-lr-alert" class="text-xs font-bold text-emerald-400">Stable Boundary</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-400 mb-4">Increases global LR $\lambda$ if global validation loss decreases to boost learning velocity. Shrinks $\lambda_{max}$ bounds and triggers fallbacks upon detection of loss hikes.</p>
+                            
+                            <!-- LR dynamic tracker with bounds -->
+                            <div class="space-y-2 mb-4 bg-slate-900/40 p-3 rounded-lg border border-slate-800">
+                                <div class="flex justify-between text-xs text-slate-400">
+                                    <span>Learning Rate Range Dynamic Bounds</span>
+                                    <span id="vis-lr" class="font-mono text-emerald-300 font-bold">0.01 / 0.50</span>
+                                </div>
+                                <div class="relative w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+                                    <div id="vis-lr-bound" class="absolute bg-emerald-950/80 border-x border-emerald-500/30 h-full transition-all duration-300" style="left: 0%; right: 0%;"></div>
+                                    <div id="vis-lr-dot" class="absolute w-3 h-3 bg-emerald-400 rounded-full top-0 shadow shadow-emerald-400/50 transition-all duration-300" style="left: 2%"></div>
+                                </div>
+                                <div class="flex justify-between text-[10px] text-slate-500">
+                                    <span>λ_min (<span id="txt-l-min-val">0.01</span>)</span>
+                                    <span>λ_max Bounds Tracker (Shrinking)</span>
+                                    <span>Original Max (<span id="txt-l-max-val">0.50</span>)</span>
+                                </div>
+                            </div>
+
+                            <!-- Live LR step indicator -->
+                            <div class="relative bg-slate-950 h-36 rounded-lg border border-slate-800 flex flex-col justify-between p-3 overflow-hidden">
+                                <span class="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Active Search State Space</span>
+                                
+                                <div id="vis-lr-map" class="flex items-center justify-around h-full gap-1">
+                                    <!-- Dynamic elements reflecting LR modifications state space map -->
+                                    <div class="text-center w-full">
+                                        <div class="text-[10px] text-slate-500 mb-2">Adaptive Policy Strategy</div>
+                                        <div class="grid grid-cols-2 gap-2 max-w-sm mx-auto">
+                                            <div id="card-lr-up" class="p-2 rounded bg-slate-900 border border-slate-800 flex flex-col items-center justify-center transition-all">
+                                                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                                                <span class="text-[9px] mt-1 text-slate-300 font-medium">Explore Higher LR</span>
+                                            </div>
+                                            <div id="card-lr-down" class="p-2 rounded bg-slate-900 border border-slate-800 flex flex-col items-center justify-center transition-all">
+                                                <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" /></svg>
+                                                <span class="text-[9px] mt-1 text-slate-300 font-medium">Reduce & Limit λ_max</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Diagram visualization (FL cycle) -->
+                <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl">
+                    <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Federated Learning Control Cycle</h3>
+                    <div class="flex flex-col lg:flex-row items-center justify-between gap-6 p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <div class="flex items-center gap-4">
+                            <div class="p-3 bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Central Aggregator (Server)</h4>
+                                <p class="text-xs text-slate-400">Updates weights, evaluates global validation loss, modulates $\lambda$.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <svg class="w-8 h-8 animate-pulse text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <div class="p-3 bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Participating Nodes (Clients)</h4>
+                                <p class="text-xs text-slate-400">Runs local updates using batch size $\beta_{min} \to \beta_{max}$ to control gradient noise.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Performance Charts -->
+            <div id="panel-charts" class="space-y-6 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Training Loss and Batch Size Tracking -->
+                    <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl">
+                        <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4">Client Epoch-wise Performance</h3>
+                        <div class="h-64 relative">
+                            <canvas id="chart-client"></canvas>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-3">Plotted dynamically per epoch. Visualizes how the dynamic batch size step decreases local RMD/training noise over time.</p>
+                    </div>
+
+                    <!-- Validation Loss and LR Tracking -->
+                    <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl">
+                        <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4">Server Global Round Performance</h3>
+                        <div class="h-64 relative">
+                            <canvas id="chart-server"></canvas>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-3">Plotted per communication round. Notice how the Global Learning Rate search adjusts to optimize convergence speed.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Logic Breakdown -->
+            <div id="panel-logic" class="space-y-6 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Client-Side Algorithm Explanation -->
+                    <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider border-b border-indigo-500/20 pb-2 mb-3 flex items-center gap-2">
+                                <span class="bg-indigo-500/20 text-indigo-300 text-xs px-2 py-0.5 rounded">LOCAL</span>
+                                Client Batch Size & Epoch Modulation
+                            </h3>
+                            <div class="text-xs space-y-4 text-slate-300">
+                                <p>To prevent noisy gradient stagnation and boost client efficiency:</p>
+                                <ul class="list-disc pl-5 space-y-2">
+                                    <li><strong>Start Minimal:</strong> Clients launch local training with $\beta = \beta_{min}$ for time and memory speed.</li>
+                                    <li><strong>RMD Watch ($\rho$):</strong> Monitors relative model weight updates over epochs. Low $\rho$ signals learning stagnation.</li>
+                                    <li><strong>Adaptive Triggers:</strong>
+                                        <div class="bg-slate-900/60 p-2 rounded mt-1 border border-slate-800 code-font text-[11px] text-indigo-400">
+                                            if (RMD stalled OR Loss_epoch &gt; Loss_prev_epoch):<br>
+                                            &nbsp;&nbsp;Increase Batch Size β;<br>
+                                            &nbsp;&nbsp;Reduce Gradient Noise variance;
+                                        </div>
+                                    </li>
+                                    <li><strong>Early Termination:</strong> If validation criteria mandate a higher $\beta$ than $\beta_{max}$, local epochs are safely halted early to preserve compute budget.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Server-Side Algorithm Explanation -->
+                    <div class="bg-slate-850/50 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider border-b border-emerald-500/20 pb-2 mb-3 flex items-center gap-2">
+                                <span class="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded">GLOBAL</span>
+                                Server Learning Rate Search
+                            </h3>
+                            <div class="text-xs space-y-4 text-slate-300">
+                                <p>To maximize communication efficiency and secure fast convergence:</p>
+                                <ul class="list-disc pl-5 space-y-2">
+                                    <li><strong>Commence Safe:</strong> Launches initially with $\lambda = \lambda_{min}$.</li>
+                                    <li><strong>Aggressive Exploration:</strong> If global validation loss decreases compared to the previous round, we safely increase $\lambda$ to take larger convergence strides.</li>
+                                    <li><strong>Decisive Boundary Shrinkage:</strong>
+                                        <div class="bg-slate-900/60 p-2 rounded mt-1 border border-slate-800 code-font text-[11px] text-emerald-400">
+                                            if (Val_Loss_round &gt; Val_Loss_prev_round):<br>
+                                            &nbsp;&nbsp;λ_max = previous_successful_λ;<br>
+                                            &nbsp;&nbsp;λ = fallback_to_safe_low_value;<br>
+                                            &nbsp;&nbsp;h_λ++ (LR reduction counter);
+                                        </div>
+                                    </li>
+                                    <li><strong>Halt Check:</strong> Training rounds terminate once $H_\lambda$ maximum reductions threshold is saturated.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3 max-w-[1600px] w-full mx-auto">
+        <p>Dynamic visualizer designed for FL performance and architectural analyses.</p>
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+            <span class="font-mono text-slate-400">System State: Active Engine</span>
+        </div>
+    </footer>
+
+    <!-- Interactive Logic Execution Engine Script -->
+    <script>
+        // Simulation State Engine variables
+        let state = {
+            round: 0,
+            epoch: 0,
+            batchSize: 16,
+            lr: 0.01,
+            bMin: 16,
+            bMax: 256,
+            lMin: 0.01,
+            lMax: 0.50,
+            hBetaMax: 5,
+            hLambdaMax: 4,
+            hBetaCount: 0,
+            hLambdaCount: 0,
+            
+            // Dynamics Tracking
+            rmd: 0.8,
+            trainLoss: 2.5,
+            prevTrainLoss: 2.5,
+            valLoss: 2.8,
+            prevValLoss: 2.8,
+            
+            // Control settings
+            running: false,
+            speed: 800,
+            noiseLevel: 2, // 1: Low, 2: Med, 3: High
+            
+            // History records for analytics plotting
+            epochHistory: [],
+            roundHistory: [],
+            
+            // Internal control trackers
+            consecutiveStalls: 0,
+            successfulLrs: [0.01]
+        };
+
+        // UI Element References
+        const elements = {
+            btnPlay: document.getElementById('btn-play'),
+            btnStep: document.getElementById('btn-step'),
+            btnReset: document.getElementById('btn-reset'),
+            txtPlay: document.getElementById('txt-play'),
+            iconPlay: document.getElementById('icon-play'),
+            presetSelect: document.getElementById('preset-select'),
+            
+            inputBMin: document.getElementById('input-b-min'),
+            inputBMax: document.getElementById('input-b-max'),
+            inputHBeta: document.getElementById('input-h-beta'),
+            inputLMin: document.getElementById('input-l-min'),
+            inputLMax: document.getElementById('input-l-max'),
+            inputHLambda: document.getElementById('input-h-lambda'),
+            inputNoise: document.getElementById('input-noise'),
+            inputSpeed: document.getElementById('input-speed'),
+            
+            lblBatchRange: document.getElementById('lbl-batch-range'),
+            lblLrRange: document.getElementById('lbl-lr-range'),
+            lblNoise: document.getElementById('lbl-noise'),
+            lblSpeed: document.getElementById('lbl-speed'),
+            
+            statusRound: document.getElementById('status-round'),
+            statusEpoch: document.getElementById('status-epoch'),
+            statusBatchSize: document.getElementById('status-batch-size'),
+            statusLr: document.getElementById('status-lr'),
+            
+            valRmd: document.getElementById('val-rmd'),
+            valTrainLoss: document.getElementById('val-train-loss'),
+            valHBeta: document.getElementById('val-h-beta'),
+            valHLambda: document.getElementById('val-h-lambda'),
+            
+            terminalLog: document.getElementById('terminal-log'),
+            
+            visBatchSize: document.getElementById('vis-batch-size'),
+            visBatchBar: document.getElementById('vis-batch-bar'),
+            visLr: document.getElementById('vis-lr'),
+            visLrBound: document.getElementById('vis-lr-bound'),
+            visLrDot: document.getElementById('vis-lr-dot'),
+            
+            txtBMinVal: document.getElementById('txt-b-min-val'),
+            txtBMaxVal: document.getElementById('txt-b-max-val'),
+            txtLMinVal: document.getElementById('txt-l-min-val'),
+            txtLMaxVal: document.getElementById('txt-l-max-val'),
+            
+            visVarianceLbl: document.getElementById('vis-variance-lbl'),
+            visRmdMeter: document.getElementById('vis-rmd-meter'),
+            visRmdAlert: document.getElementById('vis-rmd-alert'),
+            visLrAlert: document.getElementById('vis-lr-alert'),
+            cardLrUp: document.getElementById('card-lr-up'),
+            cardLrDown: document.getElementById('card-lr-down'),
+            
+            tabVisual: document.getElementById('tab-visual'),
+            tabCharts: document.getElementById('tab-charts'),
+            tabLogic: document.getElementById('tab-logic'),
+            
+            panelVisual: document.getElementById('panel-visual'),
+            panelCharts: document.getElementById('panel-charts'),
+            panelLogic: document.getElementById('panel-logic'),
+            
+            canvasGradient: document.getElementById('canvas-gradient')
+        };
+
+        // Initialize Canvas gradient particles dynamic system
+        const ctx = elements.canvasGradient.getContext('2d');
+        let particles = [];
+        const particleCount = 45;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * elements.canvasGradient.width;
+                this.y = Math.random() * elements.canvasGradient.height;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.size = Math.random() * 2 + 1;
+            }
+            update(noise) {
+                // Accelerate based on noise factor (representing stochastic updates)
+                this.vx += (Math.random() - 0.5) * noise * 0.4;
+                this.vy += (Math.random() - 0.5) * noise * 0.4;
+                
+                // Limit velocity
+                const maxSpeed = noise * 2 + 1;
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (speed > maxSpeed) {
+                    this.vx = (this.vx / speed) * maxSpeed;
+                    this.vy = (this.vy / speed) * maxSpeed;
+                }
+                
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Boundary wrapping
+                if (this.x < 0 || this.x > elements.canvasGradient.width) this.vx *= -1;
+                if (this.y < 0 || this.y > elements.canvasGradient.height) this.vy *= -1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(99, 102, 241, 0.7)';
+                ctx.fill();
+            }
+        }
+
+        function resizeCanvas() {
+            elements.canvasGradient.width = elements.canvasGradient.parentElement.clientWidth;
+            elements.canvasGradient.height = elements.canvasGradient.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Seed initial particles
+        for(let i=0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        // Particle update loop
+        function animateParticles() {
+            ctx.clearRect(0, 0, elements.canvasGradient.width, elements.canvasGradient.height);
+            
+            // Adjust noise intensity visually based on current batch size
+            // Larger batch size = lower gradient noise
+            const progress = (state.batchSize - state.bMin) / (state.bMax - state.bMin || 1);
+            const relativeNoise = Math.max(0.2, (1 - progress) * state.noiseLevel * 1.5);
+            
+            particles.forEach(p => {
+                p.update(relativeNoise);
+                p.draw();
+            });
+            
+            // Draw a simplified trajectory vector for illustration
+            ctx.beginPath();
+            ctx.moveTo(elements.canvasGradient.width / 2, elements.canvasGradient.height / 2);
+            ctx.lineTo(
+                elements.canvasGradient.width / 2 + (Math.sin(Date.now() / 300) * 40 * relativeNoise), 
+                elements.canvasGradient.height / 2 + (Math.cos(Date.now() / 200) * 20 * relativeNoise)
+            );
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // Initialize Performance Charts using Chart.js
+        let clientChart, serverChart;
+        function initCharts() {
+            const ctxClient = document.getElementById('chart-client').getContext('2d');
+            clientChart = new Chart(ctxClient, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Train Loss (Local)',
+                            data: [],
+                            borderColor: 'rgb(99, 102, 241)',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Batch Size (β)',
+                            data: [],
+                            borderColor: 'rgb(245, 158, 11)',
+                            yAxisID: 'y1',
+                            tension: 0.1,
+                            stepped: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Loss', color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Batch Size', color: '#94a3b8' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Cumulative Epochs', color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#f1f5f9' } }
+                    }
+                }
+            });
+
+            const ctxServer = document.getElementById('chart-server').getContext('2d');
+            serverChart = new Chart(ctxServer, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Global Validation Loss',
+                            data: [],
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Learning Rate (λ)',
+                            data: [],
+                            borderColor: 'rgb(14, 165, 233)',
+                            yAxisID: 'y1',
+                            tension: 0.2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Val Loss', color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Learning Rate', color: '#94a3b8' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Federated Rounds', color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#f1f5f9' } }
+                    }
+                }
+            });
+        }
+        initCharts();
+
+        // Preset Configurations Configuration Engine
+        const presets = {
+            balanced: {
+                bMin: 16, bMax: 256, hBeta: 5,
+                lMin: 0.01, lMax: 0.50, hLambda: 4,
+                noise: 2
+            },
+            'high-noise': {
+                bMin: 8, bMax: 128, hBeta: 8,
+                lMin: 0.02, lMax: 0.60, hLambda: 3,
+                noise: 3
+            },
+            'fast-stall': {
+                bMin: 32, bMax: 512, hBeta: 3,
+                lMin: 0.005, lMax: 0.20, hLambda: 5,
+                noise: 1
+            },
+            unstable: {
+                bMin: 16, bMax: 128, hBeta: 4,
+                lMin: 0.05, lMax: 0.80, hLambda: 2,
+                noise: 3
+            }
+        };
+
+        function loadPreset(presetName) {
+            const config = presets[presetName];
+            if (!config) return;
+            
+            elements.inputBMin.value = config.bMin;
+            elements.inputBMax.value = config.bMax;
+            elements.inputHBeta.value = config.hBeta;
+            elements.inputLMin.value = config.lMin.toFixed(3);
+            elements.inputLMax.value = config.lMax.toFixed(2);
+            elements.inputHLambda.value = config.hLambda;
+            elements.inputNoise.value = config.noise;
+            
+            syncInputsToState();
+            resetSimulation();
+            logToTerminal(`Preset loaded: ${presetName.toUpperCase()}. System reset.`);
+        }
+
+        elements.presetSelect.addEventListener('change', (e) => {
+            loadPreset(e.target.value);
+        });
+
+        // Sync Inputs & Render Text
+        function syncInputsToState() {
+            state.bMin = parseInt(elements.inputBMin.value);
+            state.bMax = parseInt(elements.inputBMax.value);
+            state.hBetaMax = parseInt(elements.inputHBeta.value);
+            
+            state.lMin = parseFloat(elements.inputLMin.value);
+            state.lMax = parseFloat(elements.inputLMax.value);
+            state.hLambdaMax = parseInt(elements.inputHLambda.value);
+            
+            state.noiseLevel = parseInt(elements.inputNoise.value);
+            state.speed = parseInt(elements.inputSpeed.value);
+            
+            // Labels Sync
+            elements.lblBatchRange.textContent = `${state.bMin} - ${state.bMax}`;
+            elements.lblLrRange.textContent = `${state.lMin.toFixed(3)} - ${state.lMax.toFixed(2)}`;
+            elements.lblSpeed.textContent = `${state.speed} ms`;
+            
+            const noiseWords = ["Low", "Medium", "High"];
+            elements.lblNoise.textContent = noiseWords[state.noiseLevel - 1];
+            
+            elements.txtBMinVal.textContent = state.bMin;
+            elements.txtBMaxVal.textContent = state.bMax;
+            elements.txtLMinVal.textContent = state.lMin.toFixed(3);
+            elements.txtLMaxVal.textContent = state.lMax.toFixed(2);
+        }
+
+        // Watch Configuration Changes
+        [elements.inputBMin, elements.inputBMax, elements.inputHBeta, 
+         elements.inputLMin, elements.inputLMax, elements.inputHLambda,
+         elements.inputNoise, elements.inputSpeed].forEach(el => {
+            el.addEventListener('input', () => {
+                syncInputsToState();
+            });
+        });
+
+        function logToTerminal(msg) {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            elements.terminalLog.innerHTML += `<div>[${time}] ${msg}</div>`;
+            elements.terminalLog.scrollTop = elements.terminalLog.scrollHeight;
+        }
+
+        // Logic Engine: Step Epoch (Local Client Tuning Phase)
+        function stepEpoch() {
+            state.epoch++;
+            state.prevTrainLoss = state.trainLoss;
+            
+            // Compute simulated loss with batch-size scaling mitigation
+            const noiseReductionFactor = (state.batchSize / state.bMin);
+            const rawGradNoise = (Math.random() - 0.45) * (state.noiseLevel * 0.4) / Math.sqrt(noiseReductionFactor);
+            
+            // Model training behavior
+            const convergenceBaseRate = 0.15 * Math.log2(1 + state.lr * 10);
+            state.trainLoss = Math.max(0.1, state.trainLoss - convergenceBaseRate + rawGradNoise);
+            
+            // Model Weight Variation (RMD)
+            // Stalls when batch size is extremely low (noisy gradients cancel out) or when approaching convergence
+            const stochasticCancellation = state.batchSize < (state.bMin * 2) && state.noiseLevel > 1 ? 0.3 : 1.0;
+            state.rmd = Math.max(0.01, (state.trainLoss * 0.25 * stochasticCancellation) + (Math.random() * 0.05));
+            
+            logToTerminal(`Epoch ${state.epoch}: Loss = ${state.trainLoss.toFixed(4)}, RMD (ρ) = ${state.rmd.toFixed(4)}`);
+
+            let criteriaMet = false;
+            let reason = "";
+
+            // Check Condition 1: Loss Increase indicating noisy/poor gradients
+            if (state.trainLoss > state.prevTrainLoss) {
+                criteriaMet = true;
+                reason = "Loss increase detected (gradient noise)";
+            }
+            
+            // Check Condition 2: Low RMD across consecutive epochs (stalled progress)
+            const rmdStallThreshold = 0.08 * (state.noiseLevel * 0.5);
+            if (state.rmd < rmdStallThreshold) {
+                state.consecutiveStalls++;
+                if (state.consecutiveStalls >= 2) {
+                    criteriaMet = true;
+                    reason = "Stalled learning (consecutive low RMD)";
+                }
+            } else {
+                state.consecutiveStalls = 0;
+            }
+
+            // Execute Batch Size adjustments if triggers match
+            if (criteriaMet) {
+                if (state.hBetaCount < state.hBetaMax && state.batchSize < state.bMax) {
+                    const oldSize = state.batchSize;
+                    state.batchSize = Math.min(state.batchSize * 2, state.bMax);
+                    state.hBetaCount++;
+                    state.consecutiveStalls = 0;
+                    logToTerminal(`⚠️ ${reason}. Increasing batch size: ${oldSize} ➔ ${state.batchSize} (Updates: ${state.hBetaCount}/${state.hBetaMax})`);
+                    elements.visRmdAlert.textContent = "Adjusting Noise!";
+                    elements.visRmdAlert.className = "text-xs font-bold text-amber-400 animate-pulse";
+                } else if (state.batchSize >= state.bMax) {
+                    logToTerminal(`🛑 Max Batch Size reached (${state.bMax}). Terminating early local training epochs.`);
+                    elements.visRmdAlert.textContent = "Epoch Early Stop!";
+                    elements.visRmdAlert.className = "text-xs font-bold text-rose-400";
+                    stepGlobalRound();
+                    return;
+                }
+            } else {
+                elements.visRmdAlert.textContent = "Tracking smoothly";
+                elements.visRmdAlert.className = "text-xs font-bold text-emerald-400";
+            }
+
+            // Default epoch limits (e.g. max 5 epochs per FL round if not stopped early)
+            if (state.epoch >= 5) {
+                logToTerminal(`✓ Completed maximum local epochs for Round ${state.round + 1}. Aggregating weights on Server.`);
+                stepGlobalRound();
+            }
+
+            updateUI();
+        }
+
+        // Logic Engine: Step FL Global Communication Round (Server Tuning Phase)
+        function stepGlobalRound() {
+            state.round++;
+            state.epoch = 0;
+            state.hBetaCount = 0;
+            
+            state.prevValLoss = state.valLoss;
+            // Val loss tracking mimicking global aggregate convergence
+            const noiseSmoothing = Math.sqrt(state.batchSize);
+            const roundProgress = Math.max(0.15, 0.45 * (state.lr / state.lMin));
+            
+            state.valLoss = Math.max(0.08, state.valLoss - roundProgress + (Math.random() * 0.15 * state.noiseLevel / noiseSmoothing));
+            
+            logToTerminal(`🌐 Round ${state.round} Evaluation: Val Loss = ${state.valLoss.toFixed(4)} (Previous: ${state.prevValLoss.toFixed(4)})`);
+
+            // Server LR Tuning Logic
+            if (state.valLoss < state.prevValLoss) {
+                // Validation loss decreased -> Explore higher learning rate
+                const oldLr = state.lr;
+                state.lr = Math.min(state.lr * 1.5, state.lMax);
+                state.successfulLrs.push(oldLr); // track last good rate
+                
+                logToTerminal(`🚀 Success! Val Loss decreased. Up scaling LR: ${oldLr.toFixed(3)} ➔ ${state.lr.toFixed(3)} to boost convergence.`);
+                elements.visLrAlert.textContent = "Exploring Higher LR";
+                elements.visLrAlert.className = "text-xs font-bold text-emerald-400";
+                
+                // Highlight exploration card visually
+                highlightUIElement(elements.cardLrUp);
+            } else {
+                // Validation loss increased -> Fall back to safer lower value, shrink bounds
+                const invalidLr = state.lr;
+                state.hLambdaCount++;
+                
+                // Shrink maximum learning rate bound to previous successful rate
+                state.lMax = Math.max(state.lMin, Math.min(state.lMax, state.successfulLrs[state.successfulLrs.length - 1] || state.lMin));
+                
+                // Fall back to a lower safe rate
+                state.lr = state.lMin;
+                
+                logToTerminal(`⚠️ Warning! Val Loss increased. Shrinking LR Upper Bound λ_max to ${state.lMax.toFixed(3)}. Falling back to safe λ_min: ${state.lr.toFixed(3)}`);
+                logToTerminal(`LR reductions counter: ${state.hLambdaCount} / ${state.hLambdaMax}`);
+                elements.visLrAlert.textContent = "Bound shrink / Fallback!";
+                elements.visLrAlert.className = "text-xs font-bold text-rose-400";
+                
+                highlightUIElement(elements.cardLrDown);
+
+                if (state.hLambdaCount >= state.hLambdaMax) {
+                    logToTerminal(`🛑 Max LR reductions (${state.hLambdaMax}) reached. Training Process Halted!`);
+                    pauseSimulation();
+                }
+            }
+
+            // Record Global and Local Histories for charting
+            state.roundHistory.push({
+                round: state.round,
+                valLoss: state.valLoss,
+                lr: state.lr
+            });
+
+            // Reset client local batch size to β_min for next communication round
+            state.batchSize = state.bMin;
+
+            updateCharts();
+            updateUI();
+        }
+
+        // Helper highlight action for state visual mappings
+        function highlightUIElement(el) {
+            el.classList.add('bg-slate-750', 'ring-1', 'ring-indigo-500', 'scale-105');
+            setTimeout(() => {
+                el.classList.remove('bg-slate-750', 'ring-1', 'ring-indigo-500', 'scale-105');
+            }, 700);
+        }
+
+        // Synchronize engine state metrics with visually responsive HTML elements
+        function updateUI() {
+            elements.statusRound.textContent = state.round;
+            elements.statusEpoch.textContent = state.epoch;
+            elements.statusBatchSize.textContent = `${state.batchSize}`;
+            elements.statusLr.textContent = state.lr.toFixed(3);
+            
+            elements.valRmd.textContent = state.rmd.toFixed(4);
+            elements.valTrainLoss.textContent = state.trainLoss.toFixed(4);
+            elements.valHBeta.textContent = `${state.hBetaCount} / ${state.hBetaMax}`;
+            elements.valHLambda.textContent = `${state.hLambdaCount} / ${state.hLambdaMax}`;
+            
+            // Client Batch Size progress metrics
+            elements.visBatchSize.textContent = `${state.batchSize} / ${state.bMax}`;
+            const batchPercentage = ((state.batchSize - state.bMin) / (state.bMax - state.bMin || 1)) * 100;
+            elements.visBatchBar.style.width = `${Math.max(8, batchPercentage)}%`;
+            
+            // Server LR progress metric mapping
+            elements.visLr.textContent = `${state.lr.toFixed(3)} [Range: ${state.lMin.toFixed(3)} - ${state.lMax.toFixed(2)}]`;
+            
+            // Bound bar visual boundaries
+            const originalMax = parseFloat(elements.inputLMax.value);
+            const boundPercentRight = 100 - ((state.lMax - state.lMin) / (originalMax - state.lMin || 1)) * 100;
+            elements.visLrBound.style.right = `${Math.max(0, Math.min(100, boundPercentRight))}%`;
+            
+            const dotPercentLeft = ((state.lr - state.lMin) / (originalMax - state.lMin || 1)) * 100;
+            elements.visLrDot.style.left = `${Math.max(0, Math.min(96, dotPercentLeft))}%`;
+            
+            // Sandboxed Variance Labels
+            if (state.batchSize < state.bMin * 2) {
+                elements.visVarianceLbl.textContent = "High Gradient Variance (Noisy)";
+                elements.visVarianceLbl.className = "text-xs font-mono font-bold text-rose-400";
+            } else if (state.batchSize >= state.bMax / 1.5) {
+                elements.visVarianceLbl.textContent = "Minimized Gradient Variance (Clean)";
+                elements.visVarianceLbl.className = "text-xs font-mono font-bold text-emerald-400";
+            } else {
+                elements.visVarianceLbl.textContent = "Moderate Variance (Filtered)";
+                elements.visVarianceLbl.className = "text-xs font-mono font-bold text-indigo-300";
+            }
+            
+            elements.visRmdMeter.textContent = state.rmd.toFixed(3);
+            
+            // Append client historical points inside local epoch loop
+            state.epochHistory.push({
+                epoch: state.epochHistory.length + 1,
+                loss: state.trainLoss,
+                batch: state.batchSize
+            });
+            
+            updateCharts();
+        }
+
+        // Live Plot updates
+        function updateCharts() {
+            if (clientChart) {
+                clientChart.data.labels = state.epochHistory.map(h => h.epoch);
+                clientChart.data.datasets[0].data = state.epochHistory.map(h => h.loss);
+                clientChart.data.datasets[1].data = state.epochHistory.map(h => h.batch);
+                clientChart.update('none'); // Update without full redraw flash
+            }
+            
+            if (serverChart) {
+                serverChart.data.labels = state.roundHistory.map(h => h.round);
+                serverChart.data.datasets[0].data = state.roundHistory.map(h => h.valLoss);
+                serverChart.data.datasets[1].data = state.roundHistory.map(h => h.lr);
+                serverChart.update('none');
+            }
+        }
+
+        // Interactive Simulation Run Loop Controller
+        let intervalId = null;
+        function runLoop() {
+            stepEpoch();
+        }
+
+        function playSimulation() {
+            if (state.running) return;
+            syncInputsToState();
+            state.running = true;
+            elements.txtPlay.textContent = "Pause Engine";
+            elements.iconPlay.innerHTML = `<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />`;
+            intervalId = setInterval(runLoop, state.speed);
+            logToTerminal("Training loop executed.");
+        }
+
+        function pauseSimulation() {
+            if (!state.running) return;
+            state.running = false;
+            elements.txtPlay.textContent = "Resume FL Training";
+            elements.iconPlay.innerHTML = `<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />`;
+            clearInterval(intervalId);
+            logToTerminal("Training loop paused.");
+        }
+
+        function resetSimulation() {
+            pauseSimulation();
+            state.round = 0;
+            state.epoch = 0;
+            state.hBetaCount = 0;
+            state.hLambdaCount = 0;
+            state.rmd = 0.8;
+            state.trainLoss = 2.5;
+            state.prevTrainLoss = 2.5;
+            state.valLoss = 2.8;
+            state.prevValLoss = 2.8;
+            state.consecutiveStalls = 0;
+            state.successfulLrs = [state.lMin];
+            state.epochHistory = [];
+            state.roundHistory = [];
+            
+            syncInputsToState();
+            state.batchSize = state.bMin;
+            state.lr = state.lMin;
+            
+            updateUI();
+            
+            if (clientChart) {
+                clientChart.data.labels = [];
+                clientChart.data.datasets[0].data = [];
+                clientChart.data.datasets[1].data = [];
+                clientChart.update();
+            }
+            if (serverChart) {
+                serverChart.data.labels = [];
+                serverChart.data.datasets[0].data = [];
+                serverChart.data.datasets[1].data = [];
+                serverChart.update();
+            }
+            
+            logToTerminal("Simulation values reset.");
+        }
+
+        // Play/Pause button toggle event mapping
+        elements.btnPlay.addEventListener('click', () => {
+            if (state.running) {
+                pauseSimulation();
+            } else {
+                playSimulation();
+            }
+        });
+
+        // Step manually
+        elements.btnStep.addEventListener('click', () => {
+            pauseSimulation();
+            syncInputsToState();
+            stepEpoch();
+        });
+
+        // Reset
+        elements.btnReset.addEventListener('click', resetSimulation);
+
+        // Responsive Tabs Routing Switch
+        const tabs = [
+            { btn: elements.tabVisual, panel: elements.panelVisual },
+            { btn: elements.tabCharts, panel: elements.panelCharts },
+            { btn: elements.tabLogic, panel: elements.panelLogic }
+        ];
+
+        tabs.forEach(tab => {
+            tab.btn.addEventListener('click', () => {
+                tabs.forEach(t => {
+                    t.btn.classList.remove('bg-indigo-600', 'text-white', 'shadow');
+                    t.btn.classList.add('text-slate-400', 'hover:text-slate-200');
+                    t.panel.classList.add('hidden');
+                });
+                tab.btn.classList.remove('text-slate-400', 'hover:text-slate-200');
+                tab.btn.classList.add('bg-indigo-600', 'text-white', 'shadow');
+                tab.panel.classList.remove('hidden');
+            });
+        });
+
+        // Seed Default balanced preset configuration
+        syncInputsToState();
+        resetSimulation();
+    </script>
+</body>
+</html>

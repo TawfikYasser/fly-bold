@@ -532,6 +532,8 @@ cat > /tmp/run_config.json <<EOJSON
   "hpo_rounds": $HPO_ROUNDS,
   "client_hpo_enabled": $CLIENT_HPO_ENABLED,
   "client_hpo_trials": $CLIENT_HPO_TRIALS,
+  "adaptive_batch_enabled": ${ADAPTIVE_BATCH_ENABLED:-false},
+  "adaptive_lr_enabled": ${ADAPTIVE_LR_ENABLED:-false},
   "server_internal_ip": "$SERVER_INTERNAL_IP",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -569,6 +571,39 @@ CLIENT_HPO_ENABLED=${CLIENT_HPO_ENABLED:-false}
 CLIENT_HPO_TRIALS=${CLIENT_HPO_TRIALS:-3}
 sedi "s/^client_hpo_enabled[[:space:]]*=[[:space:]]*[^#]*/client_hpo_enabled = ${CLIENT_HPO_ENABLED}  /" pyproject.toml
 sedi "s/^client_hpo_trials[[:space:]]*=[[:space:]]*[^#]*/client_hpo_trials = ${CLIENT_HPO_TRIALS}  /" pyproject.toml
+
+# Adaptive Batch/Epoch (ABS, client-side) flags (default to false if not set in .env)
+ADAPTIVE_BATCH_ENABLED=${ADAPTIVE_BATCH_ENABLED:-false}
+ADAPTIVE_BATCH_MIN=${ADAPTIVE_BATCH_MIN:-8}
+ADAPTIVE_BATCH_MAX=${ADAPTIVE_BATCH_MAX:-64}
+ADAPTIVE_BATCH_MAX_INCREASES=${ADAPTIVE_BATCH_MAX_INCREASES:-4}
+ADAPTIVE_BATCH_RMD_THRESHOLD=${ADAPTIVE_BATCH_RMD_THRESHOLD:-0.01}
+ADAPTIVE_BATCH_RMD_PATIENCE=${ADAPTIVE_BATCH_RMD_PATIENCE:-2}
+ADAPTIVE_BATCH_GROWTH_FACTOR=${ADAPTIVE_BATCH_GROWTH_FACTOR:-2.0}
+ADAPTIVE_BATCH_MAX_EPOCHS=${ADAPTIVE_BATCH_MAX_EPOCHS:-10}
+sedi "s/^adaptive_batch_enabled[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_enabled = ${ADAPTIVE_BATCH_ENABLED}  /" pyproject.toml
+sedi "s/^adaptive_batch_min[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_min = ${ADAPTIVE_BATCH_MIN}  /" pyproject.toml
+sedi "s/^adaptive_batch_max[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_max = ${ADAPTIVE_BATCH_MAX}  /" pyproject.toml
+sedi "s/^adaptive_batch_max_increases[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_max_increases = ${ADAPTIVE_BATCH_MAX_INCREASES}  /" pyproject.toml
+sedi "s/^adaptive_batch_rmd_threshold[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_rmd_threshold = ${ADAPTIVE_BATCH_RMD_THRESHOLD}  /" pyproject.toml
+sedi "s/^adaptive_batch_rmd_patience[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_rmd_patience = ${ADAPTIVE_BATCH_RMD_PATIENCE}  /" pyproject.toml
+sedi "s/^adaptive_batch_growth_factor[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_growth_factor = ${ADAPTIVE_BATCH_GROWTH_FACTOR}  /" pyproject.toml
+sedi "s/^adaptive_batch_max_epochs[[:space:]]*=[[:space:]]*[^#]*/adaptive_batch_max_epochs = ${ADAPTIVE_BATCH_MAX_EPOCHS}  /" pyproject.toml
+
+# Adaptive Global LR (ALR, server-side, final run only) flags (default to false if not set in .env)
+ADAPTIVE_LR_ENABLED=${ADAPTIVE_LR_ENABLED:-false}
+ADAPTIVE_LR_MIN=${ADAPTIVE_LR_MIN:-0.0001}
+ADAPTIVE_LR_MAX=${ADAPTIVE_LR_MAX:-0.01}
+ADAPTIVE_LR_MAX_REDUCTIONS=${ADAPTIVE_LR_MAX_REDUCTIONS:-3}
+ADAPTIVE_LR_GROWTH_FACTOR=${ADAPTIVE_LR_GROWTH_FACTOR:-1.2}
+ADAPTIVE_LR_BACKOFF_FACTOR=${ADAPTIVE_LR_BACKOFF_FACTOR:-0.5}
+sedi "s/^adaptive_lr_enabled[[:space:]]*=[[:space:]]*[^#]*/adaptive_lr_enabled = ${ADAPTIVE_LR_ENABLED}  /" pyproject.toml
+sedi "s/^adaptive_lr_min[[:space:]]*=[[:space:]]*[^#]*/adaptive_lr_min = ${ADAPTIVE_LR_MIN}  /" pyproject.toml
+sedi "s/^adaptive_lr_max[[:space:]]*=[[:space:]]*[^#]*/adaptive_lr_max = ${ADAPTIVE_LR_MAX}  /" pyproject.toml
+sedi "s/^adaptive_lr_max_reductions[[:space:]]*=[[:space:]]*[^#]*/adaptive_lr_max_reductions = ${ADAPTIVE_LR_MAX_REDUCTIONS}  /" pyproject.toml
+sedi "s/^adaptive_lr_growth_factor[[:space:]]*=[[:space:]]*[^#]*/adaptive_lr_growth_factor = ${ADAPTIVE_LR_GROWTH_FACTOR}  /" pyproject.toml
+sedi "s/^adaptive_lr_backoff_factor[[:space:]]*=[[:space:]]*[^#]*/adaptive_lr_backoff_factor = ${ADAPTIVE_LR_BACKOFF_FACTOR}  /" pyproject.toml
+
 sedi "s|^gcs_bucket[[:space:]]*=[[:space:]]*\".*\"|gcs_bucket = \"${BUCKET_NAME}\"|" pyproject.toml
 
 # Sync FLAML and HPO configuration from .env to pyproject.toml
