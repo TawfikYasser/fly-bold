@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv5 Federated Learning Experiment Analytics</title>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Phosphor Icons (SVG Alternatives) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom scrollbar for raw terminal outputs */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Glassmorphism subtle effects */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans antialiased">
+    <div class="min-h-full flex flex-col">
+        <!-- Top Navigation -->
+        <header class="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between gap-4">
+                    <!-- Brand Title -->
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-500/20">
+                            <i class="ph-bold ph-chart-line-up text-xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-brand-600">Federated Edge Hub</span>
+                            <h1 class="text-lg font-bold text-slate-900 tracking-tight leading-none mt-0.5">YOLOv5 HPO Analyzer</h1>
+                        </div>
+                    </div>
+                    
+                    <!-- File Badge Reference (Verbatim 510530001.txt) -->
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-200">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Database Log Source: <strong class="font-mono ml-0.5">510530001.txt</strong>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content -->
+        <main class="flex-1 py-8">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
+                
+                <!-- Overview Header -->
+                <div class="md:flex md:items-center md:justify-between border-b border-slate-200 pb-5">
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-2xl font-bold leading-7 text-slate-900 sm:truncate sm:text-3xl sm:tracking-tight">
+                            Run Analysis Dashboard
+                        </h2>
+                        <p class="mt-1.5 text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                            <span class="flex items-center gap-1"><i class="ph ph-fingerprint"></i> Experiment ID: <strong class="text-slate-700">EXP_YOLOv5_s_detection</strong></span>
+                            <span class="flex items-center gap-1"><i class="ph ph-hash"></i> Run ID: <strong class="text-slate-700">510530001</strong></span>
+                            <span class="flex items-center gap-1"><i class="ph ph-node"></i> Strategy: <strong class="text-slate-700">FedAdam (Index 3)</strong></span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Core Stats Cards -->
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <!-- Stat 1: Best Validation mAP -->
+                    <div class="relative overflow-hidden rounded-2xl bg-white px-4 pb-6 pt-5 shadow-sm ring-1 ring-slate-200">
+                        <dt>
+                            <div class="absolute rounded-xl bg-emerald-500/10 p-3 text-emerald-600">
+                                <i class="ph-bold ph-target text-xl"></i>
+                            </div>
+                            <p class="ml-16 truncate text-sm font-medium text-slate-500">Best Val mAP@0.5</p>
+                        </dt>
+                        <dd class="ml-16 flex items-baseline pb-0">
+                            <p class="text-3xl font-bold tracking-tight text-slate-900">53.09%</p>
+                            <p class="ml-2 flex items-baseline text-xs font-semibold text-emerald-600">
+                                <i class="ph-bold ph-trend-up mr-0.5"></i> Trial 2 (Warm-start)
+                            </p>
+                        </dd>
+                    </div>
+
+                    <!-- Stat 2: Optimal Server Learning Rate -->
+                    <div class="relative overflow-hidden rounded-2xl bg-white px-4 pb-6 pt-5 shadow-sm ring-1 ring-slate-200">
+                        <dt>
+                            <div class="absolute rounded-xl bg-indigo-500/10 p-3 text-indigo-600">
+                                <i class="ph-bold ph-key text-xl"></i>
+                            </div>
+                            <p class="ml-16 truncate text-sm font-medium text-slate-500">Optimal Server LR</p>
+                        </dt>
+                        <dd class="ml-16 flex items-baseline pb-0">
+                            <p class="text-3xl font-bold tracking-tight text-slate-900">0.00100</p>
+                            <p class="ml-2 flex items-baseline text-xs font-semibold text-indigo-600">
+                                Optuna Sweet-Spot
+                            </p>
+                        </dd>
+                    </div>
+
+                    <!-- Stat 3: Average Client Speed disparity -->
+                    <div class="relative overflow-hidden rounded-2xl bg-white px-4 pb-6 pt-5 shadow-sm ring-1 ring-slate-200">
+                        <dt>
+                            <div class="absolute rounded-xl bg-amber-500/10 p-3 text-amber-600">
+                                <i class="ph-bold ph-hourglass-high text-xl"></i>
+                            </div>
+                            <p class="ml-16 truncate text-sm font-medium text-slate-500">Heterogeneity Max Delta</p>
+                        </dt>
+                        <dd class="ml-16 flex items-baseline pb-0">
+                            <p class="text-3xl font-bold tracking-tight text-slate-900">1255.4s</p>
+                            <p class="ml-2 flex items-baseline text-xs font-semibold text-amber-600">
+                                <i class="ph-bold ph-warning mr-0.5"></i> Straggler Risk
+                            </p>
+                        </dd>
+                    </div>
+
+                    <!-- Stat 4: Rounds & Active Clients -->
+                    <div class="relative overflow-hidden rounded-2xl bg-white px-4 pb-6 pt-5 shadow-sm ring-1 ring-slate-200">
+                        <dt>
+                            <div class="absolute rounded-xl bg-blue-500/10 p-3 text-blue-600">
+                                <i class="ph-bold ph-users text-xl"></i>
+                            </div>
+                            <p class="ml-16 truncate text-sm font-medium text-slate-500">Cooperating Nodes</p>
+                        </dt>
+                        <dd class="ml-16 flex items-baseline pb-0">
+                            <p class="text-3xl font-bold tracking-tight text-slate-900">10 / 10</p>
+                            <p class="ml-2 flex items-baseline text-xs font-semibold text-blue-600">
+                                100% Participation Rate
+                            </p>
+                        </dd>
+                    </div>
+                </div>
+
+                <!-- Grid of Analytics Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Chart card 1: HPO Search Space Optimization -->
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900">Optuna Search Space Performance</h3>
+                                <p class="text-sm text-slate-500">Validation mAP@0.5 versus Client-Delegated Local Configurations</p>
+                            </div>
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">5 HPO Campaigns</span>
+                        </div>
+                        <div class="h-80 w-full">
+                            <canvas id="hpoChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Chart card 2: System and Performance Heterogeneity -->
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900">System Performance Heterogeneity</h3>
+                                <p class="text-sm text-slate-500">Client speed benchmarks & test evaluation accuracy correlation (Trial 1)</p>
+                            </div>
+                            <span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700">Straggler Bottlenecked</span>
+                        </div>
+                        <div class="h-80 w-full">
+                            <canvas id="heterogeneityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Tables Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- HPO Trial Log Table (2/3 width) -->
+                    <div class="lg:col-span-2 rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                        <div class="border-b border-slate-200 px-6 py-4 flex items-center justify-between bg-slate-50/50">
+                            <div>
+                                <h3 class="font-bold text-slate-900">Server HPO Parameter Sweep</h3>
+                                <p class="text-xs text-slate-500">Optimizing global learning rates against client performance parameters</p>
+                            </div>
+                            <button onclick="resetFilters()" class="text-xs text-brand-600 hover:text-brand-700 font-medium">Reset Filters</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                                <thead class="bg-slate-50 font-semibold text-slate-700">
+                                    <tr>
+                                        <th scope="col" class="py-3.5 pl-6 pr-3">Trial ID</th>
+                                        <th scope="col" class="px-3 py-3.5">Server LR ($\eta$)</th>
+                                        <th scope="col" class="px-3 py-3.5">Best Local Epochs</th>
+                                        <th scope="col" class="px-3 py-3.5">Local Batch Size</th>
+                                        <th scope="col" class="px-3 py-3.5">Val Loss</th>
+                                        <th scope="col" class="px-3 py-3.5 text-right pr-6">mAP@0.5</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 bg-white text-slate-600">
+                                    <!-- Highlighting the optimal configuration with subtle emerald background -->
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="whitespace-nowrap py-4 pl-6 pr-3 font-medium text-slate-900">Trial 1 (Baseline)</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs">0.001000</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-slate-500">1</td>
+                                        <td class="whitespace-nowrap px-3 py-4">32</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs text-slate-500">0.1033</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-right font-semibold text-slate-900 pr-6">52.20%</td>
+                                    </tr>
+                                    <tr class="bg-emerald-50/30 hover:bg-emerald-50/50 transition-colors">
+                                        <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 flex items-center gap-1.5">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Trial 2 (Warm-start)
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs font-semibold text-emerald-800">0.001000</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-medium text-emerald-800">3</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-emerald-800">32</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs text-emerald-800">-</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-right font-bold text-emerald-700 pr-6">53.09%</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="whitespace-nowrap py-4 pl-6 pr-3 font-medium text-slate-900">Trial 3</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs">0.000561</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-slate-500">2</td>
+                                        <td class="whitespace-nowrap px-3 py-4">32</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs text-slate-500">0.1034</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-right font-semibold text-slate-900 pr-6">51.85%</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="whitespace-nowrap py-4 pl-6 pr-3 font-medium text-slate-900">Trial 4</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs">0.007969</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-slate-500">3</td>
+                                        <td class="whitespace-nowrap px-3 py-4">32</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs text-slate-500">0.1085</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-right font-semibold text-slate-900 pr-6">49.90%</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="whitespace-nowrap py-4 pl-6 pr-3 font-medium text-slate-900">Trial 5</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs">0.002911</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-slate-500">1</td>
+                                        <td class="whitespace-nowrap px-3 py-4">32</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs text-slate-500">0.1041</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-right font-semibold text-slate-900 pr-6">52.08%</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="whitespace-nowrap py-4 pl-6 pr-3 font-medium text-slate-900">Trial 6</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs">0.001575</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-slate-500">1</td>
+                                        <td class="whitespace-nowrap px-3 py-4">32</td>
+                                        <td class="whitespace-nowrap px-3 py-4 font-mono text-xs text-slate-500">0.1036</td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-right font-semibold text-slate-900 pr-6">52.16%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Algorithmic Deep Dive FedAdam Strategy (1/3 width) -->
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                                Aggregator Formula
+                            </span>
+                            <h3 class="text-lg font-bold text-slate-900 mt-2">Server strategy: FedAdam</h3>
+                            <p class="text-sm text-slate-500 mt-1">Aggregates models with momentum & step normalization to stabilize edge descent.</p>
+                            
+                            <!-- Formulation Equations block -->
+                            <div class="mt-4 space-y-4 text-xs font-mono bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <div>
+                                    <span class="text-slate-400 block text-[10px] uppercase font-sans">1. Client Update Difference:</span>
+                                    <span class="text-slate-800 font-semibold">&Delta;<sub>t,i</sub> = w<sub>t,i</sub> - w<sub>t</sub></span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10px] uppercase font-sans">2. Weighted Aggregation:</span>
+                                    <span class="text-slate-800 font-semibold">&Delta;<sub>t</sub> = &Sigma; (n<sub>i</sub>/N) &Delta;<sub>t,i</sub></span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10px] uppercase font-sans">3. Momentum & Second Moment Updates:</span>
+                                    <span class="text-slate-800 font-semibold">m<sub>t</sub> = &beta;<sub>1</sub>m<sub>t-1</sub> + (1-&beta;<sub>1</sub>)&Delta;<sub>t</sub></span>
+                                    <span class="text-slate-800 font-semibold block mt-1">v<sub>t</sub> = &beta;<sub>2</sub>v<sub>t-1</sub> + (1-&beta;<sub>2</sub>)&Delta;<sub>t</sub><sup>2</sup></span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10px] uppercase font-sans">4. Server Update:</span>
+                                    <span class="text-indigo-600 font-semibold">w<sub>t+1</sub> = w<sub>t</sub> + &eta; &middot; m<sub>t</sub> / (&radic;v<sub>t</sub> + &tau;)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mathematical Config table -->
+                        <div class="mt-4 border-t border-slate-100 pt-4 grid grid-cols-2 gap-3 text-xs">
+                            <div class="flex justify-between border-b border-slate-100 pb-1.5">
+                                <span class="text-slate-500">&beta;<sub>1</sub> Momentum</span>
+                                <strong class="text-slate-900 font-mono">0.90</strong>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-100 pb-1.5">
+                                <span class="text-slate-500">&beta;<sub>2</sub> Moment</span>
+                                <strong class="text-slate-900 font-mono">0.99</strong>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Server Step &eta;</span>
+                                <strong class="text-slate-900 font-mono">0.10</strong>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Stability &tau;</span>
+                                <strong class="text-slate-900 font-mono">1e-3</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Client Performance Benchmarking and Heterogeneity Detail -->
+                <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                    <div class="border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-50/50">
+                        <div>
+                            <h3 class="font-bold text-slate-900">Heterogeneous Node Computational Breakdown (Trial 1 Detailed Analytics)</h3>
+                            <p class="text-xs text-slate-500">A comparative assessment of clients ranging from Ultra-fast hardware (GPU accelerated) to straggling IoT nodes</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label for="speedTierFilter" class="text-xs font-semibold text-slate-500 uppercase">Filter Tier:</label>
+                            <select id="speedTierFilter" onchange="filterClients(this.value)" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                                <option value="All">All Speed Tiers</option>
+                                <option value="Ultra-Fast">Ultra-Fast (&lt; 200s)</option>
+                                <option value="Mid-Tier">Mid-Tier (200s - 600s)</option>
+                                <option value="Slow">Slow (600s - 1000s)</option>
+                                <option value="Straggler">Straggler (&gt; 1000s)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-left text-sm" id="clientTable">
+                            <thead class="bg-slate-50 font-semibold text-slate-700">
+                                <tr>
+                                    <th class="py-3.5 pl-6 pr-3">Client Identifier</th>
+                                    <th class="px-3 py-3.5">Train Loss</th>
+                                    <th class="px-3 py-3.5">Train mAP@0.5</th>
+                                    <th class="px-3 py-3.5">Test mAP@0.5</th>
+                                    <th class="px-3 py-3.5">Total Exec Time (Train + Eval)</th>
+                                    <th class="px-3 py-3.5">Speed Profile Tier</th>
+                                    <th class="px-3 py-3.5 text-right pr-6">Status Indicator</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 bg-white text-slate-600 font-mono text-xs">
+                                <!-- Node 2 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Ultra-Fast">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 2</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1341</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5167</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.5167</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">118.18s <span class="text-[10px] text-slate-400">(109.08s train / 9.10s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Ultra-Fast</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 9 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Ultra-Fast">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 9</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1394</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.6900</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.6877</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">156.29s <span class="text-[10px] text-slate-400">(146.18s train / 10.11s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Ultra-Fast</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 8 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Mid-Tier">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 8</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1309</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.6575</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.6324</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">403.13s <span class="text-[10px] text-slate-400">(385.68s train / 17.45s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Mid-Tier</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 0 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Mid-Tier">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 0</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1296</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5380</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.4953</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">513.56s <span class="text-[10px] text-slate-400">(474.46s train / 39.10s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Mid-Tier</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 3 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Mid-Tier">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 3</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1292</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5430</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.5278</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">537.43s <span class="text-[10px] text-slate-400">(504.04s train / 33.39s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Mid-Tier</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 6 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Slow">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 6</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1278</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5695</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.4834</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">763.26s <span class="text-[10px] text-slate-400">(740.33s train / 22.93s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-800">Slow</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 1 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Slow">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 1</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1306</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5748</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.5475</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">842.55s <span class="text-[10px] text-slate-400">(803.25s train / 39.30s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-800">Slow</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 4 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Slow">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 4</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1279</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5286</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.5081</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">969.49s <span class="text-[10px] text-slate-400">(935.30s train / 34.19s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-800">Slow</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-emerald-700 font-medium"><i class="ph ph-check-circle"></i> Complete</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 7 -->
+                                <tr class="hover:bg-slate-50 transition-colors font-sans" data-tier="Straggler">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-semibold text-slate-900 font-mono">Client 7</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1257</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5106</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-indigo-600">0.4623</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">1232.30s <span class="text-[10px] text-slate-400">(1200.16s train / 32.14s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-800">Straggler</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-rose-700 font-medium"><i class="ph ph-warning"></i> Slow Node</span>
+                                    </td>
+                                </tr>
+                                <!-- Node 5 -->
+                                <tr class="bg-rose-50/10 hover:bg-rose-50/25 transition-colors font-sans" data-tier="Straggler">
+                                    <td class="whitespace-nowrap py-4 pl-6 pr-3 font-bold text-slate-950 font-mono">Client 5 (Bottleneck)</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.1270</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono">0.5716</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-bold text-rose-700">0.5553</td>
+                                    <td class="whitespace-nowrap px-3 py-4 font-mono font-semibold text-rose-700">1387.90s <span class="text-[10px] text-rose-500">(1364.45s train / 23.45s eval)</span></td>
+                                    <td class="whitespace-nowrap px-3 py-4">
+                                        <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-900 animate-pulse">Straggler</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-right pr-6 font-sans">
+                                        <span class="inline-flex items-center gap-1 text-rose-700 font-bold"><i class="ph ph-warning-octagon"></i> Bottleneck</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Raw Log Terminal Browser (Referencing verbatim 510530001.txt) -->
+                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div class="border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-900 text-white">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-3 w-3 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                            </span>
+                            <div>
+                                <h3 class="font-bold text-slate-100">Log Inspector: <span class="font-mono text-indigo-400">510530001.txt</span></h3>
+                                <p class="text-[11px] text-slate-400">Visual terminal interface directly connected to run logs</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="toggleConsoleFilter('all')" id="btn-all" class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 transition">Show Full File</button>
+                            <button onclick="toggleConsoleFilter('trial1')" id="btn-trial1" class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 transition">Trial 1 Log</button>
+                            <button onclick="toggleConsoleFilter('trial3')" id="btn-trial3" class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 transition">Trial 3 Log</button>
+                            <button onclick="toggleConsoleFilter('trial6')" id="btn-trial6" class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 transition">Trial 6 Log</button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-950 p-6 font-mono text-xs text-slate-300 custom-scrollbar overflow-y-auto max-h-[480px]" id="rawTerminal">
+                        <!-- Trial 1 logs default shown -->
+                        <div id="log-trial1" class="space-y-1">
+                            <p class="text-slate-500">// Segment extracted from raw run file 510530001.txt [Trial 1 objective starting]</p>
+                            <p class="text-indigo-400">[OPTUNA-OBJECTIVE] Starting trial 1 with lr=0.001000 (strategy=3 fixed, epochs/batch delegated to clients)</p>
+                            <p class="text-indigo-400">Using strategy: FedAdam</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-slate-200">STARTING FL TRIAL  [optuna_trial_1]</p>
+                            <p class="text-slate-200">  lr=0.001000  rounds=1 strategy=3 local_epochs=3 batch_size=32</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-blue-400">INFO :      Starting FedAdam strategy:</p>
+                            <p class="text-slate-400">INFO :          ├── Number of rounds: 1</p>
+                            <p class="text-slate-400">INFO :          ├── ConfigRecord (train): {'lr': 0.001, 'num_rounds': 1, 'local-epochs': 3, 'batch_size': 32, ...}</p>
+                            <p class="text-slate-400">INFO :          ├──> FedOpt settings: eta (0.1) | eta_l (0.1) | beta_1 (0.9) | beta_2 (0.99)</p>
+                            <p class="text-emerald-400">[SERVER] TRAINING PHASE - CLIENT RESULTS</p>
+                            <p class="text-emerald-500">✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1341, mAP@0.5: 0.5167, mAP: 0.3257, Time: 109.08s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 9] TRAIN COMPLETE - Loss: 0.1394, mAP@0.5: 0.6900, mAP: 0.4986, Time: 146.18s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 8] TRAIN COMPLETE - Loss: 0.1309, mAP@0.5: 0.6575, mAP: 0.4334, Time: 385.68s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1270, mAP@0.5: 0.5716, mAP: 0.3911, Time: 1364.45s</p>
+                            <p class="text-slate-300">[SERVER] ROUND 1 TRAINING SUMMARY</p>
+                            <p class="text-slate-400">Training Loss:     0.1289  |  Training mAP@0.5:  0.5563</p>
+                            <p class="text-emerald-400">[SERVER] EVALUATION PHASE - CLIENT RESULTS</p>
+                            <p class="text-emerald-500">✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1140, mAP@0.5: 0.5167, mAP: 0.3256, Time: 9.10s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0998, mAP@0.5: 0.5553, mAP: 0.3778, Time: 23.45s</p>
+                            <p class="text-slate-300">[SERVER] ROUND 1 EVALUATION SUMMARY</p>
+                            <p class="text-indigo-300">Validation Loss:   0.1033  |  Validation mAP@0.5: 0.5220  |  Validation mAP: 0.3497</p>
+                            <p class="text-amber-400">[OPTUNA] Trial 1 client-side winners -- most common epochs=1, batch=32 (across 10 client-rounds)</p>
+                            <p class="text-amber-500">[OPTUNA] Trial 1 -> mAP@0.5=0.5220 (lr=0.00100)</p>
+                        </div>
+                        
+                        <!-- Trial 3 logs (hidden by default) -->
+                        <div id="log-trial3" class="hidden space-y-1">
+                            <p class="text-slate-500">// Segment extracted from raw run file 510530001.txt [Trial 3 objective starting]</p>
+                            <p class="text-indigo-400">[OPTUNA-OBJECTIVE] Starting trial 3 with lr=0.000561 (strategy=3 fixed, epochs/batch delegated to clients)</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-slate-200">STARTING FL TRIAL  [optuna_trial_3]</p>
+                            <p class="text-slate-200">  lr=0.000561  rounds=1 strategy=3 local_epochs=3 batch_size=32</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-emerald-400">[SERVER] TRAINING PHASE - CLIENT RESULTS</p>
+                            <p class="text-emerald-500">✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1297, mAP@0.5: 0.5236, mAP: 0.3363, Time: 268.80s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1277, mAP@0.5: 0.5713, mAP: 0.3931, Time: 1442.64s</p>
+                            <p class="text-slate-300">[SERVER] ROUND 1 TRAINING SUMMARY</p>
+                            <p class="text-slate-400">Training Loss:     0.1290  |  Training mAP@0.5:  0.5571</p>
+                            <p class="text-emerald-400">[SERVER] EVALUATION PHASE - CLIENT RESULTS</p>
+                            <p class="text-emerald-500">✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1133, mAP@0.5: 0.5342, mAP: 0.3367, Time: 9.14s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 5] EVAL COMPLETE - Loss: 0.0997, mAP@0.5: 0.5248, mAP: 0.3623, Time: 23.19s</p>
+                            <p class="text-slate-300">[SERVER] ROUND 1 EVALUATION SUMMARY</p>
+                            <p class="text-indigo-300">Validation Loss:   0.1034  |  Validation mAP@0.5: 0.5185  |  Validation mAP: 0.3487</p>
+                            <p class="text-amber-400">[OPTUNA] Trial 3 client-side winners -- most common epochs=2, batch=32 (across 10 client-rounds)</p>
+                            <p class="text-amber-500">[OPTUNA] Trial 3 -> mAP@0.5=0.5185 (lr=0.00056)</p>
+                        </div>
+
+                        <!-- Trial 6 logs (hidden by default) -->
+                        <div id="log-trial6" class="hidden space-y-1">
+                            <p class="text-slate-500">// Segment extracted from raw run file 510530001.txt [Trial 6 objective starting]</p>
+                            <p class="text-indigo-400">[OPTUNA-OBJECTIVE] Starting trial 6 with lr=0.001575 (strategy=3 fixed, epochs/batch delegated to clients)</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-slate-200">STARTING FL TRIAL  [optuna_trial_6]</p>
+                            <p class="text-slate-200">  lr=0.001575  rounds=1 strategy=3 local_epochs=3 batch_size=32</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-emerald-400">[SERVER] TRAINING PHASE - CLIENT RESULTS</p>
+                            <p class="text-emerald-500">✅ [CLIENT 2] TRAIN COMPLETE - Loss: 0.1288, mAP@0.5: 0.5572, mAP: 0.3549, Time: 284.30s</p>
+                            <p class="text-emerald-500">✅ [CLIENT 5] TRAIN COMPLETE - Loss: 0.1267, mAP@0.5: 0.5675, mAP: 0.3865, Time: 1425.80s</p>
+                            <p class="text-slate-300">[SERVER] ROUND 1 TRAINING SUMMARY</p>
+                            <p class="text-slate-400">Training Loss:     0.1285  |  Training mAP@0.5:  0.5560</p>
+                            <p class="text-emerald-400">[SERVER] EVALUATION PHASE - CLIENT RESULTS</p>
+                            <p class="text-emerald-500">✅ [CLIENT 2] EVAL COMPLETE - Loss: 0.1131, mAP@0.5: 0.5548, mAP: 0.3533, Time: 9.35s</p>
+                            <p class="text-slate-300">[SERVER] ROUND 1 EVALUATION SUMMARY</p>
+                            <p class="text-indigo-300">Validation Loss:   0.1036  |  Validation mAP@0.5: 0.5216  |  Validation mAP: 0.3493</p>
+                            <p class="text-amber-400">[OPTUNA] Trial 6 client-side winners -- most common epochs=1, batch=32 (across 10 client-rounds)</p>
+                            <p class="text-amber-500">[OPTUNA] Trial 6 -> mAP@0.5=0.5216 (lr=0.00158)</p>
+                            <p class="text-slate-200">======================================================================</p>
+                            <p class="text-teal-400">OPTUNA COMPLETE -- Best trial #2 | mAP@0.5 = 0.5309 | lr = 0.001000 | client winners: epochs=3, batch=32</p>
+                            <p class="text-slate-500">======================================================================</p>
+                            <p class="text-slate-400">[INFO] HPO Mode is 'hpo_only' - skipping final training run. Best HPO result will be used for model export.</p>
+                        </div>
+
+                        <!-- Full Logs Option (hidden by default) -->
+                        <div id="log-all" class="hidden space-y-1">
+                            <p class="text-slate-400">INFO :      Starting logstream for run_id `12242548353872903995`</p>
+                            <p class="text-slate-400">INFO :      Start `flwr-serverapp` process</p>
+                            <p class="text-teal-400">FEDERATED LEARNING CONFIGURATION: Run ID: 510530001 | Task: detection | Rounds: 10</p>
+                            <p class="text-indigo-300">[INFO] NESTED HPO MODE: server searches lr only; each client searches epochs/batch_size</p>
+                            <p class="text-slate-500">... [Trial 1 to 6 Logs available inside custom filter buttons above] ...</p>
+                            <p class="text-slate-400">OPTUNA COMPLETE -- Best trial #2 | mAP@0.5 = 0.5309 | lr = 0.001000</p>
+                            <p class="text-amber-500">[INFO] Best HPO params from Optuna will be used for final model extraction.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="bg-white border-t border-slate-200 py-6 mt-12">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500 space-y-1">
+                <p>Designed for systematic performance reviews of YOLOv5 federated setups.</p>
+                <p>Telemetry recorded on 2026-07-12. Reference Database Identifier: <strong class="font-mono">510530001.txt</strong></p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Data arrays for HPO Search Space Charts
+        const hpoTrials = [
+            { id: 'Trial 1', lr: 0.001000, map: 52.20, epochs: 1, batch: 32 },
+            { id: 'Trial 2', lr: 0.001000, map: 53.09, epochs: 3, batch: 32 }, // Optimal Warm-Start
+            { id: 'Trial 3', lr: 0.000561, map: 51.85, epochs: 2, batch: 32 },
+            { id: 'Trial 4', lr: 0.007969, map: 49.90, epochs: 3, batch: 32 },
+            { id: 'Trial 5', lr: 0.002911, map: 52.08, epochs: 1, batch: 32 },
+            { id: 'Trial 6', lr: 0.001575, map: 52.16, epochs: 1, batch: 32 }
+        ];
+
+        // Client Heterogeneity Data (Trial 1 detailed metrics)
+        const clientData = [
+            { node: 'Client 2', trainTime: 109.08, evalTime: 9.10, total: 118.18, map: 0.5167, tier: 'Ultra-Fast' },
+            { node: 'Client 9', trainTime: 146.18, evalTime: 10.11, total: 156.29, map: 0.6877, tier: 'Ultra-Fast' },
+            { node: 'Client 8', trainTime: 385.68, evalTime: 17.45, total: 403.13, map: 0.6324, tier: 'Mid-Tier' },
+            { node: 'Client 0', trainTime: 474.46, evalTime: 39.10, total: 513.56, map: 0.4953, tier: 'Mid-Tier' },
+            { node: 'Client 3', trainTime: 504.04, evalTime: 33.39, total: 537.43, map: 0.5278, tier: 'Mid-Tier' },
+            { node: 'Client 6', trainTime: 740.33, evalTime: 22.93, total: 763.26, map: 0.4834, tier: 'Slow' },
+            { node: 'Client 1', trainTime: 803.25, evalTime: 39.30, total: 842.55, map: 0.5475, tier: 'Slow' },
+            { node: 'Client 4', trainTime: 935.30, evalTime: 34.19, total: 969.49, map: 0.5081, tier: 'Slow' },
+            { node: 'Client 7', trainTime: 1200.16, evalTime: 32.14, total: 1232.30, map: 0.4623, tier: 'Straggler' },
+            { node: 'Client 5', trainTime: 1364.45, evalTime: 23.45, total: 1387.90, map: 0.5553, tier: 'Straggler' }
+        ];
+
+        let hpoChartInstance, heterogeneityChartInstance;
+
+        window.onload = function() {
+            initHpoChart();
+            initHeterogeneityChart();
+            toggleConsoleFilter('trial1');
+        };
+
+        function initHpoChart() {
+            const ctx = document.getElementById('hpoChart').getContext('2d');
+            
+            // Sort trials by Learning Rate ascending for line visualization continuity
+            const sorted = [...hpoTrials].sort((a,b) => a.lr - b.lr);
+
+            hpoChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sorted.map(d => `LR ${d.lr.toFixed(6)}`),
+                    datasets: [
+                        {
+                            label: 'Validation mAP@0.5 (%)',
+                            data: sorted.map(d => d.map),
+                            borderColor: '#6366f1',
+                            borderWidth: 3,
+                            backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                            fill: true,
+                            tension: 0.3,
+                            pointBackgroundColor: sorted.map(d => d.map === 53.09 ? '#10b981' : '#4f46e5'),
+                            pointRadius: sorted.map(d => d.map === 53.09 ? 8 : 5),
+                            pointHoverRadius: 10
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const index = context.dataIndex;
+                                    const trial = sorted[index];
+                                    return ` mAP@0.5: ${trial.map}% (Epochs: ${trial.epochs}, Batch: ${trial.batch})`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 48,
+                            max: 54,
+                            ticks: { stepSize: 1, color: '#64748b' },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: {
+                            ticks: { color: '#64748b' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initHeterogeneityChart() {
+            const ctx = document.getElementById('heterogeneityChart').getContext('2d');
+
+            heterogeneityChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: clientData.map(c => c.node),
+                    datasets: [
+                        {
+                            label: 'Total Compute Time (s)',
+                            data: clientData.map(c => c.total),
+                            backgroundColor: clientData.map(c => c.tier === 'Straggler' ? 'rgba(239, 68, 68, 0.7)' : 'rgba(99, 102, 241, 0.65)'),
+                            borderColor: clientData.map(c => c.tier === 'Straggler' ? '#ef4444' : '#6366f1'),
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Test mAP@0.5',
+                            data: clientData.map(c => c.map),
+                            type: 'line',
+                            borderColor: '#10b981',
+                            borderWidth: 2.5,
+                            pointBackgroundColor: '#10b981',
+                            pointRadius: 4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 11 } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Execution Time (Seconds)', color: '#475569', font: { weight: 'bold' } },
+                            ticks: { color: '#64748b' },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'mAP@0.5', color: '#10b981', font: { weight: 'bold' } },
+                            min: 0.4,
+                            max: 0.75,
+                            grid: { drawOnChartArea: false }, // avoid overlapping lines
+                            ticks: { color: '#64748b' }
+                        },
+                        x: {
+                            ticks: { color: '#64748b' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function filterClients(tier) {
+            const table = document.getElementById('clientTable');
+            const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            
+            for (let i = 0; i < rows.length; i++) {
+                const rowTier = rows[i].getAttribute('data-tier');
+                if (tier === 'All' || rowTier === tier) {
+                    rows[i].classList.remove('hidden');
+                } else {
+                    rows[i].classList.add('hidden');
+                }
+            }
+        }
+
+        function toggleConsoleFilter(trial) {
+            // Hide all sub-log terminals
+            document.getElementById('log-trial1').classList.add('hidden');
+            document.getElementById('log-trial3').classList.add('hidden');
+            document.getElementById('log-trial6').classList.add('hidden');
+            document.getElementById('log-all').classList.add('hidden');
+            
+            // Remove active style from buttons
+            const btns = ['btn-trial1', 'btn-trial3', 'btn-trial6', 'btn-all'];
+            btns.forEach(id => {
+                const btn = document.getElementById(id);
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-slate-800', 'text-slate-300');
+            });
+
+            // Show selected element and style its trigger button
+            document.getElementById(`log-${trial}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`btn-${trial}`);
+            activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+            activeBtn.classList.add('bg-indigo-600', 'text-white');
+        }
+
+        function resetFilters() {
+            document.getElementById('speedTierFilter').value = 'All';
+            filterClients('All');
+        }
+    </script>
+</body>
+</html>

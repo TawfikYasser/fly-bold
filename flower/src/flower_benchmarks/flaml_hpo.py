@@ -189,6 +189,10 @@ class FLAMLTrial:
         self.intermediate_values: Dict[int, float] = {}
         self.should_prune_flag = False
         self.value: Optional[float] = None
+        self.user_attrs: Dict[str, Any] = {}
+
+    def set_user_attr(self, key: str, value: Any) -> None:
+        self.user_attrs[key] = value
 
     def suggest_float(self, name: str, low: float, high: float, log: bool = False) -> float:
         if name in self.config:
@@ -238,12 +242,14 @@ class FLAMLStudy:
         seed:                int                            = 42,
         points_to_evaluate:  Optional[List[Dict[str, Any]]] = None,
         evaluated_rewards:   Optional[List[float]]           = None,
+        search_space:        Optional[Dict[str, Any]]        = None,
     ):
         self.study_name  = study_name
         self.direction   = direction
         self.time_budget = time_budget
         self.metric_name = metric_name
         self.seed        = seed
+        self.search_space = search_space  # None -> optimize() falls back to lr-only default
         self.best_trial  = None
         self.best_params: Dict[str, Any] = {}
         self.best_value  = float("-inf") if direction == "maximize" else float("inf")
@@ -280,26 +286,17 @@ class FLAMLStudy:
         """Run HPO using flaml.tune.run."""
         logger.info(f"[FLAML] Starting study: {self.study_name}")
 
-        # ── Search space — mirrors Optuna distributions in server_app.py ──────
-        search_space = {
-            "lr":           tune.loguniform(lower=0.0001, upper=0.01),
-            "local_epochs": tune.randint(lower=1, upper=5),
-            "batch_size":   tune.choice([8, 16, 32]),
-            "strategy":     tune.choice([1, 2, 3, 4]),
-            # FedYogi
-            "yogi_eta":    tune.loguniform(lower=1e-4, upper=1e-1),
-            "yogi_eta_l":  tune.loguniform(lower=1e-3, upper=1e-1),
-            "yogi_beta_1": tune.uniform(lower=0.8, upper=0.99),
-            "yogi_beta_2": tune.uniform(lower=0.9, upper=0.999),
-            "yogi_tau":    tune.loguniform(lower=1e-4, upper=1e-2),
-            # FedAdam
-            "adam_eta":    tune.loguniform(lower=1e-3, upper=5e-1),
-            "adam_eta_l":  tune.loguniform(lower=1e-3, upper=5e-1),
-            "adam_beta_1": tune.uniform(lower=0.8, upper=0.99),
-            "adam_beta_2": tune.uniform(lower=0.9, upper=0.999),
-            "adam_tau":    tune.loguniform(lower=1e-4, upper=1e-2),
-            # FedProx
-            "proximal_mu": tune.loguniform(lower=0.001, upper=10.0),
+        # ── Search space ────────────────────────────────────────────────────
+        # NESTED HPO MODE: the server only searches `lr`. `local_epochs` and
+        # `batch_size` are NOT server dimensions anymore -- each client runs
+        # its own inner search over those two (see client_app.py
+        # run_client_local_hpo / run_client_local_hpo_flaml), conditioned on
+        # whatever `lr` this server trial suggests. `strategy` and its
+        # meta-params (yogi_*/adam_*/proximal_mu) are fixed for the whole run
+        # (read from pyproject.toml / _env), not searched, so trials are
+        # comparable on `lr` alone.
+        search_space = self.search_space or {
+            "lr": tune.loguniform(lower=0.0001, upper=0.01),
         }
 
         bad_score = float("inf") if self.direction == "minimize" else float("-inf")
@@ -376,6 +373,7 @@ def create_flaml_study(
     # ── Warm-start: Option B — load from a persisted JSON history file ─────────
     # If provided, this overrides the explicit lists above.
     history_path:        Optional[str]                  = None,
+    search_space:        Optional[Dict[str, Any]]        = None,
     **kwargs,
 ) -> FLAMLStudy:
     """Create and return a FLAMLStudy ready to run.
@@ -421,7 +419,31 @@ def create_flaml_study(
         seed=seed,
         points_to_evaluate=points_to_evaluate,
         evaluated_rewards=evaluated_rewards,
+        search_space=search_space,
     )
+
+
+def lr_only_warm_start(dataset_number: int) -> Tuple[Optional[List[Dict]], Optional[List[float]]]:
+    """Reduce a PREVIOUS_EXPERIMENTS entry (full lr+epochs+batch+strategy+meta
+    configs) down to just the `lr` dimension, for use as warm-start points in
+    the nested-HPO mode where the server only searches `lr`.
+
+    Duplicate lr values collapse to a single point using their best (for
+    "maximize") associated score, so BlendSearch/TPE doesn't see the same
+    lr suggested twice with conflicting rewards.
+    """
+    prev = PREVIOUS_EXPERIMENTS.get(dataset_number)
+    if not prev:
+        return None, None
+    by_lr: Dict[float, float] = {}
+    for cfg, score in zip(prev["configs"], prev["scores"]):
+        lr = cfg["lr"]
+        if lr not in by_lr or score > by_lr[lr]:
+            by_lr[lr] = score
+    if not by_lr:
+        return None, None
+    lrs = sorted(by_lr, key=lambda k: -by_lr[k])  # best-first
+    return [{"lr": lr} for lr in lrs], [by_lr[lr] for lr in lrs]
 
 
 def get_flaml_config() -> Dict[str, Any]:

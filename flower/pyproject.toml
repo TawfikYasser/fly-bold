@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower-benchmarks"
-version = "1.0.217"
+version = "1.0.219"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 # Dependencies for your Flower App
@@ -93,28 +93,41 @@ img_size = 416
 batch_size = 32  
 dataset = 0  
 strategy = 3  
-run_id = 1010000864000101  
+run_id = 510530001  
 
 # HPO Configuration
+# ── NESTED HPO MODE ──────────────────────────────────────────────────────
+# Server searches ONLY lr (hpo_trials/hpo_rounds below).
+# Each client searches ONLY local_epochs/batch_size, every round, every
+# trial -- conditioned on that trial's lr (client_hpo_enabled + trials).
+# Both use the SAME backend: flip use_flaml once, both follow it
+# (server_app.py forwards client_hpo_backend to clients automatically).
+#
+# Experiment A -- Optuna (TPE + HyperbandPruner):        use_flaml = false
+# Experiment B -- FLAML  (BlendSearch):                  use_flaml = true
+# Everything else below is identical between the two experiments.
 use_flaml = false  # true = use FLAML, false = use Optuna
-hpo_trials = 0  # Number of HPO trials (0 to disable HPO)
-hpo_rounds = 3  # Number of rounds to run per trial
-hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then final training with best params
+hpo_trials = 5  # server-side trials -- each suggests one lr candidate
+hpo_rounds = 1  # federated rounds run per server trial (proxy budget)
+hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then final training with the winning lr
 
-# Client-side HPO Configuration (per-client local Optuna search for local_epochs/batch_size)
-# Independent of server-side HPO above -- intended for use when hpo_trials = 0
-# (i.e. the server is NOT doing its own HPO sweep) and you supply fixed
-# lr/strategy yourself, letting each client tune its own epochs/batch instead.
-client_hpo_enabled = false  # true = each client runs its own Optuna study every round
-client_hpo_trials = 6  # Number of local Optuna trials per client per round
+# Client-side HPO Configuration (per-client local search for local_epochs/batch_size)
+# NESTED HPO MODE: this must be true (together with hpo_trials > 0 above) so
+# that every server trial's mAP is a joint function of (lr, epochs, batch),
+# not just lr with epochs/batch held fixed. Backend (Optuna/FLAML) follows
+# use_flaml automatically -- no separate switch needed here.
+client_hpo_enabled = true  # true = each client runs its own inner search every round
+client_hpo_trials = 5  # Number of local trials per client PER ROUND. Cost multiplier:
+                        # hpo_trials(6) x hpo_rounds(3) x num_clients(10) x client_hpo_trials(3)
+                        # = 540 real training calls just to find the best lr -- tune down
+                        # (e.g. hpo_rounds=2, client_hpo_trials=2) if that's too slow/costly.
 
 # Adaptive Batch/Epoch Tuning (ABS -- client-side, per round)
-# Mutually exclusive with client_hpo_enabled above -- if both are true, ABS wins.
-# Replaces fixed local-epochs/batch_size: batch starts at adaptive_batch_min and
-# grows (up to adaptive_batch_max, capped at adaptive_batch_max_increases bumps)
-# whenever local training stalls (low RMD) or loss regresses; epoch count becomes
-# an OUTPUT rather than a fixed input.
-adaptive_batch_enabled = true  
+# MUST be false for nested-HPO mode: it's mutually exclusive with
+# client_hpo_enabled (if both are true, ABS silently wins and client_hpo is
+# skipped -- see client_app.py). Re-enable this only if you go back to
+# ABS instead of client-side Optuna/FLAML search.
+adaptive_batch_enabled = false  
 adaptive_batch_min = 8  # beta_min
 adaptive_batch_max = 64  # beta_max
 adaptive_batch_max_increases = 4  # H_beta -- max batch-size bumps per round
@@ -127,7 +140,9 @@ adaptive_batch_max_epochs = 10  # hard safety ceiling on epochs/round
 # Replaces the static `lr` above for the final training run: starts at
 # adaptive_lr_min, grows toward adaptive_lr_max when validation loss improves,
 # and falls back (shrinking the upper bound) when validation loss regresses.
-adaptive_lr_enabled = true  
+# Set to false for the nested-HPO experiments below: the final run should use
+# the server's HPO-winning lr as-is, not have ALR further adjust it on top.
+adaptive_lr_enabled = false  
 adaptive_lr_min = 0.0001  # lambda_min
 adaptive_lr_max = 0.01  # lambda_max (initial upper bound)
 adaptive_lr_max_reductions = 3  # H_lambda -- max LR rollbacks before terminating

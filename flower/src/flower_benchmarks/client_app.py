@@ -265,6 +265,128 @@ def run_client_local_hpo(
 
     return best_epochs, best_batch, best_map, trials_info
 
+def run_client_local_hpo_flaml(
+    received_state,
+    model_size,
+    data_yaml: str,
+    img: int,
+    client_id: int,
+    run_id: str,
+    server_round: int,
+    n_trials: int,
+    epoch_range=(1, 5),
+    batch_choices=(8, 16, 32),
+):
+    """
+    FLAML twin of run_client_local_hpo. Same search space (local_epochs,
+    batch_size only), same objective (maximize this client's TRAIN
+    mAP@0.5), same disposable-trial contract: only the winning
+    hyperparameters are returned, `received_state` is untouched, and the
+    real training call afterwards starts fresh from it.
+
+    Returns: (best_epochs, best_batch, best_map, trials_info)
+    """
+    from flaml import tune
+    import time
+    import gc
+
+    tag = f"[CLIENT {client_id}][ROUND {server_round}][HPO-FLAML]"
+    print(f"\n{'='*70}")
+    print(f"{tag} STARTING LOCAL HPO -- {n_trials} trial(s)")
+    print(f"{tag} search space: local_epochs in {list(range(epoch_range[0], epoch_range[1]+1))}, "
+          f"batch_size in {list(batch_choices)}")
+    print(f"{tag} objective: maximize TRAIN mAP@0.5")
+    print(f"{'='*70}\n")
+
+    search_space = {
+        "local_epochs": tune.randint(lower=epoch_range[0], upper=epoch_range[1] + 1),
+        "batch_size":   tune.choice(list(batch_choices)),
+    }
+
+    trials_info = []
+    running_best = {"map50": float("-inf"), "epochs": None, "batch": None, "trial": None}
+    hpo_start = time.time()
+
+    def _objective(config):
+        trial_id = len(trials_info)
+        trial_epochs = config["local_epochs"]
+        trial_batch  = config["batch_size"]
+
+        print(
+            f"{tag} -- Trial {trial_id + 1}/{n_trials} START -- "
+            f"local_epochs={trial_epochs}, batch_size={trial_batch}"
+        )
+        t0 = time.time()
+
+        try:
+            _, trial_log = yolo_train_from_state_and_return_state_dict(
+                received_state,
+                model_size=model_size,
+                client_dataset_yaml=data_yaml,
+                epochs=trial_epochs,
+                img=img,
+                batch=trial_batch,
+                run_dir="/tmp/client_hpo_runs",
+                client_tag=f"client{client_id}_hpo_flaml_t{trial_id}",
+                round_idx=server_round,
+                run_id=run_id,
+            )
+        except Exception as e:
+            print(f"{tag} -- Trial {trial_id + 1}/{n_trials} FAILED ({time.time()-t0:.1f}s): {e}")
+            trials_info.append({
+                "trial": trial_id, "epochs": trial_epochs, "batch": trial_batch,
+                "map50": None, "status": "FAILED", "duration_s": round(time.time() - t0, 1),
+            })
+            return {"map50": float("-inf")}
+
+        trial_map = float(trial_log.get("mAP@0.5", 0.0))
+        duration  = time.time() - t0
+
+        trials_info.append({
+            "trial": trial_id, "epochs": trial_epochs, "batch": trial_batch,
+            "map50": trial_map, "status": "OK", "duration_s": round(duration, 1),
+        })
+
+        is_new_best = trial_map > running_best["map50"]
+        if is_new_best:
+            running_best.update(map50=trial_map, epochs=trial_epochs, batch=trial_batch, trial=trial_id)
+
+        print(
+            f"{tag} -- Trial {trial_id + 1}/{n_trials} DONE  ({duration:.1f}s) -- "
+            f"train_mAP@0.5={trial_map:.4f}"
+            f"{'  <-- NEW BEST' if is_new_best else ''}"
+        )
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+
+        return {"map50": trial_map}
+
+    analysis = tune.run(
+        _objective,
+        config=search_space,
+        metric="map50",
+        mode="max",
+        num_samples=n_trials,
+        use_ray=False,
+    )
+
+    best_config = analysis.best_config
+    best_epochs = best_config["local_epochs"]
+    best_batch  = best_config["batch_size"]
+    best_map    = analysis.best_result["map50"]
+    total_time  = time.time() - hpo_start
+
+    print(f"{'='*70}")
+    print(f"{tag} SEARCH COMPLETE -- {len(trials_info)} trial(s) in {total_time:.1f}s")
+    print(f"{tag} BEST -> local_epochs={best_epochs}, batch_size={best_batch}, "
+          f"train_mAP@0.5={best_map:.4f}")
+    print(f"{'='*70}\n")
+
+    return best_epochs, best_batch, best_map, trials_info
+
+
 # Flower ClientApp
 app = ClientApp()
 
@@ -597,11 +719,24 @@ def train(msg: Message, context: Context):
         epochs = adaptive_batch_epochs_run
         round_log = round_log_abs
 
+    # Backend for the client's own inner search -- forwarded from the server
+    # (single source of truth: flip USE_FLAML once and both server's outer
+    # lr-search and every client's inner epochs/batch-search switch together).
+    client_hpo_backend = str(msg.content["config"].get(
+        "client_hpo_backend", get_config("client_hpo_backend", context, default="optuna"))).lower()
+
     if client_hpo_enabled and client_hpo_trials > 0:
-        print(f"[CLIENT {client_id}] [HPO] Client-side HPO enabled "
-              f"({client_hpo_trials} trials) -- searching local-epochs/batch_size")
+        # `lr` here is this round's server-suggested value (already resolved
+        # above into train_cfg / the actual training call) -- the inner
+        # search below is implicitly conditioned on it, since every trial
+        # trains at this lr. Logged explicitly so it's traceable end-to-end.
+        this_round_lr = float(msg.content["config"].get("lr", get_config("lr", context, default=0.0)))
+        print(f"[CLIENT {client_id}] [HPO-{client_hpo_backend.upper()}] Client-side HPO enabled "
+              f"({client_hpo_trials} trials) -- searching local-epochs/batch_size "
+              f"conditioned on server lr={this_round_lr:.6f}")
         try:
-            hpo_epochs, hpo_batch, client_hpo_best_map, _trials_info = run_client_local_hpo(
+            hpo_fn = run_client_local_hpo_flaml if client_hpo_backend == "flaml" else run_client_local_hpo
+            hpo_epochs, hpo_batch, client_hpo_best_map, _trials_info = hpo_fn(
                 received_state,
                 model_size=model_size,
                 data_yaml=data_yaml,

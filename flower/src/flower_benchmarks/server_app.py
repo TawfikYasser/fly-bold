@@ -35,7 +35,7 @@ if not USE_FLAML:
     from optuna.distributions import FloatDistribution, IntDistribution, CategoricalDistribution
 else:
     from flower_benchmarks.flaml_hpo import (
-        create_flaml_study, TrialPruneSignal as FLAMLTrialPruneSignal
+        create_flaml_study, lr_only_warm_start, TrialPruneSignal as FLAMLTrialPruneSignal
     )
 
 # =====================================================================
@@ -136,6 +136,11 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             'mAP50': _safe_float(metrics.get("client_train_acc_mAP@0.5", 0.0)),
             'mAP': _safe_float(metrics.get("client_train_acc_mAP", 0.0)),
             'lr': _safe_float(metrics.get("lr", 0.01)),
+            # Nested-HPO: this client's own inner-search winners for this round
+            # (present only when client_hpo_enabled=true on the client).
+            'hpo_epochs': _safe_float(metrics.get("client_hpo_best_local_epochs", -1.0)),
+            'hpo_batch':  _safe_float(metrics.get("client_hpo_best_batch_size", -1.0)),
+            'hpo_train_map50': _safe_float(metrics.get("client_hpo_best_train_mAP@0.5", -1.0)),
             'data_received': _safe_float(metrics.get("data_received_from_server", 0.0)),
             'data_sent': _safe_float(metrics.get("data_sent_to_server", 0.0)),
             'round_duration': _safe_float(metrics.get("round_duration", 0.0)),
@@ -218,6 +223,10 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             "client_train_loss": c['loss'],
             "client_train_time": c['train_time'],
             "client_train_num_examples": int(c['examples']),
+            # Nested-HPO: -1 means client_hpo_enabled was off this round.
+            "client_hpo_epochs": int(c['hpo_epochs']) if c['hpo_epochs'] >= 0 else None,
+            "client_hpo_batch":  int(c['hpo_batch'])  if c['hpo_batch']  >= 0 else None,
+            "client_hpo_train_map50": c['hpo_train_map50'] if c['hpo_train_map50'] >= 0 else None,
             # COMMENTED: Resource monitoring disabled
             # ✅ Per-client resource metrics
             # "client_train_resources": {
@@ -762,6 +771,12 @@ def main(grid: Grid, context: Context) -> None:
 
 
     strategy_id     = get_config("strategy",        context, default=1,  type_converter=int)
+    # Fixed epochs/batch used INSIDE the server's HPO trial loop (nested-HPO
+    # mode: server only searches lr; these are just the values forwarded to
+    # clients as a starting point -- if client_hpo_enabled=true, each client
+    # overrides them with its own inner search result every round anyway).
+    local_epochs_cfg = get_config("local-epochs", context, default=3,  type_converter=int)
+    batch_size_cfg   = get_config("batch_size",    context, default=16, type_converter=int)
     # Try new hpo_trials first, fall back to old n_optuna_trials for compatibility
     hpo_trials      = get_config("hpo_trials",      context, default=None, type_converter=int)
     if hpo_trials is None:
@@ -809,12 +824,25 @@ def main(grid: Grid, context: Context) -> None:
     adaptive_lr_growth_factor  = get_config("adaptive_lr_growth_factor", context, default=1.2, type_converter=float)
     adaptive_lr_backoff_factor = get_config("adaptive_lr_backoff_factor", context, default=0.5, type_converter=float)
 
+    # Backend forwarded to clients every round so a single USE_FLAML switch
+    # controls BOTH the server's outer lr-search and every client's inner
+    # epochs/batch-search -- no separate client-side env var to keep in sync.
+    client_hpo_backend = "flaml" if USE_FLAML else "optuna"
+
     if client_hpo_enabled and hpo_trials and hpo_trials > 0:
         print(
-            f"[WARN] client_hpo_enabled=true while hpo_trials={hpo_trials} (server-side HPO is ON). "
-            f"Both server and client will be tuning epochs/batch simultaneously -- "
-            f"this is usually not what you want. Consider setting hpo_trials=0 "
-            f"when using client-side HPO."
+            f"[INFO] NESTED HPO MODE: server searches lr only ({hpo_trials} trials, "
+            f"backend={client_hpo_backend}); each client independently searches "
+            f"local_epochs/batch_size ({client_hpo_trials} trials/round, same backend) "
+            f"conditioned on that round's lr. mAP is reported back up to the server's "
+            f"study as a joint function of all three."
+        )
+    elif client_hpo_enabled and (not hpo_trials or hpo_trials == 0):
+        print(
+            f"[WARN] client_hpo_enabled=true but hpo_trials=0 -- the server will use "
+            f"a single fixed lr for the whole run while clients still search "
+            f"epochs/batch each round. That's valid (client-only tuning), but if you "
+            f"intended nested joint search, set hpo_trials > 0."
         )
 
     # -- Snapshot initial weights ONCE so every trial/run starts identically.
@@ -914,6 +942,7 @@ def main(grid: Grid, context: Context) -> None:
             # when enabled. Static for the whole _run_trial call -- not searched here.
             "client_hpo_enabled": client_hpo_enabled,
             "client_hpo_trials":  client_hpo_trials,
+            "client_hpo_backend": client_hpo_backend,
             "adaptive_batch_enabled": adaptive_batch_enabled_cfg,
         }
         if task_type == "detection":
@@ -1063,55 +1092,73 @@ def main(grid: Grid, context: Context) -> None:
             print(f"HPO Mode: {hpo_mode}")
             print(f"{'='*70}\n")
 
+            _flaml_prev_lr, _flaml_prev_scores = lr_only_warm_start(dataset_number)
             study = create_flaml_study(
                 study_name=f"{experiment_name}_{run_id}_hpo",
                 direction="maximize",
                 time_budget=flaml_time_budget,
                 metric_name=flaml_metric,
                 seed=42,
+                points_to_evaluate=_flaml_prev_lr,
+                evaluated_rewards=_flaml_prev_scores,
+                # search_space omitted -> FLAMLStudy defaults to lr-only (see flaml_hpo.py)
             )
 
             def objective_flaml(trial):
+                # NESTED HPO: server suggests ONLY lr. epochs/batch are fixed
+                # here (each client searches its own inner value instead --
+                # see client_hpo_enabled/client_hpo_backend forwarded in
+                # train_cfg). strategy is fixed to the configured strategy_id,
+                # not searched, so trials stay comparable on lr alone.
                 trial_lr = trial.suggest_float("lr", 0.0001, 0.01, log=True)
-                trial_epochs = trial.suggest_int("local_epochs", 1, 5)
-                trial_batch = trial.suggest_categorical("batch_size", [8, 16, 32])
-                trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
 
-                print(f"\n[FLAML-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f}, strategy={trial_strategy}, local_epochs={trial_epochs}, batch_size={trial_batch}")
+                print(f"\n[FLAML-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f} "
+                      f"(strategy={strategy_id} fixed, epochs/batch delegated to clients)")
 
-                if trial_strategy == 1:
-                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial)
-                elif trial_strategy == 2:
-                    t_eta = trial.suggest_float("yogi_eta", 1e-4, 1e-1, log=True)
-                    t_eta_l = trial.suggest_float("yogi_eta_l", 1e-3, 1e-1, log=True)
-                    t_beta_1 = trial.suggest_float("yogi_beta_1", 0.8, 0.99)
-                    t_beta_2 = trial.suggest_float("yogi_beta_2", 0.9, 0.999)
-                    t_tau = trial.suggest_float("yogi_tau", 1e-4, 1e-2, log=True)
-                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial, eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1, beta_2=t_beta_2, tau=t_tau)
-                elif trial_strategy == 3:
-                    t_eta = trial.suggest_float("adam_eta", 1e-3, 5e-1, log=True)
-                    t_eta_l = trial.suggest_float("adam_eta_l", 1e-3, 5e-1, log=True)
-                    t_beta_1 = trial.suggest_float("adam_beta_1", 0.8, 0.99)
-                    t_beta_2 = trial.suggest_float("adam_beta_2", 0.9, 0.999)
-                    t_tau = trial.suggest_float("adam_tau", 1e-4, 1e-2, log=True)
-                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial, eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1, beta_2=t_beta_2, tau=t_tau)
-                elif trial_strategy == 4:
-                    t_proximal_mu = trial.suggest_float("proximal_mu", 0.001, 10.0, log=True)
-                    _, trial_logs = _run_trial(trial_lr, n_rounds=hpo_rounds, trial_epochs=trial_epochs, trial_batch=trial_batch, trial_tag=f"flaml_trial_{(trial.number)+1}", trial_strategy=trial_strategy, optuna_trial=trial, proximal_mu=t_proximal_mu)
+                _, trial_logs = _run_trial(
+                    trial_lr, n_rounds=hpo_rounds,
+                    trial_epochs=local_epochs_cfg, trial_batch=batch_size_cfg,
+                    trial_tag=f"flaml_trial_{(trial.number)+1}",
+                    trial_strategy=strategy_id, optuna_trial=trial,
+                )
 
                 if not trial_logs:
                     raise FLAMLTrialPruneSignal()
 
                 eval_maps = [r.get("round_eval_acc", {}).get("mAP@0.5", 0.0) for r in trial_logs]
                 mAP = max(eval_maps) if eval_maps else 0.0
+
+                # Joint record: pull each client's own (epochs, batch) winner
+                # per round out of trial_logs so the full (lr, epochs, batch)
+                # -> mAP triple is visible, not just lr -> mAP.
+                per_client_configs = []
+                for round_log in trial_logs:
+                    for cl in round_log.get("clients_logs", []):
+                        if cl.get("client_hpo_epochs") is not None:
+                            per_client_configs.append({
+                                "round": round_log["round_id"], "client": cl["client_id"],
+                                "epochs": cl["client_hpo_epochs"], "batch": cl["client_hpo_batch"],
+                                "client_train_map50": cl.get("client_hpo_train_map50"),
+                            })
+                trial.set_user_attr("per_client_configs", per_client_configs)
+                if per_client_configs:
+                    import statistics as _stats
+                    epochs_mode = _stats.mode([c["epochs"] for c in per_client_configs])
+                    batch_mode  = _stats.mode([c["batch"] for c in per_client_configs])
+                    trial.set_user_attr("epochs_mode", epochs_mode)
+                    trial.set_user_attr("batch_mode", batch_mode)
+                    print(f"[FLAML] Trial {(trial.number+1):>3} client-side winners -- "
+                          f"most common epochs={epochs_mode}, batch={batch_mode} "
+                          f"(across {len(per_client_configs)} client-rounds)")
+
                 try:
                     trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
                     with open(trial_logs_path, "w") as f:
-                        json.dump(trial_logs, f, indent=2)
+                        json.dump({"round_logs": trial_logs, "per_client_configs": per_client_configs}, f, indent=2)
                 except Exception as e:
                     print(f"[FLAML] Warning: {e}")
 
-                print(f"[FLAML] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f}, strategy={trial_strategy}, epochs={trial_epochs}, batch={trial_batch})")
+                print(f"[FLAML] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f})")
                 return mAP
 
             study.optimize(objective_flaml, n_trials=hpo_trials)
@@ -1119,7 +1166,9 @@ def main(grid: Grid, context: Context) -> None:
             print(f"\n{'='*70}")
             print(f"FLAML COMPLETE -- Best trial #{(study.best_trial.number)+1}")
             print(f"  mAP@0.5  = {study.best_value:.4f}")
-            print(f"  lr       = {best['lr']:.6f} | strategy = {best['strategy']}")
+            print(f"  lr       = {best['lr']:.6f} | strategy = {strategy_id} (fixed)")
+            print(f"  client-side winners: epochs={study.best_trial.user_attrs.get('epochs_mode')}, "
+                  f"batch={study.best_trial.user_attrs.get('batch_mode')}")
             print(f"{'='*70}\n")
 
         else:
@@ -1141,75 +1190,26 @@ def main(grid: Grid, context: Context) -> None:
             )
 
             def objective(trial):
+                # NESTED HPO: server suggests ONLY lr. epochs/batch are fixed
+                # placeholders here -- each client overrides them every round
+                # with its own inner Optuna/FLAML search (client_hpo_enabled),
+                # conditioned on this trial's lr. strategy is fixed to the
+                # configured strategy_id (not searched), so trials are
+                # comparable on lr alone.
                 trial_lr = trial.suggest_float("lr", 0.0001, 0.01, log=True)
-                trial_epochs   = trial.suggest_int("local_epochs",   1, 5)
-                trial_batch    = trial.suggest_categorical("batch_size", [8, 16, 32])
-                trial_strategy = trial.suggest_categorical("strategy", [1, 2, 3, 4])
 
-                print(f"\n[OPTUNA-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f}, strategy={trial_strategy}, local_epochs={trial_epochs}, batch_size={trial_batch}")
+                print(f"\n[OPTUNA-OBJECTIVE] Starting trial {(trial.number)+1} with lr={trial_lr:.6f} "
+                      f"(strategy={strategy_id} fixed, epochs/batch delegated to clients)")
 
-                if trial_strategy == 1: # FedAvg
-                    _, trial_logs = _run_trial(
-                        trial_lr,
-                        n_rounds=hpo_rounds,
-                        trial_epochs=trial_epochs,
-                        trial_batch=trial_batch,
-                        trial_tag=f"optuna_trial_{(trial.number)+1}",
-                        trial_strategy=trial_strategy,
-                        optuna_trial=trial,
-                    )
-
-                elif trial_strategy == 2: # FedYogi
-                    t_eta    = trial.suggest_float("yogi_eta",    1e-4, 1e-1, log=True)
-                    t_eta_l  = trial.suggest_float("yogi_eta_l",  1e-3, 1e-1, log=True)
-                    t_beta_1 = trial.suggest_float("yogi_beta_1", 0.8,  0.99)
-                    t_beta_2 = trial.suggest_float("yogi_beta_2", 0.9,  0.999)
-                    t_tau    = trial.suggest_float("yogi_tau",    1e-4, 1e-2, log=True)
-
-                    _, trial_logs = _run_trial(
-                        trial_lr,
-                        n_rounds=hpo_rounds,
-                        trial_epochs=trial_epochs,
-                        trial_batch=trial_batch,
-                        trial_tag=f"optuna_trial_{(trial.number)+1}",
-                        trial_strategy=trial_strategy,
-                        optuna_trial=trial,
-                        eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
-                        beta_2=t_beta_2, tau=t_tau,
-                    )
-
-                elif trial_strategy == 3: # FedAdam
-                    t_eta    = trial.suggest_float("adam_eta",    1e-3, 5e-1, log=True)
-                    t_eta_l  = trial.suggest_float("adam_eta_l",  1e-3, 5e-1, log=True)
-                    t_beta_1 = trial.suggest_float("adam_beta_1", 0.8,  0.99)
-                    t_beta_2 = trial.suggest_float("adam_beta_2", 0.9,  0.999)
-                    t_tau    = trial.suggest_float("adam_tau",    1e-4, 1e-2, log=True)
-
-                    _, trial_logs = _run_trial(
-                        trial_lr,
-                        n_rounds=hpo_rounds,
-                        trial_epochs=trial_epochs,
-                        trial_batch=trial_batch,
-                        trial_tag=f"optuna_trial_{(trial.number)+1}",
-                        trial_strategy=trial_strategy,
-                        optuna_trial=trial,
-                        eta=t_eta, eta_l=t_eta_l, beta_1=t_beta_1,
-                        beta_2=t_beta_2, tau=t_tau,
-                    )
-
-                elif trial_strategy == 4: # FedProx
-                    t_proximal_mu = trial.suggest_float("proximal_mu", 0.001, 10.0, log=True)
-
-                    _, trial_logs = _run_trial(
-                        trial_lr,
-                        n_rounds=hpo_rounds,
-                        trial_epochs=trial_epochs,
-                        trial_batch=trial_batch,
-                        trial_tag=f"optuna_trial_{(trial.number)+1}",
-                        trial_strategy=trial_strategy,
-                        optuna_trial=trial,
-                        proximal_mu=t_proximal_mu,
-                    )
+                _, trial_logs = _run_trial(
+                    trial_lr,
+                    n_rounds=hpo_rounds,
+                    trial_epochs=local_epochs_cfg,
+                    trial_batch=batch_size_cfg,
+                    trial_tag=f"optuna_trial_{(trial.number)+1}",
+                    trial_strategy=strategy_id,
+                    optuna_trial=trial,
+                )
 
                 if not trial_logs:
                     raise optuna.exceptions.TrialPruned()
@@ -1217,14 +1217,38 @@ def main(grid: Grid, context: Context) -> None:
                 eval_maps = [r.get("round_eval_acc", {}).get("mAP@0.5", 0.0) for r in trial_logs]
                 mAP = max(eval_maps) if eval_maps else 0.0
 
+                # Joint record: pull each client's own (epochs, batch) winner
+                # per round out of trial_logs, so the full (lr, epochs, batch)
+                # -> mAP triple this trial actually produced is visible and
+                # persisted -- not just the lr -> mAP scalar Optuna sees.
+                per_client_configs = []
+                for round_log in trial_logs:
+                    for cl in round_log.get("clients_logs", []):
+                        if cl.get("client_hpo_epochs") is not None:
+                            per_client_configs.append({
+                                "round": round_log["round_id"], "client": cl["client_id"],
+                                "epochs": cl["client_hpo_epochs"], "batch": cl["client_hpo_batch"],
+                                "client_train_map50": cl.get("client_hpo_train_map50"),
+                            })
+                trial.set_user_attr("per_client_configs", per_client_configs)
+                if per_client_configs:
+                    import statistics as _stats
+                    epochs_mode = _stats.mode([c["epochs"] for c in per_client_configs])
+                    batch_mode  = _stats.mode([c["batch"] for c in per_client_configs])
+                    trial.set_user_attr("epochs_mode", epochs_mode)
+                    trial.set_user_attr("batch_mode", batch_mode)
+                    print(f"[OPTUNA] Trial {(trial.number+1):>3} client-side winners -- "
+                          f"most common epochs={epochs_mode}, batch={batch_mode} "
+                          f"(across {len(per_client_configs)} client-rounds)")
+
                 try:
                     trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
                     with open(trial_logs_path, "w") as f:
-                        json.dump(trial_logs, f, indent=2)
+                        json.dump({"round_logs": trial_logs, "per_client_configs": per_client_configs}, f, indent=2)
                 except Exception as e:
                     print(f"[OPTUNA] Warning: could not save trial logs: {e}")
 
-                print(f"[OPTUNA] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f}, strategy={trial_strategy}, epochs={trial_epochs}, batch={trial_batch})")
+                print(f"[OPTUNA] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f})")
                 return mAP
 
             # Seed with the known best baseline before letting Optuna explore.
@@ -1234,187 +1258,48 @@ def main(grid: Grid, context: Context) -> None:
             if len(study.trials) == 0:
                 study.enqueue_trial({"lr": 0.001, "local_epochs": 3, "batch_size": 16, "strategy": 1})
         
-            distributions = {
-                "fedavg":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-                "local_epochs": optuna.distributions.IntDistribution(1, 5),
-                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),},
-            
-                "fedyogi":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-                "local_epochs": optuna.distributions.IntDistribution(1, 5),
-                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
-                    "yogi_eta": optuna.distributions.FloatDistribution(1e-4, 1e-1, log=True),
-                    "yogi_eta_l": optuna.distributions.FloatDistribution(1e-3, 1e-1, log=True),
-                    "yogi_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
-                    "yogi_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
-                    "yogi_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
-            
-                "fedadam":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-                "local_epochs": optuna.distributions.IntDistribution(1, 5),
-                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
-                    "adam_eta": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
-                    "adam_eta_l": optuna.distributions.FloatDistribution(1e-3, 5e-1, log=True),
-                    "adam_beta_1": optuna.distributions.FloatDistribution(0.8, 0.99),
-                    "adam_beta_2": optuna.distributions.FloatDistribution(0.9, 0.999),
-                    "adam_tau": optuna.distributions.FloatDistribution(1e-4, 1e-2, log=True),},
-
-                "fedprox":{ "lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True),
-                "strategy": optuna.distributions.CategoricalDistribution([1, 2, 3, 4]),
-                "local_epochs": optuna.distributions.IntDistribution(1, 5),
-                "batch_size": optuna.distributions.CategoricalDistribution([8, 16, 32]),
-                    "proximal_mu": optuna.distributions.FloatDistribution(0.001, 10.0, log=True),},
-            }
-            best_prev_params = {
-            1:{"lr": 0.001,
-                "local_epochs": 3,
-                "batch_size": 16,
-                "strategy": 1,},
-            2:{"lr": 0.000561,
-                "local_epochs": 5,
-                "batch_size": 8,
-                "strategy": 3,
-                "adam_eta": 0.0814829,
-                "adam_eta_l": 0.00113647,
-                "adam_beta_1": 0.984283,
-                "adam_beta_2": 0.982412,
-                "adam_tau": 0.000265875,},
-            3:{"lr": 0.000231,
-                "local_epochs": 1,
-                "batch_size": 16,
-                "strategy": 2,
-                "yogi_eta": 0.00125628,
-                "yogi_eta_l": 0.00816846,
-                "yogi_beta_1": 0.949183,
-                "yogi_beta_2": 0.919768,
-                "yogi_tau": 0.00106775,},
-            4:{"lr": 0.001530,
-                "local_epochs": 1,
-                "batch_size": 8,
-                "strategy": 2,
-                "yogi_eta": 0.000196343,
-                "yogi_eta_l": 0.0233596,
-                "yogi_beta_1": 0.883629,
-                "yogi_beta_2": 0.912082,
-                "yogi_tau": 0.000978034,},
-            5:{"lr": 0.000117,
-                "local_epochs": 5,
-                "batch_size": 16,
-                "strategy": 4,
-                "proximal_mu": 1.2604664585649468,},
-            }
-            if dataset_number == 100:
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5218,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5181,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5162,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5048,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[2],
-                    distributions=distributions["fedadam"],
-                    value=0.5001,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[3],
-                    distributions=distributions["fedyogi"],
-                    value=0.5001,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[4],
-                    distributions=distributions["fedyogi"],
-                    value=0.4448,
-                    state=optuna.trial.TrialState.PRUNED,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[5],
-                    distributions=distributions["fedprox"],
-                    value=0.5039,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-            else:
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5309,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5211,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
-                study.add_trial(optuna.trial.create_trial(
-                    params=best_prev_params[1],
-                    distributions=distributions["fedavg"],
-                    value=0.5200,
-                    state=optuna.trial.TrialState.COMPLETE,
-                ))
+            # ── lr-only warm start ──────────────────────────────────────────
+            # Old full (lr+epochs+batch+strategy+meta-param) history is
+            # reduced to just its lr values -- distinct lr's, best-known score
+            # each -- matching the trimmed 1-D search space above.
+            lr_distribution = {"lr": optuna.distributions.FloatDistribution(0.0001, 0.01, log=True)}
+            try:
+                from flower_benchmarks.flaml_hpo import lr_only_warm_start as _lr_warm
+                warm_lrs, warm_scores = _lr_warm(dataset_number)
+            except Exception:
+                warm_lrs, warm_scores = None, None
+            if warm_lrs:
+                for cfg, score in zip(warm_lrs, warm_scores):
+                    study.add_trial(optuna.trial.create_trial(
+                        params=cfg, distributions=lr_distribution,
+                        value=score, state=optuna.trial.TrialState.COMPLETE,
+                    ))
+                print(f"[OPTUNA] Warm-started with {len(warm_lrs)} historical lr point(s): "
+                      f"{[round(l['lr'], 6) for l in warm_lrs]}")
 
             study.optimize(objective, n_trials=hpo_trials)
 
             best = study.best_params
+            best_epochs_mode = study.best_trial.user_attrs.get("epochs_mode", local_epochs_cfg)
+            best_batch_mode  = study.best_trial.user_attrs.get("batch_mode", batch_size_cfg)
             print(f"\n{'='*70}")
             print(f"OPTUNA COMPLETE -- Best trial #{(study.best_trial.number)+1}")
             print(f"  mAP@0.5  = {study.best_value:.4f}")
             print(f"  lr       = {best['lr']:.6f}")
-            print(f"  epochs   = {best['local_epochs']}")
-            print(f"  batch    = {best['batch_size']}")
-            print(f"  strategy = {best['strategy']} "
-                  f"({'FedAvg' if best['strategy']==1 else 'FedYogi' if best['strategy']==2 else 'FedAdam' if best['strategy']==3 else 'FedProx'})")
+            print(f"  strategy = {strategy_id} (fixed)")
+            print(f"  client-side winners: epochs={best_epochs_mode}, batch={best_batch_mode}")
             print(f"{'='*70}\n")
 
-        # Promote HPO winners as values for the final full run
+        # Promote HPO winner as the value for the final full run.
+        # epochs/batch are NOT promoted from the server search (it never
+        # searched them) -- they stay whatever client_hpo_enabled/
+        # adaptive_batch_enabled resolve to each round of the final run.
+        # strategy is fixed throughout (never searched).
         lr             = best["lr"]
-        final_epochs   = best["local_epochs"]
-        final_batch    = best["batch_size"]
-        final_strategy = best["strategy"]
-
-        # Retrieve the best strategy-specific params (may not exist if
-        # the winning strategy has no tunable params beyond lr, e.g. FedAvg)
-        final_strategy_kwargs = {}
-        if final_strategy == 2:  # FedYogi
-            final_strategy_kwargs = dict(
-                eta    = best.get("yogi_eta"),
-                eta_l  = best.get("yogi_eta_l"),
-                beta_1 = best.get("yogi_beta_1"),
-                beta_2 = best.get("yogi_beta_2"),
-                tau    = best.get("yogi_tau"),
-            )
-        elif final_strategy == 3:  # FedAdam
-            final_strategy_kwargs = dict(
-                eta    = best.get("adam_eta"),
-                eta_l  = best.get("adam_eta_l"),
-                beta_1 = best.get("adam_beta_1"),
-                beta_2 = best.get("adam_beta_2"),
-                tau    = best.get("adam_tau"),
-            )
-        elif final_strategy == 4:  # FedProx
-            final_strategy_kwargs = dict(
-                proximal_mu = best.get("proximal_mu"),
-            )
+        final_epochs   = local_epochs_cfg
+        final_batch    = batch_size_cfg
+        final_strategy = strategy_id
+        final_strategy_kwargs = {}  # fixed strategy -> Flower's own defaults apply
     else:
         # No HPO -- fall through using values already read from config
         final_epochs   = int(get_config("local-epochs", context, default=3, type_converter=int))
