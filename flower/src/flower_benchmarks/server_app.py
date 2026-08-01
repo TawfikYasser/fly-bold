@@ -44,6 +44,12 @@ else:
 ALL_ROUND_LOGS = []
 CURRENT_ROUND = 0
 
+# Accumulates every server-side HPO trial's full round logs across the WHOLE
+# search (all hpo_trials), so the single final logs file contains everything
+# -- not just the last trial's ALL_ROUND_LOGS snapshot. Populated by the
+# Optuna/FLAML objective functions; written out once at the very end.
+ALL_HPO_TRIALS = []
+
 # FIX 4: Global trial handle so the eval callback can report intermediate
 # mAP values to Optuna and trigger early pruning without restructuring
 # strategy.start() into a round-by-round loop.
@@ -141,6 +147,20 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             'hpo_epochs': _safe_float(metrics.get("client_hpo_best_local_epochs", -1.0)),
             'hpo_batch':  _safe_float(metrics.get("client_hpo_best_batch_size", -1.0)),
             'hpo_train_map50': _safe_float(metrics.get("client_hpo_best_train_mAP@0.5", -1.0)),
+            # Reconstruct every inner (epochs, batch, mAP50) trial this client ran
+            # this round, not just its winner -- flattened numeric slots were
+            # written by the client because MetricRecord disallows nested objects.
+            'inner_trials': [
+                {
+                    "trial": i,
+                    "epochs": int(_safe_float(metrics.get(f"client_hpo_trial_{i}_epochs", -1))),
+                    "batch": int(_safe_float(metrics.get(f"client_hpo_trial_{i}_batch", -1))),
+                    "map50": _safe_float(metrics.get(f"client_hpo_trial_{i}_map50", -1.0)),
+                    "status": "OK" if _safe_float(metrics.get(f"client_hpo_trial_{i}_status", -1.0)) == 1.0 else "FAILED",
+                    "duration_s": _safe_float(metrics.get(f"client_hpo_trial_{i}_duration_s", -1.0)),
+                }
+                for i in range(int(_safe_float(metrics.get("client_hpo_inner_trial_count", 0))))
+            ],
             'data_received': _safe_float(metrics.get("data_received_from_server", 0.0)),
             'data_sent': _safe_float(metrics.get("data_sent_to_server", 0.0)),
             'round_duration': _safe_float(metrics.get("round_duration", 0.0)),
@@ -227,6 +247,9 @@ def custom_train_metrics_aggregation(record_dicts: List[RecordDict], weighted_by
             "client_hpo_epochs": int(c['hpo_epochs']) if c['hpo_epochs'] >= 0 else None,
             "client_hpo_batch":  int(c['hpo_batch'])  if c['hpo_batch']  >= 0 else None,
             "client_hpo_train_map50": c['hpo_train_map50'] if c['hpo_train_map50'] >= 0 else None,
+            # All inner client-side HPO trials this round (not just the winner) --
+            # this is what makes "log everything" true instead of console-only.
+            "client_hpo_inner_trials": c.get('inner_trials', []),
             # COMMENTED: Resource monitoring disabled
             # ✅ Per-client resource metrics
             # "client_train_resources": {
@@ -959,7 +982,7 @@ def main(grid: Grid, context: Context) -> None:
                 initial_arrays=fresh_arrays,
                 train_config=ConfigRecord(train_cfg),
                 num_rounds=n_rounds,
-                timeout=18000,
+                timeout=36000,
             )
         except _TrialPruneSignal:
             # Eval callback raised the prune signal -- re-raise as appropriate exception
@@ -1051,7 +1074,7 @@ def main(grid: Grid, context: Context) -> None:
                 initial_arrays=current_arrays,
                 train_config=ConfigRecord(train_cfg),
                 num_rounds=1,
-                timeout=18000,
+                timeout=36000,
             )
 
             eval_loss = None
@@ -1151,12 +1174,20 @@ def main(grid: Grid, context: Context) -> None:
                           f"most common epochs={epochs_mode}, batch={batch_mode} "
                           f"(across {len(per_client_configs)} client-rounds)")
 
-                try:
-                    trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
-                    with open(trial_logs_path, "w") as f:
-                        json.dump({"round_logs": trial_logs, "per_client_configs": per_client_configs}, f, indent=2)
-                except Exception as e:
-                    print(f"[FLAML] Warning: {e}")
+                # Accumulate into the single master log -- this is what ends up
+                # in the one final logs file, no separate per-trial files needed.
+                trial_time = sum(r.get("round_duration", 0.0) for r in trial_logs)
+                trial_bytes = sum(r.get("round_data_transferred_bytes", 0) for r in trial_logs)
+                ALL_HPO_TRIALS.append({
+                    "trial_number": trial.number,
+                    "backend": "flaml",
+                    "lr_suggested": trial_lr,
+                    "rounds": trial_logs,
+                    "per_client_configs": per_client_configs,
+                    "trial_result_mAP50": mAP,
+                    "trial_time_s": trial_time,
+                    "trial_data_bytes": trial_bytes,
+                })
 
                 print(f"[FLAML] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f})")
                 return mAP
@@ -1241,12 +1272,20 @@ def main(grid: Grid, context: Context) -> None:
                           f"most common epochs={epochs_mode}, batch={batch_mode} "
                           f"(across {len(per_client_configs)} client-rounds)")
 
-                try:
-                    trial_logs_path = f"{experiment_name}_{run_id}_hpo_trial_{trial.number}_logs.json"
-                    with open(trial_logs_path, "w") as f:
-                        json.dump({"round_logs": trial_logs, "per_client_configs": per_client_configs}, f, indent=2)
-                except Exception as e:
-                    print(f"[OPTUNA] Warning: could not save trial logs: {e}")
+                # Accumulate into the single master log -- this is what ends up
+                # in the one final logs file, no separate per-trial files needed.
+                trial_time = sum(r.get("round_duration", 0.0) for r in trial_logs)
+                trial_bytes = sum(r.get("round_data_transferred_bytes", 0) for r in trial_logs)
+                ALL_HPO_TRIALS.append({
+                    "trial_number": trial.number,
+                    "backend": "optuna",
+                    "lr_suggested": trial_lr,
+                    "rounds": trial_logs,
+                    "per_client_configs": per_client_configs,
+                    "trial_result_mAP50": mAP,
+                    "trial_time_s": trial_time,
+                    "trial_data_bytes": trial_bytes,
+                })
 
                 print(f"[OPTUNA] Trial {(trial.number+1):>3} -> mAP@0.5={mAP:.4f}  (lr={trial_lr:.5f})")
                 return mAP
@@ -1386,6 +1425,57 @@ def main(grid: Grid, context: Context) -> None:
             print(f"[INFO] Best HPO params from FLAML will be used")
         elif hpo_trials > 0:
             print(f"[INFO] Best HPO params from Optuna will be used")
+
+        # ── Write the single master logs file for the whole HPO search ──
+        # (hpo_only mode: the search itself IS the experiment, no final run
+        # to append, so this is the complete and only logs artifact.)
+        if hpo_trials > 0 and ALL_HPO_TRIALS:
+            total_time_s = sum(t["trial_time_s"] for t in ALL_HPO_TRIALS)
+            total_data_bytes = sum(t["trial_data_bytes"] for t in ALL_HPO_TRIALS)
+            total_rounds = sum(len(t["rounds"]) for t in ALL_HPO_TRIALS)
+            total_client_inner_trials = sum(
+                len(cl.get("client_hpo_inner_trials", []))
+                for t in ALL_HPO_TRIALS for r in t["rounds"] for cl in r.get("clients_logs", [])
+            )
+            best_trial = max(ALL_HPO_TRIALS, key=lambda t: t["trial_result_mAP50"])
+
+            master_log = {
+                "run_id": run_id,
+                "experiment_name": experiment_name,
+                "hpo_mode": hpo_mode,
+                "backend": "flaml" if use_flaml else "optuna",
+                "hpo_trials": hpo_trials,
+                "hpo_rounds_per_trial": hpo_rounds,
+                "client_hpo_trials_per_round": client_hpo_trials,
+                "server_hpo_trials": ALL_HPO_TRIALS,
+                "best_trial": {
+                    "trial_number": best_trial["trial_number"],
+                    "lr": best_trial["lr_suggested"],
+                    "mAP50": best_trial["trial_result_mAP50"],
+                },
+                "cost_summary": {
+                    "total_server_trials": len(ALL_HPO_TRIALS),
+                    "total_rounds": total_rounds,
+                    "total_client_inner_trials": total_client_inner_trials,
+                    "total_time_s": total_time_s,
+                    "total_time_minutes": round(total_time_s / 60.0, 2),
+                    "total_data_bytes": total_data_bytes,
+                    "total_data_mb": round(total_data_bytes / (1024 ** 2), 4),
+                },
+            }
+
+            logs_path = f"{experiment_name}_{run_id}_logs.json"
+            try:
+                with open(logs_path, "w") as f:
+                    json.dump(master_log, f, indent=2)
+                print(f"[OK] Master HPO logs saved: {logs_path}")
+                print(f"     {len(ALL_HPO_TRIALS)} server trials, {total_rounds} rounds, "
+                      f"{total_client_inner_trials} client inner trials")
+                print(f"     Total time: {master_log['cost_summary']['total_time_minutes']} min | "
+                      f"Total data: {master_log['cost_summary']['total_data_mb']} MB")
+            except Exception as e:
+                print(f"[WARN] Could not save master HPO logs: {e}")
+
         return  # budget exhausted or hpo_only mode
 
     print(f"\n{'='*70}")

@@ -9,6 +9,7 @@ import time
 import torch
 import numpy as np
 import sys
+import shutil
 import pickle
 import yaml
 from pathlib import Path
@@ -30,6 +31,45 @@ from flower_benchmarks.task import (
 # =====================================================================
 _DATASET_CACHE = {}  # Cache dataset paths to avoid repeated file system ops
 _YOLO_MODELS_SETUP = False  # Track if YOLOv5 models are ready
+_RUN_DIRS_CLEARED = False  # Track if stale run dirs have been wiped this container lifecycle
+
+def clear_all_run_directories(context: "Context" = None):
+    """
+    Wipe every YOLO run-output directory once per container start, so old
+    experiments' weights/plots/event-logs never survive into a new run
+    (this is what was causing runs/train_abs/client3_abs_r1_e1 to accumulate
+    events.out.tfevents.* from container instances almost a day apart).
+    Safe to call multiple times -- only actually does anything once.
+    """
+    global _RUN_DIRS_CLEARED
+    if _RUN_DIRS_CLEARED:
+        return
+
+    targets = {"/tmp/client_hpo_runs", "yolov5/runs"}
+    if context is not None:
+        try:
+            configured_dir = context.run_config.get("yolo_runs_dir", None)
+        except Exception:
+            configured_dir = None
+        if configured_dir:
+            targets.add(configured_dir)
+            parent = str(Path(configured_dir).parent)
+            if parent and parent not in (".", "/"):
+                targets.add(parent)
+
+    cleared = []
+    for d in targets:
+        p = Path(d)
+        try:
+            if p.exists():
+                shutil.rmtree(p, ignore_errors=True)
+            p.mkdir(parents=True, exist_ok=True)
+            cleared.append(str(p))
+        except Exception as e:
+            print(f"[startup] Warning: could not clear {p}: {e}")
+
+    print(f"[startup] Cleared stale run directories: {sorted(cleared)}")
+    _RUN_DIRS_CLEARED = True
 
 def ensure_yolo_models_available():
     """Copy yolov5 models directory - run once per container lifecycle."""
@@ -133,8 +173,8 @@ def run_client_local_hpo(
     run_id: str,
     server_round: int,
     n_trials: int,
-    epoch_range=(1, 5),
-    batch_choices=(8, 16, 32),
+    epoch_range=(1, 10),
+    batch_choices=(8, 16, 32, 64),
 ):
     """
     Client-side Optuna search for the best (local-epochs, batch_size) pair,
@@ -196,6 +236,9 @@ def run_client_local_hpo(
                 "trial": trial.number, "epochs": trial_epochs, "batch": trial_batch,
                 "map50": None, "status": "FAILED", "duration_s": round(time.time() - t0, 1),
             })
+            _failed_trial_dir = Path("/tmp/client_hpo_runs") / f"client{client_id}_hpo_t{trial.number}_r{server_round}"
+            if _failed_trial_dir.exists():
+                shutil.rmtree(_failed_trial_dir, ignore_errors=True)
             raise optuna.exceptions.TrialPruned()
 
         trial_map = float(trial_log.get("mAP@0.5", 0.0))
@@ -223,10 +266,14 @@ def run_client_local_hpo(
             f"(trial {running_best['trial']})\n"
         )
 
-        # Memory cleanup between disposable trial runs
+        # Memory + disk cleanup between disposable trial runs -- keep only the
+        # metrics we already extracted, not the full weights/plots/caches dir.
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
+        _trial_run_dir = Path("/tmp/client_hpo_runs") / f"client{client_id}_hpo_t{trial.number}_r{server_round}"
+        if _trial_run_dir.exists():
+            shutil.rmtree(_trial_run_dir, ignore_errors=True)
 
         return trial_map
 
@@ -274,8 +321,8 @@ def run_client_local_hpo_flaml(
     run_id: str,
     server_round: int,
     n_trials: int,
-    epoch_range=(1, 5),
-    batch_choices=(8, 16, 32),
+    epoch_range=(1, 10),
+    batch_choices=(8, 16, 32, 64),
 ):
     """
     FLAML twin of run_client_local_hpo. Same search space (local_epochs,
@@ -337,6 +384,9 @@ def run_client_local_hpo_flaml(
                 "trial": trial_id, "epochs": trial_epochs, "batch": trial_batch,
                 "map50": None, "status": "FAILED", "duration_s": round(time.time() - t0, 1),
             })
+            _failed_trial_dir = Path("/tmp/client_hpo_runs") / f"client{client_id}_hpo_flaml_t{trial_id}_r{server_round}"
+            if _failed_trial_dir.exists():
+                shutil.rmtree(_failed_trial_dir, ignore_errors=True)
             return {"map50": float("-inf")}
 
         trial_map = float(trial_log.get("mAP@0.5", 0.0))
@@ -360,6 +410,9 @@ def run_client_local_hpo_flaml(
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
+        _trial_run_dir = Path("/tmp/client_hpo_runs") / f"client{client_id}_hpo_flaml_t{trial_id}_r{server_round}"
+        if _trial_run_dir.exists():
+            shutil.rmtree(_trial_run_dir, ignore_errors=True)
 
         return {"map50": trial_map}
 
@@ -481,6 +534,10 @@ def run_adaptive_batch_epoch_training(
 
         loss = round_log.get("loss", 0.0)
         rho = _flat_norm_and_delta(current_state, new_state)
+
+        _abs_epoch_dir = Path("yolov5/runs/train_abs") / f"{epoch_tag}_r{server_round}_e{epoch_num}"
+        if _abs_epoch_dir.exists():
+            shutil.rmtree(_abs_epoch_dir, ignore_errors=True)
 
         print(f"{tag} epoch {epoch_num}: batch={batch}, loss={loss:.4f}, rho={rho:.6f} "
               f"(increases_used={increases_used}/{max_increases})")
@@ -620,6 +677,7 @@ def train(msg: Message, context: Context):
     """Training function with guaranteed consistent metric structure and resource monitoring."""
     Path("/app/.healthy").touch()
 
+    clear_all_run_directories(context)
     ensure_yolo_models_available()
 
     server_round = int(msg.content["config"].get("server-round", 0))
@@ -685,6 +743,7 @@ def train(msg: Message, context: Context):
 
     client_hpo_best_map = None
     client_hpo_trials_run = 0
+    client_hpo_inner_trials = []
 
     if adaptive_batch_enabled:
         batch_min     = int(get_config("adaptive_batch_min", context, default=8))
@@ -734,9 +793,16 @@ def train(msg: Message, context: Context):
         print(f"[CLIENT {client_id}] [HPO-{client_hpo_backend.upper()}] Client-side HPO enabled "
               f"({client_hpo_trials} trials) -- searching local-epochs/batch_size "
               f"conditioned on server lr={this_round_lr:.6f}")
+        client_hpo_inner_trials = []  # kept even on failure so metrics flattening below is safe
+        # Paper's object-detection bounds (Experiment 2): beta in [4,6], E<=5.
+        # Overridable via .env without touching code.
+        _epoch_min = int(get_config("client_epoch_min", context, default=1, type_converter=int))
+        _epoch_max = int(get_config("client_epoch_max", context, default=5, type_converter=int))
+        _batch_min = int(get_config("client_batch_min", context, default=4, type_converter=int))
+        _batch_max = int(get_config("client_batch_max", context, default=6, type_converter=int))
         try:
             hpo_fn = run_client_local_hpo_flaml if client_hpo_backend == "flaml" else run_client_local_hpo
-            hpo_epochs, hpo_batch, client_hpo_best_map, _trials_info = hpo_fn(
+            hpo_epochs, hpo_batch, client_hpo_best_map, client_hpo_inner_trials = hpo_fn(
                 received_state,
                 model_size=model_size,
                 data_yaml=data_yaml,
@@ -745,6 +811,8 @@ def train(msg: Message, context: Context):
                 run_id=run_id,
                 server_round=server_round,
                 n_trials=client_hpo_trials,
+                epoch_range=(_epoch_min, _epoch_max),
+                batch_choices=tuple(range(_batch_min, _batch_max + 1)),
             )
             epochs, batch = hpo_epochs, hpo_batch
             client_hpo_trials_run = client_hpo_trials
@@ -886,20 +954,32 @@ def train(msg: Message, context: Context):
         "adaptive_batch_final_batch_size": float(batch if adaptive_batch_enabled else -1.0),
         "adaptive_batch_increases_used": float(adaptive_batch_increases_used),
         # COMMENTED: Resource monitoring disabled
-        # Training phase resource metrics
-        # "train_resources_per_process_cpu_peak": float(train_resources['per_process']['cpu_percent']['peak']),
-        # "train_resources_per_process_cpu_avg": float(train_resources['per_process']['cpu_percent']['avg']),
-        # "train_resources_per_process_ram_peak_mb": float(train_resources['per_process']['memory_mb']['peak']),
-        # "train_resources_per_process_ram_avg_mb": float(train_resources['per_process']['memory_mb']['avg']),
-        # "train_resources_per_process_ram_peak_pct": float(train_resources['per_process']['memory_percent']['peak']),
-        # "train_resources_per_process_ram_avg_pct": float(train_resources['per_process']['memory_percent']['avg']),
-        # "train_resources_system_cpu_peak": float(train_resources['system_wide']['cpu_percent']['peak']),
-        # "train_resources_system_cpu_avg": float(train_resources['system_wide']['cpu_percent']['avg']),
-        # "train_resources_system_ram_peak_mb": float(train_resources['system_wide']['memory_mb']['peak']),
-        # "train_resources_system_ram_avg_mb": float(train_resources['system_wide']['memory_mb']['avg']),
-        # "train_resources_system_ram_peak_pct": float(train_resources['system_wide']['memory_percent']['peak']),
-        # "train_resources_system_ram_avg_pct": float(train_resources['system_wide']['memory_percent']['avg']),
     }
+
+    # ── Persist EVERY client-side inner HPO trial (not just the winner) ──
+    # MetricRecord only accepts numeric values, so each of the (up to
+    # client_hpo_trials) inner trials is flattened into its own numeric
+    # slot: client_hpo_trial_{i}_epochs / _batch / _map50 / _status /
+    # _duration_s. Slots beyond how many trials actually ran are left at
+    # -1 so the server can tell "didn't run" apart from "ran and failed".
+    # status: 1.0 = OK, 0.0 = FAILED, -1.0 = slot unused.
+    max_inner_slots = max(int(client_hpo_trials), len(client_hpo_inner_trials))
+    for i in range(max_inner_slots):
+        if i < len(client_hpo_inner_trials):
+            t = client_hpo_inner_trials[i]
+            metrics[f"client_hpo_trial_{i}_epochs"] = float(t.get("epochs", -1) or -1)
+            metrics[f"client_hpo_trial_{i}_batch"] = float(t.get("batch", -1) or -1)
+            metrics[f"client_hpo_trial_{i}_map50"] = float(t.get("map50") if t.get("map50") is not None else -1.0)
+            metrics[f"client_hpo_trial_{i}_status"] = float(1.0 if t.get("status") == "OK" else 0.0)
+            metrics[f"client_hpo_trial_{i}_duration_s"] = float(t.get("duration_s", -1) or -1)
+        else:
+            metrics[f"client_hpo_trial_{i}_epochs"] = -1.0
+            metrics[f"client_hpo_trial_{i}_batch"] = -1.0
+            metrics[f"client_hpo_trial_{i}_map50"] = -1.0
+            metrics[f"client_hpo_trial_{i}_status"] = -1.0
+            metrics[f"client_hpo_trial_{i}_duration_s"] = -1.0
+    metrics["client_hpo_inner_trial_count"] = float(len(client_hpo_inner_trials))
+    # (Per-process/system resource metrics remain disabled, as before.)
 
     status_icon = "✅" if train_status == "SUCCESS" else "❌"
     print(f"[CLIENT {client_id}] {status_icon} Training {train_status}")
@@ -1067,10 +1147,19 @@ def evaluate(msg: Message, context: Context):
         torch.cuda.synchronize()
     # COMMENTED: Resource monitoring disabled
     # round_monitor.stop()  # COMMENTED: Resource monitoring disabled
-    import shutil
+    # Delete THIS round's run dir now that eval has already read best.pt/last.pt
+    # from it -- nothing later needs it (round r+1 starts fresh from the
+    # server-broadcast weights). Previously only round-1's dir was deleted,
+    # which permanently left the last 1-2 rounds' worth of weights/plots/caches
+    # on disk for every client, every run.
+    this_round_dir = Path(run_dir) / f"client{client_id}_r{server_round}"
+    if this_round_dir.exists():
+        shutil.rmtree(this_round_dir, ignore_errors=True)
+    # Also sweep any earlier round dir that might have survived a prior crash
+    # (e.g. container died between train() and evaluate() before cleanup ran).
     prev_run = Path(run_dir) / f"client{client_id}_r{server_round - 1}"
     if prev_run.exists():
-        shutil.rmtree(prev_run)
+        shutil.rmtree(prev_run, ignore_errors=True)
     gc.collect()
     print(f"[CLIENT {client_id}] Memory cleanup completed after evaluation")
     metric_record = MetricRecord(metrics)

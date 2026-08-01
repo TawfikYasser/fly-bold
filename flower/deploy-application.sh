@@ -504,6 +504,24 @@ echo "[DEBUG] Updated DOCKER_IMAGE in .env"
 sed -i '' "s/^SERVER_INTERNAL_IP=.*/SERVER_INTERNAL_IP=$SERVER_INTERNAL_IP/" .env
 echo "[DEBUG] Updated SERVER_INTERNAL_IP in .env"
 
+# Extract experiment-identity fields from .env for the GCS run_config.json
+# snapshot -- these weren't previously captured there, so a saved run_id's
+# config file couldn't tell you whether it was Optuna vs FLAML, hpo_only vs
+# hpo_then_train, or what client-side search bounds were used.
+USE_FLAML_SNAPSHOT=$(grep '^USE_FLAML=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+HPO_MODE_SNAPSHOT=$(grep '^HPO_MODE=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+CLIENT_EPOCH_MIN=$(grep '^CLIENT_EPOCH_MIN=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+CLIENT_EPOCH_MAX=$(grep '^CLIENT_EPOCH_MAX=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+CLIENT_BATCH_MIN=$(grep '^CLIENT_BATCH_MIN=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+CLIENT_BATCH_MAX=$(grep '^CLIENT_BATCH_MAX=' .env | cut -d'=' -f2 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')
+# Guard against unset (older .env files without these keys) so json stays valid.
+USE_FLAML_SNAPSHOT=${USE_FLAML_SNAPSHOT:-false}
+HPO_MODE_SNAPSHOT=${HPO_MODE_SNAPSHOT:-hpo_then_train}
+CLIENT_EPOCH_MIN=${CLIENT_EPOCH_MIN:-1}
+CLIENT_EPOCH_MAX=${CLIENT_EPOCH_MAX:-5}
+CLIENT_BATCH_MIN=${CLIENT_BATCH_MIN:-4}
+CLIENT_BATCH_MAX=${CLIENT_BATCH_MAX:-6}
+
 # Save config to GCS
 cat > /tmp/run_config.json <<EOJSON
 {
@@ -530,8 +548,15 @@ cat > /tmp/run_config.json <<EOJSON
   "enable_tls": $ENABLE_TLS,
   "optuna_trials": $OPTUNA_TRIALS,
   "hpo_rounds": $HPO_ROUNDS,
+  "hpo_trials": $HPO_TRIALS,
+  "hpo_mode": "$HPO_MODE_SNAPSHOT",
+  "use_flaml": $USE_FLAML_SNAPSHOT,
   "client_hpo_enabled": $CLIENT_HPO_ENABLED,
   "client_hpo_trials": $CLIENT_HPO_TRIALS,
+  "client_epoch_min": $CLIENT_EPOCH_MIN,
+  "client_epoch_max": $CLIENT_EPOCH_MAX,
+  "client_batch_min": $CLIENT_BATCH_MIN,
+  "client_batch_max": $CLIENT_BATCH_MAX,
   "adaptive_batch_enabled": ${ADAPTIVE_BATCH_ENABLED:-false},
   "adaptive_lr_enabled": ${ADAPTIVE_LR_ENABLED:-false},
   "server_internal_ip": "$SERVER_INTERNAL_IP",
@@ -571,6 +596,19 @@ CLIENT_HPO_ENABLED=${CLIENT_HPO_ENABLED:-false}
 CLIENT_HPO_TRIALS=${CLIENT_HPO_TRIALS:-3}
 sedi "s/^client_hpo_enabled[[:space:]]*=[[:space:]]*[^#]*/client_hpo_enabled = ${CLIENT_HPO_ENABLED}  /" pyproject.toml
 sedi "s/^client_hpo_trials[[:space:]]*=[[:space:]]*[^#]*/client_hpo_trials = ${CLIENT_HPO_TRIALS}  /" pyproject.toml
+
+# Client-side search bounds (paper's object-detection Experiment 2 ranges by
+# default). These reach the client via .env's env_file regardless, but are
+# also synced into pyproject.toml so the checked-in file is never stale if
+# someone runs without the docker-compose env_file path.
+CLIENT_EPOCH_MIN=${CLIENT_EPOCH_MIN:-1}
+CLIENT_EPOCH_MAX=${CLIENT_EPOCH_MAX:-5}
+CLIENT_BATCH_MIN=${CLIENT_BATCH_MIN:-4}
+CLIENT_BATCH_MAX=${CLIENT_BATCH_MAX:-6}
+sedi "s/^client_epoch_min[[:space:]]*=[[:space:]]*[^#]*/client_epoch_min = ${CLIENT_EPOCH_MIN}  /" pyproject.toml
+sedi "s/^client_epoch_max[[:space:]]*=[[:space:]]*[^#]*/client_epoch_max = ${CLIENT_EPOCH_MAX}  /" pyproject.toml
+sedi "s/^client_batch_min[[:space:]]*=[[:space:]]*[^#]*/client_batch_min = ${CLIENT_BATCH_MIN}  /" pyproject.toml
+sedi "s/^client_batch_max[[:space:]]*=[[:space:]]*[^#]*/client_batch_max = ${CLIENT_BATCH_MAX}  /" pyproject.toml
 
 # Adaptive Batch/Epoch (ABS, client-side) flags (default to false if not set in .env)
 ADAPTIVE_BATCH_ENABLED=${ADAPTIVE_BATCH_ENABLED:-false}

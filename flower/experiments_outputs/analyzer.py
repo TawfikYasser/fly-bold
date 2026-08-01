@@ -66,7 +66,7 @@ def get_env(key, default, type_cast=str):
 
 
 # ==================== CONFIGURATION ====================
-INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/1010000864000101/EXP_YOLOv5_s_detection_1010000864000101_logs.json"
+INPUT_FILE = "/Users/tawfik/DeFeC3/flybold/flower/experiments_outputs/1010600032002/EXP_YOLOv5_s_detection_1010600032002_logs.json"
 
 # Extract experiment number
 match = re.search(r"_detection_(\d+)_", INPUT_FILE)
@@ -96,9 +96,50 @@ CONFIG = {
 
 # ==================== DATA LOADING ====================
 def load_data(filename):
-    """Load JSON data from file"""
+    """Load JSON data from file and normalize it into a flat list of round dicts."""
     with open(filename, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
+    return flatten_experiment_data(data)
+
+
+def flatten_experiment_data(data):
+    """
+    Normalize experiment JSON into a flat list of round dicts.
+
+    Handles two schemas:
+      1) Standard FL run: a flat list of round dicts (or {"rounds": [...]})
+      2) HPO run: {"server_hpo_trials": [{"trial_number", "lr_suggested",
+         "rounds": [round0, round1, ...]}, ...]}
+         Each trial restarts round_id at 0, so a global, monotonically
+         increasing round_id is assigned across trials (needed for every
+         round-indexed plot downstream). The original per-trial round_id is
+         preserved as 'trial_round_id', and 'trial_number' /
+         'trial_lr_suggested' are attached to each round for traceability.
+    """
+    if isinstance(data, list):
+        return data
+
+    if isinstance(data, dict) and 'server_hpo_trials' in data:
+        rounds = []
+        global_round_id = 0
+        for trial in data['server_hpo_trials']:
+            for round_data in trial.get('rounds', []):
+                r = dict(round_data)  # shallow copy; don't mutate the source
+                r['trial_number'] = trial.get('trial_number')
+                r['trial_lr_suggested'] = trial.get('lr_suggested')
+                r['trial_round_id'] = r.get('round_id')
+                r['round_id'] = global_round_id
+                rounds.append(r)
+                global_round_id += 1
+        return rounds
+
+    if isinstance(data, dict) and 'rounds' in data:
+        return data['rounds']
+
+    raise ValueError(
+        "Unrecognized experiment JSON schema: expected a list of rounds, "
+        "a dict with a 'rounds' key, or an HPO dict with 'server_hpo_trials'."
+    )
 
 
 def extract_round_metrics(data):
@@ -107,6 +148,8 @@ def extract_round_metrics(data):
     for round_data in data:
         round_dict = {
             'round_id': round_data['round_id'],
+            'trial_number': round_data.get('trial_number'),
+            'trial_round_id': round_data.get('trial_round_id'),
             'duration': round_data['round_duration'],
             'lr': round_data['lr'],
             # Training metrics

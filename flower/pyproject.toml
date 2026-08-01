@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flower-benchmarks"
-version = "1.0.219"
+version = "1.0.224"
 description = "Federated Learning for YOLOv5 on GCP"
 license = "Apache-2.0"
 # Dependencies for your Flower App
@@ -93,7 +93,7 @@ img_size = 416
 batch_size = 32  
 dataset = 0  
 strategy = 3  
-run_id = 510530001  
+run_id = 1010600032002#e.g.10-10-06-00-3-2-002styleencoding--adjusttoyourownconvention  #e.g.10-10-06-00-3-2-002styleencoding--adjusttoyourownconvention  #e.g.10-10-06-00-3-2-002styleencoding--adjusttoyourownconvention  
 
 # HPO Configuration
 # ── NESTED HPO MODE ──────────────────────────────────────────────────────
@@ -107,8 +107,8 @@ run_id = 510530001
 # Experiment B -- FLAML  (BlendSearch):                  use_flaml = true
 # Everything else below is identical between the two experiments.
 use_flaml = false  # true = use FLAML, false = use Optuna
-hpo_trials = 5  # server-side trials -- each suggests one lr candidate
-hpo_rounds = 1  # federated rounds run per server trial (proxy budget)
+hpo_trials = 10  # server-side trials -- each suggests one lr candidate
+hpo_rounds = 3  # federated rounds run per server trial (proxy budget)
 hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then final training with the winning lr
 
 # Client-side HPO Configuration (per-client local search for local_epochs/batch_size)
@@ -117,10 +117,17 @@ hpo_mode = "hpo_only"  # "hpo_only" = HPO only, "hpo_then_train" = HPO then fina
 # not just lr with epochs/batch held fixed. Backend (Optuna/FLAML) follows
 # use_flaml automatically -- no separate switch needed here.
 client_hpo_enabled = true  # true = each client runs its own inner search every round
-client_hpo_trials = 5  # Number of local trials per client PER ROUND. Cost multiplier:
-                        # hpo_trials(6) x hpo_rounds(3) x num_clients(10) x client_hpo_trials(3)
-                        # = 540 real training calls just to find the best lr -- tune down
-                        # (e.g. hpo_rounds=2, client_hpo_trials=2) if that's too slow/costly.
+client_hpo_trials = 6  # Number of local trials per client PER ROUND. Cost multiplier:
+                        # hpo_trials(10) x hpo_rounds(3) x num_clients(10) x client_hpo_trials(6)
+                        # = 1800 real training calls just to find the best lr -- tune down
+                        # (e.g. hpo_rounds=2, client_hpo_trials=3) if that's too slow/costly.
+
+# Client-side search bounds -- paper's object-detection Experiment 2 ranges
+# CLIENT_EPOCH_MIN/MAX, CLIENT_BATCH_MIN/MAX (env var takes precedence).
+client_epoch_min = 1  
+client_epoch_max = 10  
+client_batch_min = 8  
+client_batch_max = 64  
 
 # Adaptive Batch/Epoch Tuning (ABS -- client-side, per round)
 # MUST be false for nested-HPO mode: it's mutually exclusive with
